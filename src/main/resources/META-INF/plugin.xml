@@ -28,6 +28,8 @@
     <toolWindow id="Review Comments" anchor="bottom"
                 factoryClass="com.yeskiy.ideareview.toolwindow.ReviewToolWindowFactory" />
 
+    <notificationGroup id="IDEA Review" displayType="BALLOON" />
+
     <projectConfigurable parentId="tools"
                          id="com.yeskiy.ideareview.settings"
                          displayName="Review Comments"

@@ -8,17 +8,24 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.components.JBList
 import com.intellij.ui.components.JBScrollPane
+import com.yeskiy.ideareview.bridge.BridgeService
+import com.yeskiy.ideareview.bridge.SendMessages
+import com.yeskiy.ideareview.bridge.SendReport
 import com.yeskiy.ideareview.settings.ShareLog
 import com.yeskiy.ideareview.store.NoteRefs
 import com.yeskiy.ideareview.store.REVIEW_COMMENTS
 import com.yeskiy.ideareview.store.ReviewCommentListener
 import com.yeskiy.ideareview.store.ReviewService
 import com.yeskiy.ideareview.store.StoredComment
+import com.yeskiy.ideareview.ui.ReviewNotice
 import com.yeskiy.ideareview.ui.ShareFailure
+import git4idea.repo.GitRepositoryManager
 import java.awt.BorderLayout
 import javax.swing.DefaultListModel
 import javax.swing.JPanel
@@ -31,12 +38,13 @@ class CommentListPanel(private val project: Project) : JPanel(BorderLayout()), D
     private var root: VirtualFile? = null
 
     init {
-        val toolbar = ActionManager.getInstance()
-            .createActionToolbar("IdeaReviewComments", DefaultActionGroup(RefreshAction(), ResolveAction()), true)
+        val actions = DefaultActionGroup(RefreshAction(), ResolveAction(), SendAllAction())
+        val toolbar = ActionManager.getInstance().createActionToolbar("IdeaReviewComments", actions, true)
         toolbar.targetComponent = this
         add(toolbar.component, BorderLayout.NORTH)
         add(JBScrollPane(list), BorderLayout.CENTER)
         project.messageBus.connect(this).subscribe(REVIEW_COMMENTS, ReviewCommentListener { reload() })
+        BridgeService.getInstance(project).startLater()
         reload()
     }
 
@@ -59,6 +67,33 @@ class CommentListPanel(private val project: Project) : JPanel(BorderLayout()), D
             model.addElement(CommentRow.format(stored, log.isUnshared(stored.id)))
         }
     }
+
+    /**
+     * Hands every open comment of this repository to the sessions that read the bridge.
+     * The work runs off the user interface thread, because it reads the git notes.
+     */
+    private fun sendAll() {
+        val here = root ?: onlyRoot()
+        if (here == null) {
+            ReviewNotice.warn(project, "Open a file of the repository you want to send.")
+            return
+        }
+        val notice = SendMessages.of(
+            ProgressManager.getInstance().runProcessWithProgressSynchronously(
+                ThrowableComputable<SendReport, RuntimeException> {
+                    BridgeService.getInstance(project).sendOpenComments(here)
+                },
+                "Sending the Review Comments",
+                true,
+                project,
+            )
+        )
+        if (notice.warning) ReviewNotice.warn(project, notice.text) else ReviewNotice.say(project, notice.text)
+    }
+
+    /** A project with one repository needs no open file to know which comments to send. */
+    private fun onlyRoot(): VirtualFile? =
+        GitRepositoryManager.getInstance(project).repositories.singleOrNull()?.root
 
     private fun resolveSelected() {
         val stored = rows.getOrNull(list.selectedIndex) ?: return
@@ -85,5 +120,16 @@ class CommentListPanel(private val project: Project) : JPanel(BorderLayout()), D
         }
 
         override fun actionPerformed(event: AnActionEvent) = resolveSelected()
+    }
+
+    private inner class SendAllAction : AnAction(
+        "Send All Comments",
+        "Send every open review comment to the Claude Code session that reads this project.",
+        AllIcons.Actions.Upload,
+    ) {
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun actionPerformed(event: AnActionEvent) = sendAll()
     }
 }

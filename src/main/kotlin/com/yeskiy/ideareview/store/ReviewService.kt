@@ -8,6 +8,7 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.VirtualFile
+import com.yeskiy.ideareview.bridge.BridgeService
 import com.yeskiy.ideareview.settings.ShareLog
 import git4idea.repo.GitRepositoryManager
 
@@ -51,6 +52,7 @@ class ReviewService(private val project: Project) {
 
     private fun finish(root: VirtualFile, stored: StoredComment): CommentWriteResult {
         val error = share(root, stored)
+        BridgeService.getInstance(project).startLater()
         notifyChanged()
         return CommentWriteResult(stored, error)
     }
