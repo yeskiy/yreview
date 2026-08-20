@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "idea-review": {
+      "command": "node",
+      "args": ["<absolute path>/channel/dist/main.js"],
+      "env": {
+        "IDEA_REVIEW_BRIDGE_URL": "http://127.0.0.1:64343",
+        "IDEA_REVIEW_BRIDGE_TOKEN": "<the token that the plugin made>"
+      }
+    }
+  }
+}
