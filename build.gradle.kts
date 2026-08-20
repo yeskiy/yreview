@@ -19,6 +19,7 @@ dependencies {
         intellijIdeaUltimate("2026.2.1")
         bundledPlugin("Git4Idea")
         bundledPlugin("com.intellij.mcpServer")
+        bundledPlugin("org.jetbrains.plugins.terminal")
         // Git4Idea alone does not put these on the compile classpath.
         // intellij.platform.vcs.impl holds ChangeDiffRequestProducer.
         // intellij.platform.vcs.dvcs.impl holds AbstractRepositoryManager, a supertype
