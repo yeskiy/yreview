@@ -21,6 +21,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.ideareview.store.CommentBook
 import com.yeskiy.ideareview.store.NoteRefs
 import com.yeskiy.ideareview.store.NotesWriteException
+import com.yeskiy.ideareview.settings.ReviewSettings
 import com.yeskiy.ideareview.store.ReviewService
 import com.yeskiy.ideareview.store.StoredComment
 import com.yeskiy.ideareview.store.ideGitRunner
@@ -145,12 +146,20 @@ class ReviewToolset : McpToolset {
                 ?: return@withContext ReviewPayloads.error("The file $relative is not in a git repository.")
             val commit = service.headOf(file)
                 ?: return@withContext ReviewPayloads.error("The repository of $relative has no commit yet.")
-            val book = service.bookFor(file)
+            val root = service.repositoryRoot(file)
                 ?: return@withContext ReviewPayloads.error("The file $relative is not in a git repository.")
 
+            // The agent writes where a person writes, so it follows the project setting and it
+            // takes the same push path. A shared ref reaches the remote, a local ref does not.
+            val ref = NoteRefs.refFor(ReviewSettings.getInstance(project).sharing.shareByDefault)
             try {
-                val stored = book.add(NoteRefs.LOCAL, commit, inRepository, startLine, endLine, text)
-                ReviewPayloads.added(stored.id, inRepository, commit, NoteRefs.isShared(stored.ref))
+                val result = service.addComment(root, ref, commit, inRepository, startLine, endLine, text)
+                ReviewPayloads.added(
+                    result.stored.id,
+                    inRepository,
+                    commit,
+                    NoteRefs.isShared(result.stored.ref) && result.shareError == null,
+                )
             } catch (failure: NotesWriteException) {
                 ReviewPayloads.error(failure.message ?: "The comment was not written.")
             }
