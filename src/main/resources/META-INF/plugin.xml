@@ -10,6 +10,7 @@
   <depends>com.intellij.modules.platform</depends>
   <depends>Git4Idea</depends>
   <depends optional="true" config-file="idea-review-mcp.xml">com.intellij.mcpServer</depends>
+  <depends optional="true" config-file="idea-review-terminal.xml">org.jetbrains.plugins.terminal</depends>
 
   <extensions defaultExtensionNs="com.intellij">
     <diff.DiffExtension implementation="com.yeskiy.ideareview.diff.ReviewDiffExtension" />
