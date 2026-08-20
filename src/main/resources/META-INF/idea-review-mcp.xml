@@ -1,0 +1,5 @@
+<idea-plugin>
+  <extensions defaultExtensionNs="com.intellij">
+    <mcpServer.mcpToolset implementation="com.yeskiy.ideareview.mcp.ReviewToolset" />
+  </extensions>
+</idea-plugin>

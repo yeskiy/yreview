@@ -53,11 +53,29 @@ class CommentBook(
 
     fun open(commit: String, refs: List<String> = NoteRefs.ALL): List<StoredComment> {
         val all = list(commit, refs)
-        val closed = all.mapNotNull { stored ->
-            stored.comment.original.takeIf { stored.comment.resolved == true }
-        }.toSet()
+        val closed = closedIds(all)
         return all.filter { it.comment.original == null && it.id !in closed }
     }
+
+    /** The comments that a later record marked as resolved. */
+    fun closed(commit: String, refs: List<String> = NoteRefs.ALL): List<StoredComment> {
+        val all = list(commit, refs)
+        val closed = closedIds(all)
+        return all.filter { it.comment.original == null && it.id in closed }
+    }
+
+    /** Every commit that carries a note in one of [refs]. */
+    fun commits(refs: List<String> = NoteRefs.ALL): List<String> =
+        refs.flatMap { gateway.commitsWithNotes(it) }.distinct()
+
+    /** The record with this id, searched over every commit that carries a note. */
+    fun find(id: String, refs: List<String> = NoteRefs.ALL): StoredComment? =
+        commits(refs).firstNotNullOfOrNull { commit ->
+            list(commit, refs).firstOrNull { it.id == id }
+        }
+
+    private fun closedIds(all: List<StoredComment>): Set<String> =
+        all.mapNotNull { stored -> stored.comment.original.takeIf { stored.comment.resolved == true } }.toSet()
 
     private fun write(ref: String, commit: String, comment: Comment): StoredComment {
         gateway.append(ref, commit, CommentJson.encode(comment))
