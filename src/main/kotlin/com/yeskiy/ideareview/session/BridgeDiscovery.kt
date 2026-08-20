@@ -46,7 +46,7 @@ object BridgeDiscovery {
     fun find(home: Path, projectPath: String): BridgeLookup {
         val file = fileFor(home, projectPath)
         if (!file.isRegularFile()) {
-            return BridgeLookup.Unavailable("The bridge file for this project does not exist yet.")
+            return BridgeLookup.Unavailable("The bridge server did not write a file for this project.")
         }
         return runCatching { parse(file.readText()) }
             .getOrElse { BridgeLookup.Unavailable("The bridge file cannot be read.") }
