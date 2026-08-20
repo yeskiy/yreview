@@ -3,20 +3,10 @@ package com.yeskiy.ideareview.session
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertTrue
 
 class ClaudeCommandTest {
 
     private val project = "E:/work/demo"
-
-    @Test
-    fun `the mcp config pins the project in the header`() {
-        assertEquals(
-            "{\"mcpServers\":{\"idea\":{\"type\":\"http\",\"url\":\"http://127.0.0.1:64342/stream\"," +
-                "\"headers\":{\"IJ_MCP_SERVER_PROJECT_PATH\":\"E:/work/demo\"}}}}",
-            ClaudeCommand.mcpConfig(project)
-        )
-    }
 
     @Test
     fun `a windows path keeps its drive letter and loses its backslashes`() {
@@ -39,46 +29,31 @@ class ClaudeCommandTest {
     }
 
     @Test
-    fun `the arguments carry the launcher the config and the channel`() {
-        assertEquals(
-            listOf(
-                "claude",
-                "--mcp-config",
-                ClaudeCommand.mcpConfig(project),
-                "--dangerously-load-development-channels",
-                "server:idea-review"
-            ),
-            ClaudeCommand.arguments(project)
-        )
+    fun `the session runs the launcher and nothing else`() {
+        assertEquals(listOf("claude"), ClaudeCommand.arguments())
     }
 
     @Test
-    fun `the shell line quotes the config for powershell`() {
-        assertEquals(
-            "claude --mcp-config '" + ClaudeCommand.mcpConfig(project) + "' " +
-                "--dangerously-load-development-channels 'server:idea-review'",
-            ClaudeCommand.shellLine(project)
-        )
-    }
-
-    @Test
-    fun `a single quote in the path is doubled`() {
-        val line = ClaudeCommand.shellLine("E:/Projects/O'Brien")
-        assertTrue(line.contains("E:/Projects/O''Brien"))
-        assertFalse(line.contains("O'Brien"))
+    fun `the command carries no flag of its own`() {
+        // The launcher owns every flag. A second --mcp-config naming the same server would
+        // replace the launcher entry and drop its pinned header. A second channel flag would
+        // start a channel the launcher had deliberately left out.
+        val text = ClaudeCommand.shellCommand().joinToString(" ")
+        assertFalse(text.contains("--mcp-config"))
+        assertFalse(text.contains("--dangerously-load-development-channels"))
     }
 
     @Test
     fun `the shell command runs powershell and keeps the window open`() {
         assertEquals(
-            listOf("powershell.exe", "-NoLogo", "-NoExit", "-Command", ClaudeCommand.shellLine(project)),
-            ClaudeCommand.shellCommand(project)
+            listOf("powershell.exe", "-NoLogo", "-NoExit", "-Command", "claude"),
+            ClaudeCommand.shellCommand()
         )
     }
 
     @Test
     fun `the command never names a bridge variable`() {
-        val text = ClaudeCommand.shellCommand(project).joinToString(" ")
+        val text = ClaudeCommand.shellCommand().joinToString(" ")
         assertFalse(text.contains("IDEA_REVIEW_BRIDGE"))
     }
 }

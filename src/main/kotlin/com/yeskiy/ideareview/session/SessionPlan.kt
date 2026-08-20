@@ -17,7 +17,7 @@ data class SessionPlan(
         fun of(projectPath: String, bridge: BridgeLookup): SessionPlan {
             val path = ClaudeCommand.windowsPath(projectPath)
             return SessionPlan(
-                command = ClaudeCommand.shellCommand(path),
+                command = ClaudeCommand.shellCommand(),
                 workingDirectory = path,
                 environment = when (bridge) {
                     is BridgeLookup.Available -> mapOf(

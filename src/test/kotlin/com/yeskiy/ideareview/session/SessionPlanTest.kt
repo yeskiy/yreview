@@ -14,7 +14,7 @@ class SessionPlanTest {
     @Test
     fun `the plan runs the launcher in the project directory`() {
         val plan = SessionPlan.of(project, ready)
-        assertEquals(ClaudeCommand.shellCommand(project), plan.command)
+        assertEquals(ClaudeCommand.shellCommand(), plan.command)
         assertEquals(project, plan.workingDirectory)
     }
 
@@ -39,7 +39,7 @@ class SessionPlanTest {
     @Test
     fun `a missing bridge still starts the session`() {
         val plan = SessionPlan.of(project, BridgeLookup.Unavailable("The bridge file does not exist yet."))
-        assertEquals(ClaudeCommand.shellCommand(project), plan.command)
+        assertEquals(ClaudeCommand.shellCommand(), plan.command)
         assertTrue(plan.environment.isEmpty())
         assertFalse(plan.bridgeReady)
     }
