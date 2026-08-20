@@ -9,4 +9,37 @@
 
   <depends>com.intellij.modules.platform</depends>
   <depends>Git4Idea</depends>
+
+  <extensions defaultExtensionNs="com.intellij">
+    <diff.DiffExtension implementation="com.yeskiy.ideareview.diff.ReviewDiffExtension" />
+
+    <intentionAction>
+      <language />
+      <className>com.yeskiy.ideareview.action.AddCommentIntention</className>
+      <category>Review comments</category>
+    </intentionAction>
+
+    <codeInsight.lineMarkerProvider
+        language=""
+        implementationClass="com.yeskiy.ideareview.gutter.CommentGutterProvider" />
+
+    <toolWindow id="Review Comments" anchor="bottom"
+                factoryClass="com.yeskiy.ideareview.toolwindow.ReviewToolWindowFactory" />
+  </extensions>
+
+  <actions>
+    <action id="com.yeskiy.ideareview.AddComment"
+            class="com.yeskiy.ideareview.action.AddCommentAction"
+            text="Add Review Comment"
+            description="Write a review comment on the selected lines.">
+      <add-to-group group-id="EditorPopupMenu" anchor="last" />
+    </action>
+
+    <action id="com.yeskiy.ideareview.AddDiffComment"
+            class="com.yeskiy.ideareview.diff.AddDiffCommentAction"
+            text="Add Review Comment"
+            description="Write a review comment on the selected lines of this diff side.">
+      <add-to-group group-id="Diff.EditorPopupMenu" anchor="last" />
+    </action>
+  </actions>
 </idea-plugin>
