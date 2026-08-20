@@ -1,0 +1,36 @@
+{
+  "name": "idea-review-channel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Claude Code channel server that pushes IDEA review comments into an open session",
+  "license": "MIT",
+  "bin": {
+    "idea-review-channel": "./dist/main.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "fake-bridge": "node dist/fakeBridge.js",
+    "test": "vitest run",
+    "lint": "eslint --fix ."
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "22.20.1",
+    "eslint": "10.8.1",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.67.0",
+    "vitest": "4.1.11"
+  },
+  "engines": {
+    "node": ">=20.19"
+  }
+}
