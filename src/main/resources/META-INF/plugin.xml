@@ -1,0 +1,12 @@
+<idea-plugin>
+  <id>com.yeskiy.ideareview</id>
+  <name>IDEA Review</name>
+  <vendor>yeskiy</vendor>
+  <description><![CDATA[
+    Write review comments on any line, in the editor and in the diff.
+    Comments are stored as git notes in the git-appraise format.
+  ]]></description>
+
+  <depends>com.intellij.modules.platform</depends>
+  <depends>Git4Idea</depends>
+</idea-plugin>
