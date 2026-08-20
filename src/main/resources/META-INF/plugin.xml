@@ -25,6 +25,12 @@
 
     <toolWindow id="Review Comments" anchor="bottom"
                 factoryClass="com.yeskiy.ideareview.toolwindow.ReviewToolWindowFactory" />
+
+    <projectConfigurable parentId="tools"
+                         id="com.yeskiy.ideareview.settings"
+                         displayName="Review Comments"
+                         nonDefaultProject="true"
+                         instance="com.yeskiy.ideareview.settings.ReviewConfigurable" />
   </extensions>
 
   <actions>
