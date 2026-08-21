@@ -67,6 +67,64 @@ class TaskFilterTest {
         assertTrue(TaskFilter.apply(todos, emptySet()).isEmpty())
     }
 
+    @Test
+    fun `keeps both kinds by default`() {
+        val kept = TaskFilter.apply(todos + comment, null, TaskKindFilter.BOTH)
+
+        assertEquals(listOf("a", "b", "c"), kept.map { it.id })
+    }
+
+    @Test
+    fun `keeps the review comments only`() {
+        val kept = TaskFilter.apply(todos + comment, null, TaskKindFilter.COMMENTS)
+
+        assertEquals(listOf("c"), kept.map { it.id })
+    }
+
+    @Test
+    fun `keeps the todo items only`() {
+        val kept = TaskFilter.apply(todos + comment, null, TaskKindFilter.TODOS)
+
+        assertEquals(listOf("a", "b"), kept.map { it.id })
+    }
+
+    @Test
+    fun `a todo filter does not bring back a hidden review comment`() {
+        val kept = TaskFilter.apply(todos + comment, setOf(FIXME_RULE), TaskKindFilter.TODOS)
+
+        assertEquals(listOf("b"), kept.map { it.id })
+    }
+
+    @Test
+    fun `a todo filter does not remove the comments of the comments only view`() {
+        val kept = TaskFilter.apply(todos + comment, setOf(FIXME_RULE), TaskKindFilter.COMMENTS)
+
+        assertEquals(listOf("c"), kept.map { it.id })
+    }
+
+    @Test
+    fun `a comments only view keeps the comment when the todo filter holds no pattern`() {
+        val kept = TaskFilter.apply(todos + comment, emptySet(), TaskKindFilter.COMMENTS)
+
+        assertEquals(listOf("c"), kept.map { it.id })
+    }
+
+    @Test
+    fun `the two filters answer on their own`() {
+        assertTrue(TaskFilter.acceptsKind(comment, TaskKindFilter.COMMENTS))
+        assertFalse(TaskFilter.acceptsKind(comment, TaskKindFilter.TODOS))
+        assertTrue(TaskFilter.acceptsRules(comment, setOf(FIXME_RULE)))
+        assertFalse(TaskFilter.accepts(comment, setOf(FIXME_RULE), TaskKindFilter.TODOS))
+    }
+
+    @Test
+    fun `names every kind of the filter menu`() {
+        assertEquals(
+            listOf("Comments and TODO Items", "Review Comments Only", "TODO Items Only"),
+            TaskKindFilter.entries.map { it.label },
+        )
+    }
+
     companion object {
         private const val TODO_RULE = "\\btodo\\b.*"
 

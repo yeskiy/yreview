@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class TaskChoiceTest {
@@ -13,6 +14,17 @@ class TaskChoiceTest {
         startLine = 1,
         endLine = 1,
         text = "work on $id",
+        filePath = "/repo/src/A.kt",
+        rootPath = "/repo",
+    )
+
+    private fun comment(id: String) = ReviewTask(
+        id = id,
+        kind = TaskKind.COMMENT,
+        path = "src/A.kt",
+        startLine = 1,
+        endLine = 1,
+        text = "please look at $id",
         filePath = "/repo/src/A.kt",
         rootPath = "/repo",
     )
@@ -83,5 +95,95 @@ class TaskChoiceTest {
     fun `walks nowhere in an empty tree`() {
         assertEquals(-1, TaskChoice.nextIndex(0, -1))
         assertEquals(-1, TaskChoice.previousIndex(0, -1))
+    }
+
+    @Test
+    fun `a write takes the checked rows first`() {
+        val target = TaskChoice.writeTarget(listOf(comment("x")), listOf(comment("y")))
+
+        assertEquals(WriteScope.CHECKED, target.scope)
+        assertEquals(listOf("x"), target.comments.map { it.id })
+    }
+
+    @Test
+    fun `a write takes the highlighted rows when no check box is on`() {
+        val target = TaskChoice.writeTarget(emptyList(), listOf(comment("y"), comment("z")))
+
+        assertEquals(WriteScope.SELECTED, target.scope)
+        assertEquals(listOf("y", "z"), target.comments.map { it.id })
+    }
+
+    @Test
+    fun `a write never falls back to the whole tree`() {
+        val target = TaskChoice.writeTarget(emptyList(), emptyList())
+
+        assertEquals(WriteScope.NONE, target.scope)
+        assertTrue(target.empty)
+        assertTrue(target.comments.isEmpty())
+        assertTrue(target.todos.isEmpty())
+    }
+
+    @Test
+    fun `a write keeps the todo rows apart from the comments`() {
+        val target = TaskChoice.writeTarget(emptyList(), listOf(task("a"), comment("y"), task("b")))
+
+        assertEquals(listOf("y"), target.comments.map { it.id })
+        assertEquals(listOf("a", "b"), target.todos.map { it.id })
+    }
+
+    @Test
+    fun `a write of todo rows only holds no comment`() {
+        val target = TaskChoice.writeTarget(emptyList(), listOf(task("a")))
+
+        assertEquals(WriteScope.SELECTED, target.scope)
+        assertTrue(target.empty)
+        assertEquals(listOf("a"), target.todos.map { it.id })
+    }
+
+    @Test
+    fun `a write counts one comment once`() {
+        val target = TaskChoice.writeTarget(listOf(comment("x"), comment("x")), emptyList())
+
+        assertEquals(listOf("x"), target.comments.map { it.id })
+    }
+
+    @Test
+    fun `the delete question names the risk and the count`() {
+        val target = TaskChoice.writeTarget(listOf(comment("x"), comment("y")), emptyList())
+
+        assertEquals(
+            "You cannot undo this delete. The plugin removes 2 review comments from the git notes.",
+            target.deleteQuestion,
+        )
+    }
+
+    @Test
+    fun `the notice names the todo rows a write leaves alone`() {
+        val target = TaskChoice.writeTarget(emptyList(), listOf(comment("y"), task("a")))
+
+        assertEquals(
+            "A TODO lives in the source file and not in a note. The plugin kept 1 TODO row.",
+            target.todoNotice,
+        )
+    }
+
+    @Test
+    fun `the notice stays empty when every row is a comment`() {
+        assertEquals("", TaskChoice.writeTarget(listOf(comment("x")), emptyList()).todoNotice)
+    }
+
+    @Test
+    fun `the preview takes the first row of the selection`() {
+        assertEquals("b", TaskChoice.previewTask(listOf(task("b"), task("c")), all)?.id)
+    }
+
+    @Test
+    fun `the preview takes the first row of the tree when no row is selected`() {
+        assertEquals("a", TaskChoice.previewTask(emptyList(), all)?.id)
+    }
+
+    @Test
+    fun `the preview stays empty when the tree is empty`() {
+        assertNull(TaskChoice.previewTask(emptyList(), emptyList()))
     }
 }
