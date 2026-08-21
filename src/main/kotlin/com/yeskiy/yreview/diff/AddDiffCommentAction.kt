@@ -5,16 +5,12 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.Editor
-import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.action.CommentTarget
-import com.yeskiy.yreview.settings.ReviewSettings
-import com.yeskiy.yreview.store.NoteRefs
-import com.yeskiy.yreview.store.NotesWriteException
-import com.yeskiy.yreview.store.ReviewService
-import com.yeskiy.yreview.ui.AddCommentDialog
-import com.yeskiy.yreview.ui.ShareFailure
+import com.yeskiy.yreview.action.CommentWriter
+import com.yeskiy.yreview.ui.AddCommentPopup
+import com.yeskiy.yreview.ui.CommentText
 
 val REVIEW_ANCHOR: Key<DiffAnchor> = Key.create("com.yeskiy.yreview.anchor")
 val REVIEW_ROOT: Key<VirtualFile> = Key.create("com.yeskiy.yreview.root")
@@ -40,29 +36,16 @@ class AddDiffCommentAction : AnAction() {
         val root = editor.getUserData(REVIEW_ROOT) ?: return
 
         val target = CommentTarget.fromEditor(editor, anchor.path)
-        val working = if (anchor.dirty) " (working tree)" else ""
-        val header = "${anchor.path}:${target.startLine}-${target.endLine} @${anchor.commit.take(7)}$working"
+        val header = CommentText.diffHeader(
+            anchor.path,
+            target.startLine,
+            target.endLine,
+            anchor.commit,
+            anchor.dirty,
+        )
 
-        val dialog = AddCommentDialog(project, header, ReviewSettings.getInstance(project).sharing.shareByDefault)
-        if (!dialog.showAndGet()) return
-
-        try {
-            val result = ReviewService.getInstance(project).addComment(
-                root,
-                NoteRefs.refFor(dialog.share),
-                anchor.commit,
-                anchor.path,
-                target.startLine,
-                target.endLine,
-                dialog.text,
-            )
-            result.shareError?.let { ShareFailure.report(project, TITLE, it) }
-        } catch (failure: NotesWriteException) {
-            Messages.showErrorDialog(project, failure.message ?: "The comment was not written.", TITLE)
+        AddCommentPopup.show(project, editor, header) { text, share ->
+            CommentWriter.write(project, root, anchor.commit, target, text, share)
         }
-    }
-
-    private companion object {
-        const val TITLE = "Add Review Comment"
     }
 }

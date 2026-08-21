@@ -7,12 +7,9 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
-import com.yeskiy.yreview.settings.ReviewSettings
-import com.yeskiy.yreview.store.NoteRefs
-import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewService
-import com.yeskiy.yreview.ui.AddCommentDialog
-import com.yeskiy.yreview.ui.ShareFailure
+import com.yeskiy.yreview.ui.AddCommentPopup
+import com.yeskiy.yreview.ui.CommentText
 
 data class Target(val path: String, val startLine: Int, val endLine: Int)
 
@@ -52,36 +49,16 @@ class AddCommentAction : AnAction() {
 
         val path = service.relativePath(file) ?: return
         val commit = service.headOf(file) ?: run {
-            Messages.showErrorDialog(project, "This repository has no commit yet.", TITLE)
+            Messages.showErrorDialog(project, "This repository has no commit yet.", CommentWriter.TITLE)
             return
         }
         val root = service.repositoryRoot(file) ?: return
         val target = CommentTarget.fromEditor(editor, path)
 
-        val dialog = AddCommentDialog(
+        AddCommentPopup.show(
             project,
-            "${target.path}:${target.startLine}-${target.endLine}",
-            ReviewSettings.getInstance(project).sharing.shareByDefault,
-        )
-        if (!dialog.showAndGet()) return
-
-        try {
-            val result = service.addComment(
-                root,
-                NoteRefs.refFor(dialog.share),
-                commit,
-                target.path,
-                target.startLine,
-                target.endLine,
-                dialog.text,
-            )
-            result.shareError?.let { ShareFailure.report(project, TITLE, it) }
-        } catch (failure: NotesWriteException) {
-            Messages.showErrorDialog(project, failure.message ?: "The comment was not written.", TITLE)
-        }
-    }
-
-    private companion object {
-        const val TITLE = "Add Review Comment"
+            editor,
+            CommentText.header(target.path, target.startLine, target.endLine),
+        ) { text, share -> CommentWriter.write(project, root, commit, target, text, share) }
     }
 }
