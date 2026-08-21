@@ -18,12 +18,14 @@ import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.settings.ReviewSettings
 import org.jetbrains.plugins.terminal.ShellTerminalWidget
 import java.awt.BorderLayout
+import java.nio.file.Path
 import javax.swing.JPanel
 import javax.swing.JTextArea
 
 /**
  * The content of the Claude tool window. It holds a terminal that runs one review session.
- * The plugin owns the command line, so the channel flags are never missing.
+ * The plugin owns the command line. It reads the command from the settings, and it appends
+ * the channel flags itself, so no shell function of one machine has to carry them.
  *
  * One button in the tool window title bar carries both states. It starts a session while
  * none runs, and it ends the running one. A terminal stays on screen after the session
@@ -52,11 +54,14 @@ class ClaudeSessionPanel(
     /** True between the press on Start and the mount of the terminal. */
     private var starting = false
 
+    /** The configuration file of the running session. It goes away with the session. */
+    private var configFile: Path? = null
+
     init {
         showIdle(NO_SESSION)
     }
 
-    override fun dispose() = Unit
+    override fun dispose() = dropConfig()
 
     val isRunning: Boolean
         get() = session != null
@@ -94,17 +99,45 @@ class ClaudeSessionPanel(
 
     /** The switch comes first, so a closed channel never reads the file of an earlier run. */
     private fun lookup(basePath: String): BridgeLookup =
-        if (ReviewSettings.getInstance(project).channel) {
+        if (settings().channel) {
             BridgeDiscovery.find(basePath)
         } else {
             BridgeLookup.ChannelOff
         }
 
+    private fun settings(): ReviewSettings = ReviewSettings.getInstance(project)
+
+    private fun channelServer(): ChannelServer.Answer = ChannelServer.locate(settings().channelServer)
+
+    /**
+     * The channel needs both halves, so the file appears only when the bridge answers and
+     * the settings name the server. A failed write leaves the session without the channel.
+     */
+    private fun writeConfig(bridge: BridgeLookup, server: ChannelServer.Answer): Path? {
+        if (bridge !is BridgeLookup.Available || server !is ChannelServer.Answer.Found) return null
+        return runCatching { ChannelConfig.write(server.path) }
+            .onFailure { thisLogger().warn("The review session wrote no channel configuration file.", it) }
+            .getOrNull()
+    }
+
+    private fun dropConfig() {
+        ChannelConfig.delete(configFile)
+        configFile = null
+    }
+
     private fun mount(basePath: String, bridge: BridgeLookup) {
         starting = false
         if (isRunning) return
-        val started = ReviewTerminal.open(project, SessionPlan.of(basePath, bridge), this)
-            ?: return failed(NO_TERMINAL)
+        dropConfig()
+        val server = channelServer()
+        val written = writeConfig(bridge, server)
+        configFile = written
+        val plan = SessionPlan.of(basePath, bridge, settings().claudeCommand, server, written?.toString())
+        val started = ReviewTerminal.open(project, plan, this)
+        if (started == null) {
+            dropConfig()
+            return failed(NO_TERMINAL)
+        }
         terminal?.let { drop(it) }
         remove(idle)
         terminal = started
@@ -125,9 +158,9 @@ class ClaudeSessionPanel(
     /**
      * Follows the process behind the terminal. The terminal gets its connector after the
      * session opens, so the accessor holds this call until the connector exists. The
-     * command line carries no -NoExit flag, and PowerShell exits with the agent. The exit
-     * callback runs on a pooled thread, and [onTermination] moves the work to the user
-     * interface thread.
+     * wrapper shell carries no flag that keeps it alive, so it exits with the agent. The
+     * exit callback runs on a pooled thread, and [onTermination] moves the work to the
+     * user interface thread.
      */
     private fun watch(started: TerminalWidget) =
         started.ttyConnectorAccessor.executeWithTtyConnector { connector ->
@@ -158,6 +191,7 @@ class ClaudeSessionPanel(
 
     private fun endSession() {
         session = null
+        dropConfig()
         toolWindow.setTitle(ENDED_TITLE)
     }
 
@@ -192,7 +226,7 @@ class ClaudeSessionPanel(
 
     private fun bridgeState(): String {
         val basePath = project.basePath ?: return NO_DIRECTORY
-        return SessionPlan.of(basePath, lookup(basePath)).status
+        return SessionPlan.of(basePath, lookup(basePath), settings().claudeCommand, channelServer()).status
     }
 
     /** A text area, not a label. The status text wraps, and it never renders markup. */

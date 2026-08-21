@@ -10,12 +10,37 @@ class SessionPlanTest {
     private val project = "E:/work/demo"
     private val token = "0123456789abcdef0123"
     private val ready = BridgeLookup.Available("http://127.0.0.1:52431", token)
+    private val serverPath = "E:/work/demo/channel/dist/main.js"
+    private val found = ChannelServer.Answer.Found(serverPath)
+    private val config = "/tmp/claude-y-review-mcp-1.json"
+
+    private fun plan(
+        bridge: BridgeLookup = ready,
+        server: ChannelServer.Answer = found,
+        configFile: String? = config,
+    ) = SessionPlan.of(project, bridge, "claude", server, configFile)
 
     @Test
-    fun `the plan runs the launcher in the project directory`() {
-        val plan = SessionPlan.of(project, ready)
-        assertEquals(ClaudeCommand.shellCommand(), plan.command)
-        assertEquals(project, plan.workingDirectory)
+    fun `the plan runs the command in the project directory`() {
+        assertEquals(ClaudeCommand.shellCommand("claude", config), plan().command)
+        assertEquals(project, plan().workingDirectory)
+    }
+
+    @Test
+    fun `the plan appends the two flags of the channel`() {
+        val line = plan().command.last()
+
+        assertTrue(line.contains(ClaudeCommand.CONFIG_FLAG), line)
+        assertTrue(line.contains(config), line)
+        assertTrue(line.contains(ClaudeCommand.CHANNEL_FLAG), line)
+        assertTrue(line.contains(ClaudeCommand.CHANNEL_VALUE), line)
+    }
+
+    @Test
+    fun `the plan runs the command of the settings`() {
+        val custom = SessionPlan.of(project, ready, "C:/tools/claude.exe", found, config)
+
+        assertTrue(custom.command.last().contains("C:/tools/claude.exe"), custom.command.last())
     }
 
     @Test
@@ -25,69 +50,112 @@ class SessionPlanTest {
                 BridgeDiscovery.URL_VARIABLE to "http://127.0.0.1:52431",
                 BridgeDiscovery.TOKEN_VARIABLE to token
             ),
-            SessionPlan.of(project, ready).environment
+            plan().environment
         )
     }
 
     @Test
     fun `the token never reaches the command line`() {
-        val plan = SessionPlan.of(project, ready)
+        val plan = plan()
         assertFalse(plan.command.any { it.contains(token) })
         assertFalse(plan.status.contains(token))
     }
 
     @Test
     fun `a missing bridge still starts the session`() {
-        val plan = SessionPlan.of(project, BridgeLookup.Unavailable("The bridge file does not exist yet."))
-        assertEquals(ClaudeCommand.shellCommand(), plan.command)
+        val plan = plan(bridge = BridgeLookup.Unavailable("The bridge file does not exist yet."))
+
         assertTrue(plan.environment.isEmpty())
         assertFalse(plan.bridgeReady)
+        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
     }
 
     @Test
     fun `a missing bridge is stated in the status text`() {
-        val plan = SessionPlan.of(project, BridgeLookup.Unavailable("The bridge file does not exist yet."))
+        val plan = plan(bridge = BridgeLookup.Unavailable("The bridge file does not exist yet."))
+
         assertTrue(plan.status.contains("The bridge file does not exist yet."))
         assertTrue(plan.status.contains("not available"))
     }
 
     @Test
     fun `a ready bridge is stated in the status text`() {
-        val plan = SessionPlan.of(project, ready)
-        assertTrue(plan.bridgeReady)
-        assertTrue(plan.status.contains("http://127.0.0.1:52431"))
+        assertTrue(plan().bridgeReady)
+        assertTrue(plan().status.contains("http://127.0.0.1:52431"))
     }
 
     @Test
     fun `a closed channel starts the session without the bridge`() {
-        val plan = SessionPlan.of(project, BridgeLookup.ChannelOff)
-        assertEquals(ClaudeCommand.shellCommand(), plan.command)
+        val plan = plan(bridge = BridgeLookup.ChannelOff)
+
         assertEquals(project, plan.workingDirectory)
         assertTrue(plan.environment.isEmpty())
         assertFalse(plan.bridgeReady)
+        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
     }
 
     @Test
     fun `a closed channel names the switch in the status text`() {
-        val plan = SessionPlan.of(project, BridgeLookup.ChannelOff)
+        val plan = plan(bridge = BridgeLookup.ChannelOff)
+
         assertTrue(plan.status.contains("The review channel is off in the settings."), plan.status)
         assertTrue(plan.status.contains("The session starts without the channel."), plan.status)
     }
 
     @Test
     fun `a closed channel never asks the user to wait`() {
-        val plan = SessionPlan.of(project, BridgeLookup.ChannelOff)
+        val plan = plan(bridge = BridgeLookup.ChannelOff)
+
         assertFalse(plan.status.contains("yet"), plan.status)
         assertFalse(plan.status.contains("not available"), plan.status)
     }
 
     @Test
-    fun `the three cases each carry their own words`() {
+    fun `an empty channel server setting starts the session without the flags`() {
+        val plan = plan(server = ChannelServer.Answer.NotSet, configFile = null)
+
+        assertEquals(ClaudeCommand.shellCommand("claude"), plan.command)
+        assertFalse(plan.command.last().contains(ClaudeCommand.CONFIG_FLAG))
+        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+        assertTrue(plan.bridgeReady)
+    }
+
+    @Test
+    fun `an empty channel server setting names the settings in the status text`() {
+        val plan = plan(server = ChannelServer.Answer.NotSet, configFile = null)
+
+        assertTrue(plan.status.contains("No channel server is set in the settings."), plan.status)
+        assertTrue(plan.status.contains("The session starts without the channel."), plan.status)
+        assertFalse(plan.status.contains("yet"), plan.status)
+    }
+
+    @Test
+    fun `a channel server that is no file is named in the status text`() {
+        val plan = plan(server = ChannelServer.Answer.Missing(serverPath), configFile = null)
+
+        assertTrue(plan.status.contains(serverPath), plan.status)
+        assertTrue(plan.status.contains("The session starts without the channel."), plan.status)
+        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+    }
+
+    @Test
+    fun `a channel server that is no file never carries the flags`() {
+        // A caller that writes no configuration file must never produce a --mcp-config flag.
+        val plan = plan(server = ChannelServer.Answer.Missing(serverPath), configFile = config)
+
+        assertFalse(plan.command.last().contains(ClaudeCommand.CONFIG_FLAG), plan.command.last())
+    }
+
+    @Test
+    fun `the five cases each carry their own words`() {
         val texts = listOf(
-            SessionPlan.of(project, ready).status,
-            SessionPlan.of(project, BridgeLookup.Unavailable("The bridge file does not exist yet.")).status,
-            SessionPlan.of(project, BridgeLookup.ChannelOff).status,
+            plan().status,
+            plan(bridge = BridgeLookup.Unavailable("The bridge file does not exist yet.")).status,
+            plan(bridge = BridgeLookup.ChannelOff).status,
+            plan(server = ChannelServer.Answer.NotSet, configFile = null).status,
+            plan(server = ChannelServer.Answer.Missing(serverPath), configFile = null).status,
         )
+
         assertEquals(texts.size, texts.distinct().size)
     }
 

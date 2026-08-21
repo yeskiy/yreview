@@ -6,6 +6,7 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
+import com.yeskiy.yreview.session.ClaudeCommand
 import com.yeskiy.yreview.tasks.TaskGrouping
 import com.yeskiy.yreview.tasks.TaskKindFilter
 import com.yeskiy.yreview.tasks.TaskScope
@@ -62,6 +63,20 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         @JvmField
         var sessionWindow: Boolean? = null
 
+        /**
+         * The command a review session runs. Every machine holds Claude Code in its own
+         * place, so the default names the launcher every installer writes to the PATH.
+         */
+        @JvmField
+        var claudeCommand: String = ClaudeCommand.DEFAULT_COMMAND
+
+        /**
+         * The path of the channel server, or an empty string. The plugin ships no copy of
+         * that Node program, so it cannot fill this field on its own.
+         */
+        @JvmField
+        var channelServer: String = ""
+
         @JvmField
         var projectTab: TabState = TabState()
 
@@ -97,6 +112,20 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         get() = current.sessionWindow
         set(value) {
             current.sessionWindow = value
+        }
+
+    /** The command of a review session. A blank field falls back to the default. */
+    var claudeCommand: String
+        get() = current.claudeCommand.trim().ifEmpty { ClaudeCommand.DEFAULT_COMMAND }
+        set(value) {
+            current.claudeCommand = value.trim().ifEmpty { ClaudeCommand.DEFAULT_COMMAND }
+        }
+
+    /** The path of the channel server, or an empty string while nobody named one. */
+    var channelServer: String
+        get() = current.channelServer.trim()
+        set(value) {
+            current.channelServer = value.trim()
         }
 
     /** True when the Claude tool window may appear. An unset choice follows the search. */

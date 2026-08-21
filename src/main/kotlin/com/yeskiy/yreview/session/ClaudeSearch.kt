@@ -22,9 +22,9 @@ data class ClaudeInstall(val path: String?, val source: ClaudeSource) {
  * Two well known folders follow, because the IDE can hold a PATH that the shell of the
  * user does not have.
  *
- * A review session runs the `claude` launcher, which is a PowerShell function of the
- * user profile. A shell function has no file and no PATH entry, so no search finds it. A
- * machine that holds `claude` alone therefore reports nothing.
+ * The search reports a file, and the settings page offers that file as the command. A user
+ * whose command is a shell function keeps that function, because a shell function has no
+ * file and no PATH entry, and no search finds it.
  */
 object ClaudeSearch {
 

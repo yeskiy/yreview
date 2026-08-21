@@ -83,6 +83,61 @@ class ReviewSettingsStateTest {
         assertEquals(CommentSharing.SHARED, read.sharing)
         assertEquals(true, read.channel)
         assertNull(read.sessionWindow)
+        assertEquals("claude", read.claudeCommand)
+        assertEquals("", read.channelServer)
+    }
+
+    @Test
+    fun `the default command is claude and the default channel server is empty`() {
+        assertEquals("claude", ReviewSettings.State().claudeCommand)
+        assertEquals("", ReviewSettings.State().channelServer)
+    }
+
+    @Test
+    fun `the command and the channel server survive a write and a read`() {
+        val state = ReviewSettings.State()
+        state.claudeCommand = "C:\\tools\\claude.exe"
+        state.channelServer = "E:/work/demo/channel/dist/main.js"
+
+        assertEquals("C:\\tools\\claude.exe", read(state).claudeCommand)
+        assertEquals("E:/work/demo/channel/dist/main.js", read(state).channelServer)
+    }
+
+    @Test
+    fun `a blank command falls back to the default`() {
+        val settings = ReviewSettings()
+        settings.loadState(ReviewSettings.State())
+
+        settings.claudeCommand = "   "
+        assertEquals("claude", settings.claudeCommand)
+
+        settings.claudeCommand = "  claude  "
+        assertEquals("claude", settings.claudeCommand)
+    }
+
+    @Test
+    fun `the channel server keeps an empty value and loses its spaces`() {
+        val settings = ReviewSettings()
+        settings.loadState(ReviewSettings.State())
+
+        assertEquals("", settings.channelServer)
+
+        settings.channelServer = "  /opt/y-review/channel/dist/main.js  "
+        assertEquals("/opt/y-review/channel/dist/main.js", settings.channelServer)
+    }
+
+    @Test
+    fun `the command and the channel server both round trip through the service`() {
+        val settings = ReviewSettings()
+        settings.loadState(ReviewSettings.State())
+        settings.claudeCommand = "claude"
+        settings.channelServer = "/opt/y-review/channel/dist/main.js"
+
+        val second = ReviewSettings()
+        second.loadState(read(settings.state))
+
+        assertEquals("claude", second.claudeCommand)
+        assertEquals("/opt/y-review/channel/dist/main.js", second.channelServer)
     }
 
     @Test
