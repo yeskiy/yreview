@@ -32,6 +32,10 @@ object ClaudeCommand {
     /** The launcher is a PowerShell function, so the session runs as one PowerShell line. */
     fun shellLine(): String = arguments().joinToString(" ")
 
+    /**
+     * PowerShell exits as soon as the launcher exits. The terminal session then ends with
+     * the agent, and the tool window reports the true state.
+     */
     fun shellCommand(): List<String> =
-        listOf("powershell.exe", "-NoLogo", "-NoExit", "-Command", shellLine())
+        listOf("powershell.exe", "-NoLogo", "-Command", shellLine())
 }

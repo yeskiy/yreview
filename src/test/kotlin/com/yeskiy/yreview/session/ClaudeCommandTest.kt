@@ -44,11 +44,18 @@ class ClaudeCommandTest {
     }
 
     @Test
-    fun `the shell command runs powershell and keeps the window open`() {
+    fun `the shell command runs powershell and ends with the launcher`() {
         assertEquals(
-            listOf("powershell.exe", "-NoLogo", "-NoExit", "-Command", "claude"),
+            listOf("powershell.exe", "-NoLogo", "-Command", "claude"),
             ClaudeCommand.shellCommand()
         )
+    }
+
+    @Test
+    fun `the shell does not outlive the launcher`() {
+        // -NoExit keeps PowerShell alive after the agent exits. The terminal session then
+        // stays open, and the tool window reports a session that nobody uses.
+        assertFalse(ClaudeCommand.shellCommand().contains("-NoExit"))
     }
 
     @Test
