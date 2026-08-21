@@ -4,3 +4,4 @@ plugins {
 }
 
 rootProject.name = "y-review"
+include("channel-server")

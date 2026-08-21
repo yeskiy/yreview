@@ -18,26 +18,26 @@ data class SessionPlan(
             "The session starts without the channel. " +
                 "The agent can still read the comments through the IDE server."
 
-        private const val NO_NODE =
-            "Node was not found on this machine, and the channel server needs Node."
+        private const val NO_RUNTIME =
+            "The IDE names no Java runtime, so the plugin cannot start the channel server."
 
         /**
          * The channel needs three parts. The bridge must answer, the plugin must hold the
-         * channel server, and this machine must hold Node. The plugin appends the two flags
-         * only then, and [configFile] holds the configuration file the caller wrote for
-         * this session.
+         * channel server, and the IDE must name a Java runtime. The plugin appends the two
+         * flags only then, and [configFile] holds the configuration file the caller wrote
+         * for this session.
          */
         fun of(
             projectPath: String,
             bridge: BridgeLookup,
             command: String = ClaudeCommand.DEFAULT_COMMAND,
             server: ChannelServer.Answer = ChannelServer.Answer.Unknown,
-            node: NodeInstall = NodeInstall.NOTHING,
+            javaPath: String? = null,
             configFile: String? = null,
         ): SessionPlan {
             val ready = bridge is BridgeLookup.Available &&
                 server is ChannelServer.Answer.Found &&
-                node.found
+                javaPath != null
             return SessionPlan(
                 command = ClaudeCommand.shellCommand(command, configFile.takeIf { ready }),
                 workingDirectory = ClaudeCommand.windowsPath(projectPath),
@@ -48,7 +48,7 @@ data class SessionPlan(
                     )
                     is BridgeLookup.Unavailable, BridgeLookup.ChannelOff -> emptyMap()
                 },
-                status = status(bridge, server, node),
+                status = status(bridge, server, javaPath),
                 bridgeReady = bridge is BridgeLookup.Available
             )
         }
@@ -60,7 +60,7 @@ data class SessionPlan(
         private fun status(
             bridge: BridgeLookup,
             server: ChannelServer.Answer,
-            node: NodeInstall,
+            javaPath: String?,
         ): String = when (bridge) {
             is BridgeLookup.Unavailable ->
                 "The review bridge is not available yet. ${bridge.reason} $WITHOUT_CHANNEL"
@@ -68,10 +68,10 @@ data class SessionPlan(
                 "The review channel is off in the settings. $WITHOUT_CHANNEL"
             is BridgeLookup.Available -> when (server) {
                 is ChannelServer.Answer.Found ->
-                    if (node.found) {
+                    if (javaPath != null) {
                         "The review bridge is ready at ${bridge.url}."
                     } else {
-                        "$NO_NODE $WITHOUT_CHANNEL"
+                        "$NO_RUNTIME $WITHOUT_CHANNEL"
                     }
                 ChannelServer.Answer.Unknown ->
                     "The folder of the plugin is not known, so no channel server was found. $WITHOUT_CHANNEL"

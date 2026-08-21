@@ -8,12 +8,12 @@ import java.nio.file.Path
 /**
  * Finds the channel server inside the plugin.
  *
- * The plugin ships the server, so no setting names it. The build writes one bundled
- * JavaScript file into the folder of the plugin, beside the lib folder, and this search
- * asks the platform where that folder is.
+ * The plugin ships the server, so no setting names it. The build writes one jar into the
+ * folder of the plugin, beside the lib folder, and this search asks the platform where
+ * that folder is.
  *
- * The file carries the .mjs suffix. The folder of the plugin holds no package.json, so
- * Node reads a .js file as a script of the older kind, and the bundle is a module.
+ * The jar holds every class that the server needs. The server runs in a process of its
+ * own, and that process reads no class of the IDE.
  */
 object ChannelServer {
 
@@ -23,8 +23,11 @@ object ChannelServer {
     /** The folder inside the plugin folder that holds the server. */
     const val FOLDER_NAME = "channel"
 
-    /** The file the bundler writes. */
-    const val FILE_NAME = "main.mjs"
+    /** The file the channel-server build writes. */
+    const val FILE_NAME = "y-review-channel.jar"
+
+    /** The class that the Java launcher runs. The jar names it in the manifest as well. */
+    const val MAIN_CLASS = "com.yeskiy.yreview.channel.MainKt"
 
     /** Where the server is right now. */
     sealed interface Answer {

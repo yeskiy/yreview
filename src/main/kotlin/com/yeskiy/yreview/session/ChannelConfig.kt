@@ -24,6 +24,8 @@ object ChannelConfig {
 
     private const val STDIO = "stdio"
 
+    private const val CLASS_PATH_FLAG = "-cp"
+
     private val JSON = Json { prettyPrint = true }
 
     @Serializable
@@ -33,17 +35,26 @@ object ChannelConfig {
     private data class Document(val mcpServers: Map<String, Entry>)
 
     /**
-     * [nodePath] is the file that the search for Node found, and not the bare command.
-     * Claude Code starts the server with a PATH of its own, so a full path always runs.
+     * [javaPath] is the launcher of the Java runtime that the IDE runs, and not the bare
+     * command. Claude Code starts the server with a PATH of its own, so a full path always
+     * runs. The class path holds one jar, and that jar holds every class of the server.
      */
-    fun text(nodePath: String, serverPath: String): String =
+    fun text(javaPath: String, serverPath: String): String =
         JSON.encodeToString(
-            Document(mapOf(ClaudeCommand.SERVER_NAME to Entry(STDIO, nodePath, listOf(serverPath))))
+            Document(
+                mapOf(
+                    ClaudeCommand.SERVER_NAME to Entry(
+                        STDIO,
+                        javaPath,
+                        listOf(CLASS_PATH_FLAG, serverPath, ChannelServer.MAIN_CLASS)
+                    )
+                )
+            )
         )
 
     /** The caller owns the file, and it deletes the file when the session ends. */
-    fun write(nodePath: String, serverPath: String): Path =
-        Files.createTempFile(PREFIX, SUFFIX).also { it.writeText(text(nodePath, serverPath)) }
+    fun write(javaPath: String, serverPath: String): Path =
+        Files.createTempFile(PREFIX, SUFFIX).also { it.writeText(text(javaPath, serverPath)) }
 
     fun delete(file: Path?) {
         file ?: return

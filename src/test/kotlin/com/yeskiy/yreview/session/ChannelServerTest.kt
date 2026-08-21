@@ -14,7 +14,7 @@ class ChannelServerTest {
 
     private val never: (Path) -> Boolean = { false }
 
-    private fun expected(): String = plugin.resolve("channel").resolve("main.mjs").toString()
+    private fun expected(): String = plugin.resolve("channel").resolve("y-review-channel.jar").toString()
 
     @Test
     fun `the server sits beside the lib folder of the plugin`() {
@@ -32,10 +32,8 @@ class ChannelServerTest {
     }
 
     @Test
-    fun `the file name keeps the module suffix that Node needs`() {
-        // The plugin folder holds no package.json, so Node reads a .js file as a script of
-        // the older kind. The bundle is a module, therefore the suffix must stay .mjs.
-        assertEquals("main.mjs", ChannelServer.FILE_NAME)
+    fun `the file name is the jar that the Java launcher reads`() {
+        assertEquals("y-review-channel.jar", ChannelServer.FILE_NAME)
         assertEquals("channel", ChannelServer.FOLDER_NAME)
     }
 
@@ -58,9 +56,19 @@ class ChannelServerTest {
             "the sandbox rule must name the folder that ChannelServer reads"
         )
         assertTrue(
-            File("channel/package.json").readText().contains("bundle/${ChannelServer.FILE_NAME}"),
-            "the bundler must write the file name that ChannelServer reads"
+            File("channel-server/build.gradle.kts").readText()
+                .contains("archiveFileName = \"${ChannelServer.FILE_NAME}\""),
+            "the channel-server build must write the file name that ChannelServer reads"
         )
+    }
+
+    @Test
+    fun `the main class is the one the channel-server module holds`() {
+        assertTrue(
+            File("channel-server/src/main/kotlin/com/yeskiy/yreview/channel/Main.kt").isFile,
+            "the channel server must hold a Main.kt that the launcher runs"
+        )
+        assertEquals("com.yeskiy.yreview.channel.MainKt", ChannelServer.MAIN_CLASS)
     }
 
     @Test

@@ -4,6 +4,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.io.File
+import java.util.jar.JarFile
 import kotlin.io.path.deleteIfExists
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.readText
@@ -14,11 +16,11 @@ import kotlin.test.assertTrue
 
 class ChannelConfigTest {
 
-    private val nodePath = "C:\\Program Files\\nodejs\\node.exe"
+    private val javaPath = "C:\\Program Files\\JetBrains\\jbr\\bin\\java.exe"
 
-    private val serverPath = "C:\\Users\\one\\plugins\\y-review\\channel\\main.mjs"
+    private val serverPath = "C:\\Users\\one\\plugins\\y-review\\channel\\y-review-channel.jar"
 
-    private fun text() = ChannelConfig.text(nodePath, serverPath)
+    private fun text() = ChannelConfig.text(javaPath, serverPath)
 
     private fun entry(text: String) =
         Json.parseToJsonElement(text).jsonObject["mcpServers"]!!.jsonObject["y-review"]!!.jsonObject
@@ -32,11 +34,24 @@ class ChannelConfigTest {
     }
 
     @Test
-    fun `the server runs the node of this machine with the channel server of the plugin`() {
+    fun `the server runs the java of the IDE with the channel server of the plugin`() {
         val entry = entry(text())
 
-        assertEquals(nodePath, entry["command"]!!.jsonPrimitive.content)
-        assertEquals(listOf(serverPath), entry["args"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertEquals(javaPath, entry["command"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf("-cp", serverPath, ChannelServer.MAIN_CLASS),
+            entry["args"]!!.jsonArray.map { it.jsonPrimitive.content }
+        )
+    }
+
+    @Test
+    fun `the jar of the channel server names the same main class`() {
+        // Two builds decide this name, and no compiler ties them together.
+        val jar = File(System.getProperty("y.review.channel.jar").orEmpty())
+        assertTrue(jar.isFile, "the channel jar is missing at ${jar.absolutePath}")
+        JarFile(jar).use {
+            assertEquals(ChannelServer.MAIN_CLASS, it.manifest.mainAttributes.getValue("Main-Class"))
+        }
     }
 
     @Test
@@ -56,7 +71,7 @@ class ChannelConfigTest {
 
     @Test
     fun `a written file holds the same text and a delete removes it`() {
-        val file = ChannelConfig.write(nodePath, serverPath)
+        val file = ChannelConfig.write(javaPath, serverPath)
         try {
             assertTrue(file.isRegularFile())
             assertEquals(text(), file.readText())
@@ -65,7 +80,7 @@ class ChannelConfigTest {
             file.deleteIfExists()
         }
 
-        val second = ChannelConfig.write(nodePath, serverPath)
+        val second = ChannelConfig.write(javaPath, serverPath)
         ChannelConfig.delete(second)
         assertFalse(second.isRegularFile())
     }

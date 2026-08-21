@@ -4,6 +4,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import com.yeskiy.yreview.session.ChannelServer
+import com.yeskiy.yreview.session.JavaRuntime
 import org.junit.jupiter.api.Assumptions
 import java.io.BufferedReader
 import java.io.File
@@ -17,13 +19,12 @@ import kotlin.test.assertTrue
 /**
  * Runs the real channel server against the real bridge.
  *
- * The channel is a Node process that Claude Code starts. The test starts it the same way,
+ * The channel is a Java process that Claude Code starts. The test starts it the same way,
  * points it at the bridge with the two environment variables, and reads the Model Context
  * Protocol messages on its standard output.
  *
- * The file under test is the bundle that the plugin ships, not the output of the type
- * script compiler. The Gradle test task writes that bundle first. The test skips itself
- * when the file is missing, because a machine without Node cannot write it.
+ * The file under test is the jar that the plugin ships. The Gradle test task builds that
+ * jar first and names it in the y.review.channel.jar property.
  */
 class ChannelContractTest {
 
@@ -67,9 +68,11 @@ class ChannelContractTest {
     )
 
     private fun startChannel(): Process {
-        val main = File("channel/bundle/main.mjs")
-        Assumptions.assumeTrue(main.isFile, "channel/bundle/main.mjs is missing. Run npm run bundle in channel.")
-        val builder = ProcessBuilder("node", main.absolutePath)
+        val jar = File(System.getProperty("y.review.channel.jar").orEmpty())
+        Assumptions.assumeTrue(jar.isFile, "the channel jar is missing at ${jar.absolutePath}")
+        val java = JavaRuntime.locate()
+        Assumptions.assumeTrue(java != null, "this runtime names no java launcher")
+        val builder = ProcessBuilder(java, "-cp", jar.absolutePath, ChannelServer.MAIN_CLASS)
         builder.environment()["Y_REVIEW_BRIDGE_URL"] = address.url
         builder.environment()["Y_REVIEW_BRIDGE_TOKEN"] = address.token
         val process = builder.start()
