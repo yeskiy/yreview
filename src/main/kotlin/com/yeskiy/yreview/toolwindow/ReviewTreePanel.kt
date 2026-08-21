@@ -33,9 +33,11 @@ import com.intellij.openapi.fileTypes.FileTypeListener
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.util.Condition
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vcs.changes.Change
@@ -57,6 +59,7 @@ import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.TreeUIHelper
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBLoadingPanel
 import com.intellij.ui.content.Content
 import com.intellij.ui.tree.AsyncTreeModel
 import com.intellij.ui.tree.StructureTreeModel
@@ -91,6 +94,7 @@ import com.yeskiy.yreview.tasks.CloseReport
 import com.yeskiy.yreview.tasks.RemoveReport
 import com.yeskiy.yreview.tasks.RepositoryTasks
 import com.yeskiy.yreview.tasks.ReviewTask
+import com.yeskiy.yreview.tasks.ScanState
 import com.yeskiy.yreview.tasks.SendScope
 import com.yeskiy.yreview.tasks.SendTarget
 import com.yeskiy.yreview.tasks.TaskChecks
@@ -108,6 +112,7 @@ import com.yeskiy.yreview.tasks.TaskTree
 import com.yeskiy.yreview.tasks.TodoRemoval
 import com.yeskiy.yreview.tasks.TodoReport
 import com.yeskiy.yreview.tasks.WriteTarget
+import com.yeskiy.yreview.tasks.readScope
 import com.yeskiy.yreview.ui.ReviewNotice
 import java.awt.BorderLayout
 import java.awt.event.KeyAdapter
@@ -167,6 +172,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private val splitter = OnePixelSplitter(false, "$PREVIEW_PROPORTION.${scope.name}", 0.6f)
 
+    private val loading = JBLoadingPanel(BorderLayout(), this, LOADING_DELAY)
+
+    private val state = ScanState()
+
     private val preview = CommentPreviewPanel(project)
 
     private val scopeChooser: ScopeChooserCombo? =
@@ -194,12 +203,14 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private var content: Content? = null
 
+    @Volatile
+    private var closed = false
+
     init {
         tree.isRootVisible = false
         tree.showsRootHandles = true
         tree.setRowHeight(0)
         tree.selectionModel.selectionMode = TreeSelectionModel.DISCONTIGUOUS_TREE_SELECTION
-        tree.emptyText.text = "This scope has no open review task."
         tree.cellRenderer = renderer
         TreeUIHelper.getInstance().installTreeSpeedSearch(tree)
         installChecks()
@@ -212,7 +223,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         toolbar = ActionManager.getInstance().createActionToolbar(PLACE, toolbarGroup(expander), false)
         toolbar.targetComponent = tree
         setToolbar(toolbar.component)
-        splitter.firstComponent = ScrollPaneFactory.createScrollPane(tree, true)
+        loading.add(ScrollPaneFactory.createScrollPane(tree, true), BorderLayout.CENTER)
+        splitter.firstComponent = loading
         installScopeChooser()
         setContent(center())
         showPreview(tab().showPreview)
@@ -223,11 +235,14 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         tree.addTreeSelectionListener { updatePreview() }
 
         subscribe()
+        showState()
         BridgeService.getInstance(project).startLater()
         scheduleReload()
     }
 
-    override fun dispose() = Unit
+    override fun dispose() {
+        closed = true
+    }
 
     /** The tab that holds this panel. The changelist tab writes the list name on it. */
     fun attach(content: Content) {
@@ -296,21 +311,56 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         })
     }
 
+    /**
+     * Reads the tasks of the scope again.
+     *
+     * The read runs on a pooled thread, and it reports back once on every path. The tab
+     * therefore leaves the loading state after a failure too, and not only after a result.
+     */
     private fun reload() {
         val onlyFile = if (scope == TaskScope.CURRENT_FILE) openFile() else null
         val chosen = chosenScope()
+        val ticket = state.start(DumbService.getInstance(project).isDumb)
+        showState()
         ApplicationManager.getApplication().executeOnPooledThread {
-            if (project.isDisposed) return@executeOnPooledThread
-            val changes = readChangeList()
-            val found = try {
-                TaskScan.read(project, onlyFile)
-            } catch (failure: RuntimeException) {
-                logger.warn("the review tool window could not read the tasks", failure)
-                emptyList()
-            }
-            publish(TreeContent(found, layoutOf(found, chosen, changes), changes))
+            val outcome = readScope { scan(onlyFile, chosen) }
+            outcome.failure?.let { logger.warn("the review tool window could not read the tasks", it) }
+            ApplicationManager.getApplication().invokeLater({ settle(ticket, outcome.rows) }, expired())
         }
     }
+
+    /** The rows of the scope, or null when the project went away before the read ended. */
+    private fun scan(onlyFile: VirtualFile?, chosen: SearchScope?): TreeContent? {
+        if (project.isDisposed) return null
+        val changes = readChangeList()
+        val found = TaskScan.read(project, onlyFile)
+        return TreeContent(found, layoutOf(found, chosen, changes), changes)
+    }
+
+    /**
+     * Closes one scan on the user interface thread.
+     *
+     * A scan of an older ticket writes nothing here, so it neither stops the spinner of a
+     * newer scan nor draws its own rows over newer rows.
+     */
+    private fun settle(ticket: Long, content: TreeContent?) {
+        if (!state.finish(ticket, content == null)) return
+        if (content == null || project.isDisposed) showState() else show(content)
+    }
+
+    /** The panel stops its own spinner while it lives, whatever the project does. */
+    private fun expired(): Condition<Any?> = Condition { closed }
+
+    /** Puts the words of the phase on the empty tree, and runs the spinner while a scan is open. */
+    private fun showState() {
+        tree.emptyText.text = state.emptyText(finishedText())
+        loading.setLoadingText(state.loadingText)
+        if (state.loading) loading.startLoading() else loading.stopLoading()
+    }
+
+    /** The words a scan that ran to the end and found nothing leaves on the tree. */
+    private fun finishedText(): String =
+        if (scope == TaskScope.CHANGE_LIST) ChangeListTab.emptyText(changeList) else NO_TASK
 
     /** The changelist tab reads the local changes. Every other tab keeps the empty record. */
     private fun readChangeList(): ChangeListFacts {
@@ -341,15 +391,15 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         repositories = content.repositories
         changeList = content.changeList
         structure.layout = content.layout
-        if (scope == TaskScope.CHANGE_LIST) showChangeList(content.changeList)
+        if (scope == TaskScope.CHANGE_LIST) nameTab(content.changeList)
         treeModel.invalidateAsync()
         toolbar.updateActionsAsync()
         updatePreview()
+        showState()
     }
 
-    /** The tab names the changelist it reads, and the empty tree says why it holds no row. */
-    private fun showChangeList(facts: ChangeListFacts) {
-        tree.emptyText.text = ChangeListTab.emptyText(facts)
+    /** The tab carries the name of the changelist it reads, as the bundled TODO window does. */
+    private fun nameTab(facts: ChangeListFacts) {
         content?.let {
             it.displayName = ChangeListTab.tabTitle(facts)
             it.description = ChangeListTab.tabTooltip(facts)
@@ -466,7 +516,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun send() {
         val chosen = target().tasks
         if (chosen.isEmpty()) {
-            ReviewNotice.warn(project, "This scope has no open review task.")
+            ReviewNotice.warn(project, NO_TASK)
             return
         }
         val roots = chosen.map { it.rootPath }.distinct()
@@ -721,6 +771,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         val onProject = project.messageBus.connect(this)
         onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener { scheduleReload() })
         onProject.subscribe(TodoConfiguration.PROPERTY_CHANGE, PropertyChangeListener { scheduleReload() })
+        onProject.subscribe(DumbService.DUMB_MODE, IndexWatch())
         if (scope == TaskScope.CURRENT_FILE) {
             onProject.subscribe(
                 FileEditorManagerListener.FILE_EDITOR_MANAGER,
@@ -793,6 +844,29 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             )
         )
     }
+
+    /**
+     * The signals of the index of the project.
+     *
+     * The TODO reader answers only in smart mode, so the tab names the index while the IDE
+     * builds it. The tab reads the tasks again by itself after the index is complete.
+     */
+    private inner class IndexWatch : DumbService.DumbModeListener {
+
+        override fun enteredDumbMode() = changePhase { state.enterIndexing() }
+
+        override fun exitDumbMode() = changePhase {
+            state.exitIndexing()
+            scheduleReload()
+        }
+    }
+
+    /** The phase and the spinner belong to the user interface thread, so every change goes there. */
+    private fun changePhase(change: () -> Unit) =
+        ApplicationManager.getApplication().invokeLater({
+            change()
+            showState()
+        }, expired())
 
     /**
      * The signals of the local changes.
@@ -1054,7 +1128,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     companion object {
         private const val RELOAD_DELAY = 400
 
+        // The bundled TODO window waits the same time before it paints its spinner.
+        private const val LOADING_DELAY = 1000
+
         private const val GAP = 6
+
+        private const val NO_TASK = "This scope has no open review task."
 
         private const val PLACE = "YReviewTasks"
 
