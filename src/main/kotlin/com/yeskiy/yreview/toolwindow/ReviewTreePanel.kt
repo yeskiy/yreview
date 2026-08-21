@@ -46,7 +46,10 @@ import com.intellij.openapi.vcs.changes.ChangeListListener
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.pom.Navigatable
+import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiDocumentManager
+import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiFile
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiTreeChangeAdapter
 import com.intellij.psi.PsiTreeChangeEvent
@@ -97,6 +100,7 @@ import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.ScanState
 import com.yeskiy.yreview.tasks.SendScope
 import com.yeskiy.yreview.tasks.SendTarget
+import com.yeskiy.yreview.tasks.SourceSignal
 import com.yeskiy.yreview.tasks.TaskChecks
 import com.yeskiy.yreview.tasks.TaskChoice
 import com.yeskiy.yreview.tasks.TaskCompletion
@@ -391,6 +395,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         repositories = content.repositories
         changeList = content.changeList
         structure.layout = content.layout
+        state.rows = content.layout.rows
         if (scope == TaskScope.CHANGE_LIST) nameTab(content.changeList)
         treeModel.invalidateAsync()
         toolbar.updateActionsAsync()
@@ -793,14 +798,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             },
         )
 
-        PsiManager.getInstance(project).addPsiTreeChangeListener(
-            object : PsiTreeChangeAdapter() {
-                override fun childrenChanged(event: PsiTreeChangeEvent) = scheduleReload()
-
-                override fun propertyChanged(event: PsiTreeChangeEvent) = scheduleReload()
-            },
-            this,
-        )
+        PsiManager.getInstance(project).addPsiTreeChangeListener(SourceWatch(), this)
     }
 
     // --- The toolbar and the menu ---
@@ -867,6 +865,36 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             change()
             showState()
         }, expired())
+
+    /**
+     * The signals of the source files.
+     *
+     * The tab reads its scope again for a change of a file, of a folder or of the source
+     * roots. It reads the scope for no other signal, and the bundled TODO view draws the
+     * same line. A signal that names no file tells the tab nothing about the tasks, and
+     * [SourceSignal] holds the reason for each property the tab drops.
+     */
+    private inner class SourceWatch : PsiTreeChangeAdapter() {
+
+        override fun childAdded(event: PsiTreeChangeEvent) = scheduleFor(event, event.child)
+
+        override fun beforeChildRemoval(event: PsiTreeChangeEvent) = scheduleFor(event, event.child)
+
+        override fun childMoved(event: PsiTreeChangeEvent) = scheduleFor(event, event.child)
+
+        override fun childReplaced(event: PsiTreeChangeEvent) = scheduleFor(event, null)
+
+        override fun childrenChanged(event: PsiTreeChangeEvent) = scheduleFor(event, null)
+
+        override fun propertyChanged(event: PsiTreeChangeEvent) {
+            if (SourceSignal.readAgain(event.propertyName)) scheduleReload()
+        }
+
+        /** A change inside a file, of a whole file or of a whole folder needs a new read. */
+        private fun scheduleFor(event: PsiTreeChangeEvent, child: PsiElement?) {
+            if (event.file != null || child is PsiFile || child is PsiDirectory) scheduleReload()
+        }
+    }
 
     /**
      * The signals of the local changes.

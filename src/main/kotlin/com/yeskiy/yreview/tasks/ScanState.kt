@@ -55,6 +55,14 @@ class ScanState {
     var phase: ScanPhase = ScanPhase.NEW
         private set
 
+    /**
+     * How many rows the tree holds now.
+     *
+     * The tab writes this number every time it draws the result of a scan. A tab that holds
+     * a row reads the scope again behind those rows, so the rows stay readable.
+     */
+    var rows: Int = 0
+
     private var ticket = 0L
 
     /** Starts a scan and gives the ticket that the result of the scan must carry. */
@@ -89,9 +97,15 @@ class ScanState {
         if (phase == ScanPhase.INDEXING) phase = ScanPhase.RUNNING
     }
 
-    /** True while the tab waits for a result. The spinner runs in that time. */
+    /**
+     * True while the tab waits for a result and has no row to show. The spinner runs then.
+     *
+     * A spinner over rows hides the rows and tells the user nothing new, so a tab that holds
+     * a row runs no spinner.
+     */
     val loading: Boolean
-        get() = phase == ScanPhase.NEW || phase == ScanPhase.RUNNING || phase == ScanPhase.INDEXING
+        get() = rows == 0 &&
+            (phase == ScanPhase.NEW || phase == ScanPhase.RUNNING || phase == ScanPhase.INDEXING)
 
     /** The words beside the spinner. */
     val loadingText: String

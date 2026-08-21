@@ -262,4 +262,98 @@ class ScanStateTest {
     fun `a tab that never scanned rejects every ticket of a scan`() {
         assertFalse(ScanState().current(1L))
     }
+
+    // --- A tab that holds rows ---
+
+    @Test
+    fun `a new tab holds no row`() {
+        assertEquals(0, ScanState().rows)
+    }
+
+    @Test
+    fun `a tab with no row runs its next scan with a spinner`() {
+        val state = ScanState()
+        state.finish(state.start(indexing = false), failed = false)
+        state.rows = 0
+        state.start(indexing = false)
+
+        assertTrue(state.loading)
+    }
+
+    @Test
+    fun `a tab with rows runs its next scan without a spinner`() {
+        val state = ScanState()
+        state.finish(state.start(indexing = false), failed = false)
+        state.rows = 3
+        state.start(indexing = false)
+
+        assertEquals(ScanPhase.RUNNING, state.phase)
+        assertFalse(state.loading)
+    }
+
+    @Test
+    fun `a tab with rows waits for the index without a spinner`() {
+        val state = ScanState()
+        state.finish(state.start(indexing = false), failed = false)
+        state.rows = 3
+        state.start(indexing = true)
+
+        assertEquals(ScanPhase.INDEXING, state.phase)
+        assertFalse(state.loading)
+    }
+
+    @Test
+    fun `an index that starts over rows runs no spinner`() {
+        val state = ScanState()
+        state.rows = 3
+        state.enterIndexing()
+
+        assertEquals(ScanPhase.INDEXING, state.phase)
+        assertFalse(state.loading)
+    }
+
+    @Test
+    fun `a scan that empties the tree stops the spinner`() {
+        val state = ScanState()
+        state.rows = 3
+        val ticket = state.start(indexing = false)
+        state.rows = 0
+
+        assertTrue(state.finish(ticket, failed = false))
+        assertFalse(state.loading)
+        assertEquals(found, state.emptyText(found))
+    }
+
+    @Test
+    fun `a tab that lost its rows runs its next scan with a spinner`() {
+        val state = ScanState()
+        state.rows = 3
+        state.finish(state.start(indexing = false), failed = false)
+        state.rows = 0
+        state.start(indexing = false)
+
+        assertTrue(state.loading)
+        assertEquals(ScanState.READ_LONG, state.emptyText(found))
+    }
+
+    @Test
+    fun `a scan that failed over rows runs no spinner`() {
+        val state = ScanState()
+        state.rows = 3
+        state.finish(state.start(indexing = false), failed = true)
+
+        assertEquals(ScanPhase.FAILED, state.phase)
+        assertFalse(state.loading)
+    }
+
+    @Test
+    fun `a tab with rows still names the index beside the spinner of a later empty scan`() {
+        val state = ScanState()
+        state.rows = 3
+        state.start(indexing = true)
+        state.rows = 0
+
+        assertTrue(state.loading)
+        assertEquals(ScanState.INDEX_SHORT, state.loadingText)
+    }
 }

@@ -18,7 +18,11 @@ data class TaskFolder(
 data class TaskLayout(
     val folders: List<TaskFolder> = emptyList(),
     val files: List<TaskGroup> = emptyList(),
-)
+) {
+
+    /** How many rows stand under this parent. A layout of no row leaves the tree empty. */
+    val rows: Int get() = folders.size + files.size
+}
 
 /** The three group toggles of the toolbar. The flatten toggle works with byDirectory only. */
 data class TaskGrouping(

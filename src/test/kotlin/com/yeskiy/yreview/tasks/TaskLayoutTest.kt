@@ -40,6 +40,21 @@ class TaskLayoutTest {
     }
 
     @Test
+    fun `a layout of no task holds no row`() {
+        assertEquals(0, TaskTree.layout(emptyList(), flat).rows)
+    }
+
+    @Test
+    fun `a flat layout counts one row for each file`() {
+        assertEquals(2, TaskTree.layout(groups(task("a", "src/A.kt"), task("b", "web/B.kt")), flat).rows)
+    }
+
+    @Test
+    fun `a layout counts a folder row and a file row of the root together`() {
+        assertEquals(2, TaskTree.layout(groups(task("a", "src/A.kt"), task("b", "README.md")), byDirectory).rows)
+    }
+
+    @Test
     fun `puts the files under their module`() {
         val layout = TaskTree.layout(
             groups(task("a", "src/A.kt", module = "core"), task("b", "web/B.kt", module = "app")),
