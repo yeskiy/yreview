@@ -10,15 +10,17 @@ class SessionPlanTest {
     private val project = "E:/work/demo"
     private val token = "0123456789abcdef0123"
     private val ready = BridgeLookup.Available("http://127.0.0.1:52431", token)
-    private val serverPath = "E:/work/demo/channel/dist/main.js"
+    private val serverPath = "C:/Users/one/plugins/y-review/channel/main.mjs"
     private val found = ChannelServer.Answer.Found(serverPath)
+    private val node = NodeInstall("C:/Program Files/nodejs/node.exe")
     private val config = "/tmp/claude-y-review-mcp-1.json"
 
     private fun plan(
         bridge: BridgeLookup = ready,
         server: ChannelServer.Answer = found,
+        node: NodeInstall = this.node,
         configFile: String? = config,
-    ) = SessionPlan.of(project, bridge, "claude", server, configFile)
+    ) = SessionPlan.of(project, bridge, "claude", server, node, configFile)
 
     @Test
     fun `the plan runs the command in the project directory`() {
@@ -38,7 +40,7 @@ class SessionPlanTest {
 
     @Test
     fun `the plan runs the command of the settings`() {
-        val custom = SessionPlan.of(project, ready, "C:/tools/claude.exe", found, config)
+        val custom = SessionPlan.of(project, ready, "C:/tools/claude.exe", found, node, config)
 
         assertTrue(custom.command.last().contains("C:/tools/claude.exe"), custom.command.last())
     }
@@ -111,8 +113,8 @@ class SessionPlanTest {
     }
 
     @Test
-    fun `an empty channel server setting starts the session without the flags`() {
-        val plan = plan(server = ChannelServer.Answer.NotSet, configFile = null)
+    fun `an unknown plugin folder starts the session without the flags`() {
+        val plan = plan(server = ChannelServer.Answer.Unknown, configFile = null)
 
         assertEquals(ClaudeCommand.shellCommand("claude"), plan.command)
         assertFalse(plan.command.last().contains(ClaudeCommand.CONFIG_FLAG))
@@ -121,10 +123,10 @@ class SessionPlanTest {
     }
 
     @Test
-    fun `an empty channel server setting names the settings in the status text`() {
-        val plan = plan(server = ChannelServer.Answer.NotSet, configFile = null)
+    fun `an unknown plugin folder names the plugin in the status text`() {
+        val plan = plan(server = ChannelServer.Answer.Unknown, configFile = null)
 
-        assertTrue(plan.status.contains("No channel server is set in the settings."), plan.status)
+        assertTrue(plan.status.contains("plugin"), plan.status)
         assertTrue(plan.status.contains("The session starts without the channel."), plan.status)
         assertFalse(plan.status.contains("yet"), plan.status)
     }
@@ -147,13 +149,38 @@ class SessionPlanTest {
     }
 
     @Test
-    fun `the five cases each carry their own words`() {
+    fun `a machine without node starts the session without the flags`() {
+        val plan = plan(node = NodeInstall.NOTHING, configFile = null)
+
+        assertEquals(ClaudeCommand.shellCommand("claude"), plan.command)
+        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+        assertTrue(plan.bridgeReady)
+    }
+
+    @Test
+    fun `a machine without node reads it in the status text`() {
+        val plan = plan(node = NodeInstall.NOTHING, configFile = null)
+
+        assertTrue(plan.status.contains("Node was not found on this machine"), plan.status)
+        assertTrue(plan.status.contains("The session starts without the channel."), plan.status)
+    }
+
+    @Test
+    fun `a machine without node never carries the flags`() {
+        val plan = plan(node = NodeInstall.NOTHING, configFile = config)
+
+        assertFalse(plan.command.last().contains(ClaudeCommand.CONFIG_FLAG), plan.command.last())
+    }
+
+    @Test
+    fun `the six cases each carry their own words`() {
         val texts = listOf(
             plan().status,
             plan(bridge = BridgeLookup.Unavailable("The bridge file does not exist yet.")).status,
             plan(bridge = BridgeLookup.ChannelOff).status,
-            plan(server = ChannelServer.Answer.NotSet, configFile = null).status,
+            plan(server = ChannelServer.Answer.Unknown, configFile = null).status,
             plan(server = ChannelServer.Answer.Missing(serverPath), configFile = null).status,
+            plan(node = NodeInstall.NOTHING, configFile = null).status,
         )
 
         assertEquals(texts.size, texts.distinct().size)

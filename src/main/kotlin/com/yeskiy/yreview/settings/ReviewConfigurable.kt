@@ -1,10 +1,8 @@
 package com.yeskiy.yreview.settings
 
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
-import com.intellij.openapi.util.Disposer
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
@@ -13,9 +11,9 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
-import com.yeskiy.yreview.session.ChannelServer
 import com.yeskiy.yreview.session.ClaudeCommand
 import com.yeskiy.yreview.session.ClaudeDetection
+import com.yeskiy.yreview.session.NodeDetection
 import java.awt.Font
 import javax.swing.JComponent
 
@@ -29,18 +27,10 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val command = JBTextField()
 
-    private val server = JBTextField()
-
-    /** The validators of the page live until the user closes it. */
-    private var pageLife: Disposable? = null
-
     override fun getDisplayName(): String = "Review Comments"
 
     override fun createComponent(): JComponent {
         choice.renderer = textListCellRenderer<CommentSharing> { it.label }
-        disposeUIResources()
-        val life = Disposer.newDisposable("y-review settings page")
-        pageLife = life
         return panel {
             row("New comments:") {
                 cell(choice)
@@ -56,12 +46,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
                 cell(channel)
             }
             row {
-                comment(
-                    "The channel pushes a task to a running Claude Code session at once. " +
-                        "With the channel off, the plugin opens no port. " +
-                        "Every send then writes AGENT.md and tasks.json in .git/y-review, " +
-                        "and it copies the prompt to the clipboard."
-                )
+                comment(channelHelp())
             }
             row {
                 cell(sessionWindow)
@@ -79,52 +64,31 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             row {
                 comment(commandHelp())
             }
-            row("Channel server:") {
-                cell(server)
-                    .align(AlignX.FILL)
-                    .validationOnInput { field -> ChannelServer.problem(field.text)?.let { warning(it) } }
-            }
-            row {
-                comment(
-                    "The channel server is the Node program ${ChannelServer.PATH_SHAPE} " +
-                        "of a y-review checkout. Keep the node_modules folder of that checkout beside it, " +
-                        "because the program loads its dependencies from there. " +
-                        "While this field is empty the session still starts, and it starts without the channel."
-                )
-            }
             row {
                 cell(appendedArguments()).align(AlignX.FILL)
             }
             row {
                 comment(
                     "The plugin appends these arguments to the command above. " +
-                        "It appends them only when the bridge answers and the channel server is a file. " +
+                        "It appends them only when the bridge answers and the channel can run. " +
                         "An entry in a configuration file alone never registers a channel."
                 )
             }
-        }.also { it.registerValidators(life) }
-    }
-
-    override fun disposeUIResources() {
-        pageLife?.let { Disposer.dispose(it) }
-        pageLife = null
+        }
     }
 
     override fun isModified(): Boolean =
         selected() != settings().sharing ||
             channel.isSelected != settings().channel ||
             sessionWindow.isSelected != shown() ||
-            command.text.trim() != settings().claudeCommand ||
-            server.text.trim() != settings().channelServer
+            command.text.trim() != settings().claudeCommand
 
     override fun apply() {
         settings().sharing = selected()
         settings().channel = channel.isSelected
         settings().sessionWindow = sessionWindow.isSelected
         settings().claudeCommand = command.text
-        settings().channelServer = server.text
         command.text = settings().claudeCommand
-        server.text = settings().channelServer
         BridgeService.getInstance(project).applySwitch(channel.isSelected)
         SessionWindow.show(project, sessionWindow.isSelected)
     }
@@ -134,7 +98,6 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         channel.isSelected = settings().channel
         sessionWindow.isSelected = shown()
         command.text = settings().claudeCommand
-        server.text = settings().channelServer
     }
 
     /** The real strings, so a user reads what the session runs and not a description of it. */
@@ -144,6 +107,19 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         lineWrap = false
         font = JBUI.Fonts.create(Font.MONOSPACED, JBUI.Fonts.label().size)
         border = JBUI.Borders.empty(4, 8)
+    }
+
+    /** The switch is the only control of the channel, so this text carries the machine state. */
+    private fun channelHelp(): String {
+        val node = NodeDetection.getInstance().install()
+        val found = node.path
+            ?.let { "This machine runs the server with the Node at $it." }
+            ?: "Node was not found on this machine, so a session starts without the channel."
+        return "The channel pushes a task to a running Claude Code session at once. " +
+            "With the channel off, the plugin opens no port. " +
+            "Every send then writes AGENT.md and tasks.json in .git/y-review, " +
+            "and it copies the prompt to the clipboard. " +
+            "The plugin ships the channel server, and Node runs it. $found"
     }
 
     private fun commandHelp(): String {

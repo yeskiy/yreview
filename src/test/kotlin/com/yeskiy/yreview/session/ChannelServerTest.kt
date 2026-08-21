@@ -1,58 +1,71 @@
 package com.yeskiy.yreview.session
 
+import java.io.File
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ChannelServerTest {
 
-    private val real = "E:/work/demo/channel/dist/main.js"
+    private val plugin = Path.of("C:/Users/one/AppData/Roaming/JetBrains/IU2026.2/plugins/y-review")
 
     private val always: (Path) -> Boolean = { true }
 
     private val never: (Path) -> Boolean = { false }
 
+    private fun expected(): String = plugin.resolve("channel").resolve("main.mjs").toString()
+
     @Test
-    fun `an empty setting reports that nobody named a server`() {
-        assertEquals(ChannelServer.Answer.NotSet, ChannelServer.locate("", always))
-        assertEquals(ChannelServer.Answer.NotSet, ChannelServer.locate("   ", always))
+    fun `the server sits beside the lib folder of the plugin`() {
+        assertEquals(ChannelServer.Answer.Found(expected()), ChannelServer.locate(plugin, always))
     }
 
     @Test
-    fun `a path that is a file is found`() {
-        assertEquals(ChannelServer.Answer.Found(Path.of(real).toString()), ChannelServer.locate(real, always))
+    fun `a plugin folder without the file reports the path it looked at`() {
+        assertEquals(ChannelServer.Answer.Missing(expected()), ChannelServer.locate(plugin, never))
     }
 
     @Test
-    fun `a path that is no file is missing`() {
-        assertEquals(ChannelServer.Answer.Missing(real), ChannelServer.locate(real, never))
+    fun `no plugin folder reports an unknown place`() {
+        assertEquals(ChannelServer.Answer.Unknown, ChannelServer.locate(null, always))
     }
 
     @Test
-    fun `the setting loses the spaces around it`() {
-        assertEquals(ChannelServer.Answer.Missing(real), ChannelServer.locate("  $real  ", never))
+    fun `the file name keeps the module suffix that Node needs`() {
+        // The plugin folder holds no package.json, so Node reads a .js file as a script of
+        // the older kind. The bundle is a module, therefore the suffix must stay .mjs.
+        assertEquals("main.mjs", ChannelServer.FILE_NAME)
+        assertEquals("channel", ChannelServer.FOLDER_NAME)
     }
 
     @Test
-    fun `the settings page reports a path that is no file`() {
-        val problem = ChannelServer.problem(real, never)
-
-        assertNotNull(problem)
-        assertTrue(problem.contains(real))
+    fun `the identifier is the one the descriptor of the plugin carries`() {
+        assertEquals("com.yeskiy.yreview", ChannelServer.PLUGIN_ID)
+        assertTrue(
+            File("src/main/resources/META-INF/plugin.xml").readText()
+                .contains("<id>${ChannelServer.PLUGIN_ID}</id>")
+        )
     }
 
     @Test
-    fun `the settings page reports nothing for an empty field or a real file`() {
-        assertNull(ChannelServer.problem("", never))
-        assertNull(ChannelServer.problem(real, always))
+    fun `the build writes the server where this search looks for it`() {
+        // Two files outside Kotlin decide the place. A drift there breaks the channel and
+        // no compiler reports it, so the names stay under a test.
+        assertTrue(
+            File("build.gradle.kts").readText()
+                .contains("val channelFolder = \"${ChannelServer.FOLDER_NAME}\""),
+            "the sandbox rule must name the folder that ChannelServer reads"
+        )
+        assertTrue(
+            File("channel/package.json").readText().contains("bundle/${ChannelServer.FILE_NAME}"),
+            "the bundler must write the file name that ChannelServer reads"
+        )
     }
 
     @Test
-    fun `the help text names the file the build writes`() {
-        assertEquals("main.js", ChannelServer.FILE_NAME)
-        assertTrue(ChannelServer.PATH_SHAPE.endsWith("channel/dist/main.js"))
+    fun `a search outside a running IDE answers instead of failing`() {
+        // No platform runs here, so the plugin folder stays unknown and nothing throws.
+        assertEquals(ChannelServer.Answer.Unknown, ChannelServer.locate())
     }
 }

@@ -107,15 +107,19 @@ class ClaudeSessionPanel(
 
     private fun settings(): ReviewSettings = ReviewSettings.getInstance(project)
 
-    private fun channelServer(): ChannelServer.Answer = ChannelServer.locate(settings().channelServer)
+    private fun channelServer(): ChannelServer.Answer = ChannelServer.locate()
+
+    private fun node(): NodeInstall = NodeDetection.getInstance().install()
 
     /**
-     * The channel needs both halves, so the file appears only when the bridge answers and
-     * the settings name the server. A failed write leaves the session without the channel.
+     * The channel needs all three parts, so the file appears only when the bridge answers,
+     * the plugin holds the server, and this machine holds Node. A failed write leaves the
+     * session without the channel.
      */
-    private fun writeConfig(bridge: BridgeLookup, server: ChannelServer.Answer): Path? {
+    private fun writeConfig(bridge: BridgeLookup, server: ChannelServer.Answer, node: NodeInstall): Path? {
         if (bridge !is BridgeLookup.Available || server !is ChannelServer.Answer.Found) return null
-        return runCatching { ChannelConfig.write(server.path) }
+        val nodePath = node.path ?: return null
+        return runCatching { ChannelConfig.write(nodePath, server.path) }
             .onFailure { thisLogger().warn("The review session wrote no channel configuration file.", it) }
             .getOrNull()
     }
@@ -130,9 +134,10 @@ class ClaudeSessionPanel(
         if (isRunning) return
         dropConfig()
         val server = channelServer()
-        val written = writeConfig(bridge, server)
+        val node = node()
+        val written = writeConfig(bridge, server, node)
         configFile = written
-        val plan = SessionPlan.of(basePath, bridge, settings().claudeCommand, server, written?.toString())
+        val plan = SessionPlan.of(basePath, bridge, settings().claudeCommand, server, node, written?.toString())
         val started = ReviewTerminal.open(project, plan, this)
         if (started == null) {
             dropConfig()
@@ -226,7 +231,7 @@ class ClaudeSessionPanel(
 
     private fun bridgeState(): String {
         val basePath = project.basePath ?: return NO_DIRECTORY
-        return SessionPlan.of(basePath, lookup(basePath), settings().claudeCommand, channelServer()).status
+        return SessionPlan.of(basePath, lookup(basePath), settings().claudeCommand, channelServer(), node()).status
     }
 
     /** A text area, not a label. The status text wraps, and it never renders markup. */

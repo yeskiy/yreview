@@ -84,23 +84,36 @@ class ReviewSettingsStateTest {
         assertEquals(true, read.channel)
         assertNull(read.sessionWindow)
         assertEquals("claude", read.claudeCommand)
-        assertEquals("", read.channelServer)
     }
 
     @Test
-    fun `the default command is claude and the default channel server is empty`() {
+    fun `an old file that still names a channel server loads`() {
+        // The plugin ships the channel server, so the settings page dropped that field.
+        // A file of an earlier version still holds the key, and it must not stop the load.
+        val old = "<State>" +
+            "<option name=\"sharing\" value=\"SHARED\" />" +
+            "<option name=\"channelServer\" value=\"E:/work/demo/channel/dist/main.js\" />" +
+            "<option name=\"claudeCommand\" value=\"claude\" />" +
+            "</State>"
+
+        val read = XmlSerializer.deserialize(JDOMUtil.load(old), ReviewSettings.State::class.java)
+
+        assertEquals(CommentSharing.SHARED, read.sharing)
+        assertEquals("claude", read.claudeCommand)
+        assertEquals(true, read.channel)
+    }
+
+    @Test
+    fun `the default command is claude`() {
         assertEquals("claude", ReviewSettings.State().claudeCommand)
-        assertEquals("", ReviewSettings.State().channelServer)
     }
 
     @Test
-    fun `the command and the channel server survive a write and a read`() {
+    fun `the command survives a write and a read`() {
         val state = ReviewSettings.State()
         state.claudeCommand = "C:\\tools\\claude.exe"
-        state.channelServer = "E:/work/demo/channel/dist/main.js"
 
         assertEquals("C:\\tools\\claude.exe", read(state).claudeCommand)
-        assertEquals("E:/work/demo/channel/dist/main.js", read(state).channelServer)
     }
 
     @Test
@@ -116,28 +129,15 @@ class ReviewSettingsStateTest {
     }
 
     @Test
-    fun `the channel server keeps an empty value and loses its spaces`() {
-        val settings = ReviewSettings()
-        settings.loadState(ReviewSettings.State())
-
-        assertEquals("", settings.channelServer)
-
-        settings.channelServer = "  /opt/y-review/channel/dist/main.js  "
-        assertEquals("/opt/y-review/channel/dist/main.js", settings.channelServer)
-    }
-
-    @Test
-    fun `the command and the channel server both round trip through the service`() {
+    fun `the command round trips through the service`() {
         val settings = ReviewSettings()
         settings.loadState(ReviewSettings.State())
         settings.claudeCommand = "claude"
-        settings.channelServer = "/opt/y-review/channel/dist/main.js"
 
         val second = ReviewSettings()
         second.loadState(read(settings.state))
 
         assertEquals("claude", second.claudeCommand)
-        assertEquals("/opt/y-review/channel/dist/main.js", second.channelServer)
     }
 
     @Test

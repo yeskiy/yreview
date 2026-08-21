@@ -19,8 +19,11 @@ import kotlin.test.assertTrue
  *
  * The channel is a Node process that Claude Code starts. The test starts it the same way,
  * points it at the bridge with the two environment variables, and reads the Model Context
- * Protocol messages on its standard output. The test skips itself when the channel is not
- * built, because a build without Node cannot run it.
+ * Protocol messages on its standard output.
+ *
+ * The file under test is the bundle that the plugin ships, not the output of the type
+ * script compiler. The Gradle test task writes that bundle first. The test skips itself
+ * when the file is missing, because a machine without Node cannot write it.
  */
 class ChannelContractTest {
 
@@ -64,8 +67,8 @@ class ChannelContractTest {
     )
 
     private fun startChannel(): Process {
-        val main = File("channel/dist/main.js")
-        Assumptions.assumeTrue(main.isFile, "channel/dist/main.js is missing. Run npm run build in channel.")
+        val main = File("channel/bundle/main.mjs")
+        Assumptions.assumeTrue(main.isFile, "channel/bundle/main.mjs is missing. Run npm run bundle in channel.")
         val builder = ProcessBuilder("node", main.absolutePath)
         builder.environment()["Y_REVIEW_BRIDGE_URL"] = address.url
         builder.environment()["Y_REVIEW_BRIDGE_TOKEN"] = address.token

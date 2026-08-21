@@ -70,13 +70,6 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         @JvmField
         var claudeCommand: String = ClaudeCommand.DEFAULT_COMMAND
 
-        /**
-         * The path of the channel server, or an empty string. The plugin ships no copy of
-         * that Node program, so it cannot fill this field on its own.
-         */
-        @JvmField
-        var channelServer: String = ""
-
         @JvmField
         var projectTab: TabState = TabState()
 
@@ -122,13 +115,6 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         get() = current.claudeCommand.trim().ifEmpty { ClaudeCommand.DEFAULT_COMMAND }
         set(value) {
             current.claudeCommand = value.trim().ifEmpty { ClaudeCommand.DEFAULT_COMMAND }
-        }
-
-    /** The path of the channel server, or an empty string while nobody named one. */
-    var channelServer: String
-        get() = current.channelServer.trim()
-        set(value) {
-            current.channelServer = value.trim()
         }
 
     /** True when the Claude tool window may appear. An unset choice follows the search. */

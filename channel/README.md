@@ -31,11 +31,23 @@ never starts this process.
 ```bash
 npm install
 npm run build
+npm run bundle
 npm test
 npm run lint
 ```
 
-The build writes `dist/`. The session entry point is `dist/main.js`.
+`npm run build` writes `dist/` with the type script compiler. That output keeps one file
+for each source file, and it needs `node_modules` beside it. Use it for a manual run.
+
+`npm run bundle` writes `bundle/main.mjs` with esbuild. That file holds this package, the
+Model Context Protocol software development kit, and zod. It needs no `node_modules`, and
+it is about 1.1 megabytes. The suffix stays `.mjs`, because the file lands in a folder
+without a package.json and Node must read it as a module.
+
+The IDEA plugin ships `bundle/main.mjs`. The Gradle build runs `npm ci` and `npm run
+bundle`, then it copies the file into the plugin folder beside `lib`. The plugin reads the
+folder of its own installation and finds the file there, so no setting names a path. The
+machine of the user still needs Node, because Node runs the file.
 
 ## Settings
 

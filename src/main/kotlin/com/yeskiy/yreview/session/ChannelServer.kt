@@ -1,46 +1,54 @@
 package com.yeskiy.yreview.session
 
+import com.intellij.ide.plugins.PluginManagerCore
+import com.intellij.openapi.extensions.PluginId
 import java.nio.file.Files
 import java.nio.file.Path
 
 /**
- * Reads the channel server setting.
+ * Finds the channel server inside the plugin.
  *
- * The plugin cannot find this file on its own. The channel server is a Node program of the
- * y-review checkout, and the plugin ships no copy of it. For this reason the user names the
- * path, and an empty setting is the honest state of a fresh installation.
+ * The plugin ships the server, so no setting names it. The build writes one bundled
+ * JavaScript file into the folder of the plugin, beside the lib folder, and this search
+ * asks the platform where that folder is.
+ *
+ * The file carries the .mjs suffix. The folder of the plugin holds no package.json, so
+ * Node reads a .js file as a script of the older kind, and the bundle is a module.
  */
 object ChannelServer {
 
-    /** What the setting names right now. */
+    /** The identifier of plugin.xml. The platform hands out the plugin folder for it. */
+    const val PLUGIN_ID = "com.yeskiy.yreview"
+
+    /** The folder inside the plugin folder that holds the server. */
+    const val FOLDER_NAME = "channel"
+
+    /** The file the bundler writes. */
+    const val FILE_NAME = "main.mjs"
+
+    /** Where the server is right now. */
     sealed interface Answer {
 
-        /** The settings hold no channel server. The session then runs without the channel. */
-        data object NotSet : Answer
+        /** The platform names no folder for the plugin, so no search can run. */
+        data object Unknown : Answer
 
-        /** The settings name a path, and that path is not a file. */
+        /** The folder of the plugin holds no server file. */
         data class Missing(val path: String) : Answer
 
         data class Found(val path: String) : Answer
     }
 
-    /** The last part of the path, as the build of the channel writes it. */
-    const val FILE_NAME = "main.js"
+    fun file(pluginPath: Path): Path = pluginPath.resolve(FOLDER_NAME).resolve(FILE_NAME)
 
-    /** The last part of the path, for the help text of the settings page. */
-    const val PATH_SHAPE = "channel/dist/$FILE_NAME"
-
-    fun locate(setting: String, exists: (Path) -> Boolean = { Files.isRegularFile(it) }): Answer {
-        val trimmed = setting.trim()
-        if (trimmed.isEmpty()) return Answer.NotSet
-        val path = runCatching { Path.of(trimmed) }.getOrNull() ?: return Answer.Missing(trimmed)
-        return if (exists(path)) Answer.Found(path.toString()) else Answer.Missing(trimmed)
+    fun locate(
+        pluginPath: Path? = pluginPath(),
+        exists: (Path) -> Boolean = { Files.isRegularFile(it) },
+    ): Answer {
+        val file = file(pluginPath ?: return Answer.Unknown)
+        return if (exists(file)) Answer.Found(file.toString()) else Answer.Missing(file.toString())
     }
 
-    /** The text the settings page shows under a path that is not a file, or null while it is good. */
-    fun problem(setting: String, exists: (Path) -> Boolean = { Files.isRegularFile(it) }): String? =
-        when (val answer = locate(setting, exists)) {
-            is Answer.Missing -> "This path is not a file: ${answer.path}"
-            Answer.NotSet, is Answer.Found -> null
-        }
+    /** Null while no platform answers, so a test outside a running IDE reads no folder. */
+    fun pluginPath(): Path? =
+        runCatching { PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.pluginPath }.getOrNull()
 }
