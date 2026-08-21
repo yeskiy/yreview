@@ -16,6 +16,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.IdeActions
@@ -104,6 +105,8 @@ import com.yeskiy.yreview.tasks.TaskRemoval
 import com.yeskiy.yreview.tasks.TaskScan
 import com.yeskiy.yreview.tasks.TaskScope
 import com.yeskiy.yreview.tasks.TaskTree
+import com.yeskiy.yreview.tasks.TodoRemoval
+import com.yeskiy.yreview.tasks.TodoReport
 import com.yeskiy.yreview.tasks.WriteTarget
 import com.yeskiy.yreview.ui.ReviewNotice
 import java.awt.BorderLayout
@@ -118,6 +121,7 @@ import java.time.Instant
 import java.time.temporal.ChronoUnit
 import javax.swing.JComponent
 import javax.swing.JPanel
+import javax.swing.ToolTipManager
 import javax.swing.tree.TreeSelectionModel
 
 /** The tasks that went out, and the text the user pastes when the channel is out of reach. */
@@ -213,6 +217,9 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         setContent(center())
         showPreview(tab().showPreview)
         PopupHandler.installPopupMenu(tree, menuGroup(expander), "YReviewTasksPopup")
+        DeleteAction().registerCustomShortcutSet(CommonShortcuts.getDelete(), tree, this)
+        // A tree shows the tooltip of a row only after this call. See JTree.getToolTipText.
+        ToolTipManager.sharedInstance().registerComponent(tree)
         tree.addTreeSelectionListener { updatePreview() }
 
         subscribe()
@@ -531,7 +538,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private fun resolveSelected() {
         val chosen = writeTarget()
-        if (chosen.empty) {
+        if (!chosen.hasComments) {
             ReviewNotice.warn(project, "Check a review comment. $TODO_LIVES_IN_THE_SOURCE")
             return
         }
@@ -557,51 +564,66 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     // --- Delete ---
 
     /**
-     * Removes the chosen review comments from the git notes.
+     * Removes the chosen rows, whatever kind they are.
      *
-     * The delete is final, because the plugin keeps no copy of the removed line. The dialog
-     * therefore names how many comments go before git runs.
+     * A review comment goes out of the git notes, and the plugin keeps no copy of the
+     * removed line. A TODO goes out of the source file, and one undo step puts it back.
+     * The dialog names both counts before the work starts, and it asks once.
      */
     private fun deleteSelected() {
         val chosen = writeTarget()
         if (chosen.empty) {
-            ReviewNotice.warn(project, "Check a review comment. $TODO_LIVES_IN_THE_SOURCE")
+            ReviewNotice.warn(project, "Check a review comment or a TODO item first.")
             return
         }
         val answer = Messages.showYesNoDialog(
             project,
             chosen.deleteQuestion,
-            "Delete the Review Comments",
+            "Delete the Review Tasks",
             Messages.getWarningIcon(),
         )
         if (answer != Messages.YES) return
-        report(
-            chosen,
-            ProgressManager.getInstance().runProcessWithProgressSynchronously(
-                ThrowableComputable<RemoveReport, RuntimeException> {
-                    TaskRemoval.getInstance(project).delete(chosen.comments.map { it.id })
-                },
-                "Deleting the Review Comments",
-                true,
-                project,
-            ),
+        report(deleteComments(chosen), deleteTodos(chosen))
+    }
+
+    /** A note write runs git, so it runs off the user interface thread under a progress. */
+    private fun deleteComments(chosen: WriteTarget): RemoveReport? {
+        if (chosen.comments.isEmpty()) return null
+        return ProgressManager.getInstance().runProcessWithProgressSynchronously(
+            ThrowableComputable<RemoveReport, RuntimeException> {
+                TaskRemoval.getInstance(project).delete(chosen.comments.map { it.id })
+            },
+            "Deleting the Review Comments",
+            true,
+            project,
         )
     }
 
-    private fun report(chosen: WriteTarget, outcome: RemoveReport) {
-        val problem = outcome.problem
-        if (problem != null) {
-            ReviewNotice.warn(project, problem)
-            return
-        }
-        if (outcome.removed == 0) {
-            ReviewNotice.warn(project, "The git notes hold no line for that comment.")
-            return
-        }
-        ReviewNotice.say(
-            project,
-            "The IDE deleted ${TaskLabels.count(chosen.comments.size, "review comment")}. ${chosen.todoNotice}".trim(),
+    /** A TODO delete writes a document, so it stays on the user interface thread. */
+    private fun deleteTodos(chosen: WriteTarget): TodoReport? =
+        if (chosen.todos.isEmpty()) null else TodoRemoval.getInstance(project).delete(chosen.todos)
+
+    private fun report(comments: RemoveReport?, todos: TodoReport?) {
+        val warnings = listOfNotNull(
+            comments?.problem,
+            comments?.takeIf { it.removed == 0 }?.let { "The git notes hold no line for that comment." },
+            todos?.problem,
+            missingNotice(todos),
         )
+        val done = listOfNotNull(
+            comments?.let { TaskLabels.count(it.removed, "review comment") },
+            todos?.let { TaskLabels.count(it.removed, "TODO item") },
+        ).joinToString(" and ")
+        val text = "The IDE deleted $done. ${warnings.joinToString(" ")}".trim()
+        if (warnings.isEmpty()) ReviewNotice.say(project, text) else ReviewNotice.warn(project, text)
+    }
+
+    /** The rows whose TODO the plugin did not find again, because the file changed under them. */
+    private fun missingNotice(todos: TodoReport?): String? {
+        val missing = todos?.missing.orEmpty()
+        if (missing.isEmpty()) return null
+        return "The plugin did not find ${TaskLabels.count(missing.size, "TODO item")}: " +
+            "${missing.joinToString(", ")}. Read the tasks again."
     }
 
     // --- The preview ---
@@ -990,7 +1012,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = !writeTarget().empty
+            event.presentation.isEnabled = writeTarget().hasComments
         }
 
         override fun actionPerformed(event: AnActionEvent) = resolveSelected()
@@ -998,7 +1020,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private inner class DeleteAction : AnAction(
         "Delete",
-        "Remove the checked review comments from the git notes.",
+        "Remove the checked review comments from the git notes, and the checked TODO items from the source.",
         AllIcons.General.Delete,
     ) {
 

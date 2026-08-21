@@ -2,6 +2,8 @@ package com.yeskiy.yreview.tasks
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class TaskLabelsTest {
 
@@ -37,7 +39,7 @@ class TaskLabelsTest {
 
     @Test
     fun `shows the first line of the text after the line number`() {
-        assertEquals("88-94: first line", TaskLabels.taskTitle(comment))
+        assertEquals("88-94: first line...", TaskLabels.taskTitle(comment))
     }
 
     @Test
@@ -80,15 +82,77 @@ class TaskLabelsTest {
     }
 
     @Test
-    fun `shows no tail for a todo of one line`() {
-        assertEquals("", TaskLabels.taskTail(todo))
+    fun `keeps a short line of one line whole`() {
+        assertEquals("12: TODO: drop this", TaskLabels.taskTitle(todo))
+        assertEquals("TODO: drop this", TaskLabels.rowText(todo.text))
     }
 
     @Test
-    fun `shows the lines after the first one`() {
+    fun `keeps the first line only when the text holds several lines`() {
         val long = todo.copy(text = listOf("TODO: drop this", "after the release", "of the parser").joinToString("\n"))
-        assertEquals("12: TODO: drop this", TaskLabels.taskTitle(long))
-        assertEquals("after the release of the parser", TaskLabels.taskTail(long))
+
+        assertEquals("12: TODO: drop this...", TaskLabels.taskTitle(long))
+    }
+
+    @Test
+    fun `cuts a line that is longer than the row limit`() {
+        val long = "x".repeat(TaskLabels.ROW_LIMIT + 40)
+
+        val row = TaskLabels.rowText(long)
+
+        assertEquals("x".repeat(TaskLabels.ROW_LIMIT) + TaskLabels.MORE, row)
+        assertEquals(TaskLabels.ROW_LIMIT + TaskLabels.MORE.length, row.length)
+    }
+
+    @Test
+    fun `keeps a line of the length of the row limit whole`() {
+        val edge = "y".repeat(TaskLabels.ROW_LIMIT)
+
+        assertEquals(edge, TaskLabels.rowText(edge))
+    }
+
+    @Test
+    fun `puts no line break in a row`() {
+        val row = TaskLabels.rowText("first line\nsecond line")
+
+        assertEquals("first line...", row)
+        assertFalse(row.contains("\n"))
+    }
+
+    @Test
+    fun `drops the blank lines in front of the text`() {
+        assertEquals("first line...", TaskLabels.rowText("\n   \nfirst line\nsecond line"))
+        assertEquals("first line", TaskLabels.firstLine("\n   \n  first line  \n"))
+        assertEquals("", TaskLabels.firstLine("   "))
+    }
+
+    @Test
+    fun `the clipboard keeps the whole text of a long comment`() {
+        val long = comment.copy(text = "${"z".repeat(TaskLabels.ROW_LIMIT + 40)}\nsecond line")
+
+        assertTrue(TaskLabels.plainText(long).contains("z".repeat(TaskLabels.ROW_LIMIT + 40)))
+        assertTrue(TaskLabels.plainText(long).contains("second line"))
+    }
+
+    @Test
+    fun `the tooltip names the place and holds every line`() {
+        val tooltip = TaskLabels.taskTooltip(comment)
+
+        assertTrue(tooltip.contains("src/main/kotlin/Parser.kt:88-94"))
+        assertTrue(tooltip.contains("first line"))
+        assertTrue(tooltip.contains("second line"))
+        assertTrue(tooltip.contains("<br/>"))
+    }
+
+    @Test
+    fun `the tooltip escapes the markup of the text`() {
+        val tricky = comment.copy(text = "drop <b>this</b> & that")
+
+        val tooltip = TaskLabels.taskTooltip(tricky)
+
+        assertFalse(tooltip.contains("<b>this</b>"))
+        assertTrue(tooltip.contains("&lt;b&gt;this&lt;/b&gt;"))
+        assertTrue(tooltip.contains("&amp;"))
     }
 
     @Test

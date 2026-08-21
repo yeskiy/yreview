@@ -40,8 +40,14 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         @JvmField
         var autoScrollToSource: Boolean = false
 
+        /**
+         * True while the preview pane stands beside the tree.
+         *
+         * A tab that nobody changed opens the pane. The store writes this field only when
+         * the value differs from the default, so a stored false keeps the pane closed.
+         */
         @JvmField
-        var showPreview: Boolean = false
+        var showPreview: Boolean = true
 
         /** The identifier of the scope the Scope Based tab shows. The other tabs leave it empty. */
         @JvmField

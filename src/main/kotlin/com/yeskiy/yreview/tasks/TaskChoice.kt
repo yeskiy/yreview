@@ -30,8 +30,11 @@ data class SendTarget(val scope: SendScope, val tasks: List<ReviewTask>) {
 /**
  * The rows that a resolve or a delete acts on, split by kind.
  *
- * Both actions write to the git notes, so both act on review comments only. A TODO lives
- * in the source file and not in a note, and [todos] holds the rows they leave alone.
+ * A resolve writes to the git notes, so a resolve acts on review comments only. A TODO
+ * lives in the source file and not in a note, and [todos] holds those rows.
+ *
+ * A delete acts on both kinds. It removes a review comment from the git notes, and it
+ * removes a TODO from the source file.
  */
 data class WriteTarget(
     val scope: WriteScope,
@@ -39,20 +42,38 @@ data class WriteTarget(
     val todos: List<ReviewTask>,
 ) {
 
-    val empty: Boolean get() = comments.isEmpty()
+    /** True while the target holds no row at all. A delete needs one row of either kind. */
+    val empty: Boolean get() = comments.isEmpty() && todos.isEmpty()
 
-    /** The question the delete dialog asks. It starts with the risk, because a delete is final. */
-    val deleteQuestion: String
-        get() = "You cannot undo this delete. " +
-            "The plugin removes ${TaskLabels.count(comments.size, "review comment")} from the git notes."
+    /** True while the target holds a review comment. A resolve needs one. */
+    val hasComments: Boolean get() = comments.isNotEmpty()
 
-    /** What the notice says about the rows a write leaves alone. It is empty when there are none. */
+    /** The question the delete dialog asks. It names both counts and starts with the risk. */
+    val deleteQuestion: String get() = listOfNotNull(commentRisk, todoRisk).joinToString(" ")
+
+    /** What the notice says about the rows a resolve leaves alone. It is empty when there are none. */
     val todoNotice: String
         get() = if (todos.isEmpty()) {
             ""
         } else {
             "A TODO lives in the source file and not in a note. " +
                 "The plugin kept ${TaskLabels.count(todos.size, "TODO row")}."
+        }
+
+    private val commentRisk: String?
+        get() = if (comments.isEmpty()) {
+            null
+        } else {
+            "You cannot put a review comment back. " +
+                "The plugin removes ${TaskLabels.count(comments.size, "review comment")} from the git notes."
+        }
+
+    private val todoRisk: String?
+        get() = if (todos.isEmpty()) {
+            null
+        } else {
+            "The plugin removes ${TaskLabels.count(todos.size, "TODO item")} from the source. " +
+                "One undo step puts the text back."
         }
 }
 

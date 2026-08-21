@@ -1,16 +1,23 @@
 package com.yeskiy.yreview.settings
 
+import com.intellij.openapi.util.JDOMUtil
+import com.intellij.util.xmlb.SkipDefaultsSerializationFilter
 import com.intellij.util.xmlb.XmlSerializer
 import com.yeskiy.yreview.tasks.TaskKindFilter
 import com.yeskiy.yreview.tasks.TaskScope
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class ReviewViewStateTest {
 
     private fun read(state: ReviewSettings.State): ReviewSettings.State =
         XmlSerializer.deserialize(XmlSerializer.serialize(state), ReviewSettings.State::class.java)
+
+    /** The text of y-review.xml. The store of the platform drops every value of the default. */
+    private fun store(state: ReviewSettings.State): String =
+        JDOMUtil.write(XmlSerializer.serialize(state, SkipDefaultsSerializationFilter()))
 
     @Test
     fun `starts with one flat tree and no filter`() {
@@ -20,10 +27,59 @@ class ReviewViewStateTest {
         assertFalse(state.byDirectory)
         assertFalse(state.flattenDirectories)
         assertFalse(state.autoScrollToSource)
-        assertFalse(state.showPreview)
         assertEquals("", state.todoFilterName)
         assertEquals(TaskKindFilter.BOTH, state.kindFilter)
         assertEquals("", state.scopeId)
+    }
+
+    @Test
+    fun `a fresh state opens the preview pane`() {
+        assertTrue(ReviewSettings.TabState().showPreview)
+        assertTrue(ReviewSettings.State().projectTab.showPreview)
+        assertTrue(ReviewSettings().tab(TaskScope.PROJECT).showPreview)
+    }
+
+    @Test
+    fun `the store writes the preview only after the user closes it`() {
+        val closed = ReviewSettings.State()
+        closed.projectTab.showPreview = false
+
+        assertFalse(store(ReviewSettings.State()).contains("showPreview"))
+        assertTrue(store(closed).contains("<option name=\"showPreview\" value=\"false\" />"))
+    }
+
+    @Test
+    fun `an old file that stores the closed pane keeps it closed`() {
+        val old = "<State>" +
+            "<option name=\"projectTab\">" +
+            "<TabState><option name=\"showPreview\" value=\"false\" /></TabState>" +
+            "</option>" +
+            "</State>"
+
+        val back = XmlSerializer.deserialize(JDOMUtil.load(old), ReviewSettings.State::class.java)
+
+        assertFalse(back.projectTab.showPreview)
+        assertTrue(back.currentFileTab.showPreview)
+    }
+
+    @Test
+    fun `an old file that names no tab opens the preview pane`() {
+        val old = "<State><option name=\"sharing\" value=\"SHARED\" /></State>"
+
+        val back = XmlSerializer.deserialize(JDOMUtil.load(old), ReviewSettings.State::class.java)
+
+        assertTrue(back.projectTab.showPreview)
+    }
+
+    @Test
+    fun `the closed pane survives a write and a read`() {
+        val state = ReviewSettings.State()
+        state.projectTab.showPreview = false
+
+        val back = XmlSerializer.deserialize(JDOMUtil.load(store(state)), ReviewSettings.State::class.java)
+
+        assertFalse(read(state).projectTab.showPreview)
+        assertFalse(back.projectTab.showPreview)
     }
 
     @Test
@@ -80,7 +136,7 @@ class ReviewViewStateTest {
     fun `keeps the four tabs apart after a write and a read`() {
         val state = ReviewSettings.State()
         state.projectTab.byDirectory = true
-        state.currentFileTab.showPreview = true
+        state.currentFileTab.showPreview = false
         state.scopeTab.kindFilter = TaskKindFilter.TODOS
         state.changeListTab.byModule = true
 
@@ -90,8 +146,8 @@ class ReviewViewStateTest {
         assertFalse(back.currentFileTab.byDirectory)
         assertFalse(back.scopeTab.byDirectory)
         assertFalse(back.changeListTab.byDirectory)
-        assertEquals(true, back.currentFileTab.showPreview)
-        assertFalse(back.projectTab.showPreview)
+        assertFalse(back.currentFileTab.showPreview)
+        assertTrue(back.projectTab.showPreview)
         assertEquals(TaskKindFilter.TODOS, back.scopeTab.kindFilter)
         assertEquals(TaskKindFilter.BOTH, back.projectTab.kindFilter)
         assertEquals(true, back.changeListTab.byModule)
