@@ -1,4 +1,4 @@
-# idea-review channel
+# y-review channel
 
 This is a Claude Code channel server. A channel pushes text into a Claude Code
 session that is already open. This server takes review comments from the IntelliJ
@@ -16,7 +16,7 @@ IntelliJ IDEA plugin
         |  GET /events    the plugin pushes a batch down this stream
         |  POST /resolve  the channel reports the fixed comments back
         v
-idea-review channel (this package, one Node process)
+y-review channel (this package, one Node process)
         |
         |  stdio, Model Context Protocol
         v
@@ -43,8 +43,8 @@ The server reads two environment variables. It refuses to start without them.
 
 | Variable | Value | Rule |
 |---|---|---|
-| `IDEA_REVIEW_BRIDGE_URL` | The base address of the bridge, for example `http://127.0.0.1:64343` | The scheme must be `http`. The host must be a loopback address. |
-| `IDEA_REVIEW_BRIDGE_TOKEN` | A secret that the plugin makes for each IDE run | At least 16 characters. |
+| `Y_REVIEW_BRIDGE_URL` | The base address of the bridge, for example `http://127.0.0.1:64343` | The scheme must be `http`. The host must be a loopback address. |
+| `Y_REVIEW_BRIDGE_TOKEN` | A secret that the plugin makes for each IDE run | At least 16 characters. |
 
 The server rejects an address outside the loopback range. Any local program can
 reach a loopback port, therefore the token is the real guard. The plugin makes a
@@ -57,7 +57,7 @@ The plugin hosts the bridge. This section is the full contract. The plugin side
 does not exist yet, so `src/fakeBridge.ts` holds a bridge that follows this
 contract and the tests run against it.
 
-Both requests carry the token in the `X-Idea-Review-Token` header. The bridge must
+Both requests carry the token in the `X-Y-Review-Token` header. The bridge must
 answer 401 when the token does not match.
 
 ### The channel learns about a new batch
@@ -67,7 +67,7 @@ The channel sends one request:
 ```
 GET /events
 Accept: text/event-stream
-X-Idea-Review-Token: <token>
+X-Y-Review-Token: <token>
 ```
 
 The bridge answers `200` with the media type `text/event-stream` and holds the
@@ -136,7 +136,7 @@ When the model calls the `review_resolve` tool, the channel sends one request:
 ```
 POST /resolve
 Content-Type: application/json
-X-Idea-Review-Token: <token>
+X-Y-Review-Token: <token>
 
 {"ids":["c3f9a12aabbccddeeff00112233445566778899a"]}
 ```
@@ -151,7 +151,7 @@ The channel sends one notification for one batch. The method is
 `notifications/claude/channel`. The model sees this:
 
 ```
-<channel source="idea-review" branch="feat/channel-server" commit="4f2c8b1c..." count="2" batch_id="b7f2a91">
+<channel source="y-review" branch="feat/channel-server" commit="4f2c8b1c..." count="2" batch_id="b7f2a91">
 [c3f9a12] src/main/kotlin/Parser.kt:88-94 @HEAD
 This branch never runs when the input is empty. Add the guard before the loop.
 
@@ -193,19 +193,19 @@ The tool call fails in these cases:
 
 ## Start a session with this channel
 
-Write an MCP configuration file. The key of the entry must be `idea-review`,
+Write an MCP configuration file. The key of the entry must be `y-review`,
 because the `source` attribute on the tag comes from the server name.
-`mcp.idea-review.example.json` holds the shape:
+`mcp.y-review.example.json` holds the shape:
 
 ```json
 {
   "mcpServers": {
-    "idea-review": {
+    "y-review": {
       "command": "node",
       "args": ["<absolute path>/channel/dist/main.js"],
       "env": {
-        "IDEA_REVIEW_BRIDGE_URL": "http://127.0.0.1:64343",
-        "IDEA_REVIEW_BRIDGE_TOKEN": "<the token that the plugin made>"
+        "Y_REVIEW_BRIDGE_URL": "http://127.0.0.1:64343",
+        "Y_REVIEW_BRIDGE_TOKEN": "<the token that the plugin made>"
       }
     }
   }
@@ -215,7 +215,7 @@ because the `source` attribute on the tag comes from the server name.
 Then start the session:
 
 ```bash
-claude --mcp-config ./channel/mcp.idea-review.json --dangerously-load-development-channels server:idea-review
+claude --mcp-config ./channel/mcp.y-review.json --dangerously-load-development-channels server:y-review
 ```
 
 An entry in the MCP configuration is not enough. A session receives channel events
@@ -238,10 +238,10 @@ preview. Keep the flag in one place, because the syntax can change.
 We ran this server against the command line tool, version 2.1.237.
 
 1. An interactive session receives the events. The terminal prints a one line
-   summary such as `← idea-review: [c3f9a12] src/main/kotlin/Parser.kt:88-94 @HEAD ...`.
+   summary such as `← y-review: [c3f9a12] src/main/kotlin/Parser.kt:88-94 @HEAD ...`.
 2. A `claude -p` run receives no event, even after a second turn. Start an
    interactive session, or a session that stays open.
-3. The startup notice can say `server:idea-review · no MCP server configured with
+3. The startup notice can say `server:y-review · no MCP server configured with
    that name` and the events still arrive. Do not treat that line as a failure.
 
 The tool keeps a rule that decides whether it registers a channel. One part of that

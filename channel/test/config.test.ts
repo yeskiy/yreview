@@ -4,8 +4,8 @@ import { parseConfig } from '../src/config.js';
 const token = 'a-token-of-32-characters-000000000';
 
 const envWith = (url: string): Record<string, string | undefined> => ({
-    IDEA_REVIEW_BRIDGE_URL: url,
-    IDEA_REVIEW_BRIDGE_TOKEN: token
+    Y_REVIEW_BRIDGE_URL: url,
+    Y_REVIEW_BRIDGE_TOKEN: token
 });
 
 describe('parseConfig', () => {
@@ -26,7 +26,7 @@ describe('parseConfig', () => {
     });
 
     test('keeps a base path and removes the trailing slash', () => {
-        expect(parseConfig(envWith('http://127.0.0.1:64343/idea-review/')).bridgeUrl).toBe('http://127.0.0.1:64343/idea-review');
+        expect(parseConfig(envWith('http://127.0.0.1:64343/y-review/')).bridgeUrl).toBe('http://127.0.0.1:64343/y-review');
     });
 
     test('returns the token', () => {
@@ -50,20 +50,20 @@ describe('parseConfig', () => {
     });
 
     test('rejects an address that does not parse', () => {
-        expect(() => parseConfig(envWith('not a url'))).toThrow(/IDEA_REVIEW_BRIDGE_URL/);
+        expect(() => parseConfig(envWith('not a url'))).toThrow(/Y_REVIEW_BRIDGE_URL/);
     });
 
     test('rejects a missing address', () => {
-        expect(() => parseConfig({ IDEA_REVIEW_BRIDGE_TOKEN: token })).toThrow(/IDEA_REVIEW_BRIDGE_URL/);
+        expect(() => parseConfig({ Y_REVIEW_BRIDGE_TOKEN: token })).toThrow(/Y_REVIEW_BRIDGE_URL/);
     });
 
     test('rejects a missing token', () => {
-        expect(() => parseConfig({ IDEA_REVIEW_BRIDGE_URL: 'http://127.0.0.1:64343' })).toThrow(/IDEA_REVIEW_BRIDGE_TOKEN/);
+        expect(() => parseConfig({ Y_REVIEW_BRIDGE_URL: 'http://127.0.0.1:64343' })).toThrow(/Y_REVIEW_BRIDGE_TOKEN/);
     });
 
     test('rejects a token that is too short to guard the bridge', () => {
         expect(() =>
-            parseConfig({ IDEA_REVIEW_BRIDGE_URL: 'http://127.0.0.1:64343', IDEA_REVIEW_BRIDGE_TOKEN: 'short' })
-        ).toThrow(/IDEA_REVIEW_BRIDGE_TOKEN/);
+            parseConfig({ Y_REVIEW_BRIDGE_URL: 'http://127.0.0.1:64343', Y_REVIEW_BRIDGE_TOKEN: 'short' })
+        ).toThrow(/Y_REVIEW_BRIDGE_TOKEN/);
     });
 });

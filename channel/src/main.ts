@@ -11,7 +11,7 @@ const config = ((): ReturnType<typeof parseConfig> => {
         return parseConfig(process.env);
     } catch (cause) {
         log(cause instanceof Error ? cause.message : String(cause));
-        log('set IDEA_REVIEW_BRIDGE_URL and IDEA_REVIEW_BRIDGE_TOKEN, then start the server again');
+        log('set Y_REVIEW_BRIDGE_URL and Y_REVIEW_BRIDGE_TOKEN, then start the server again');
         process.exit(2);
     }
 })();

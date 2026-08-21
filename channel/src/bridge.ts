@@ -1,6 +1,6 @@
 import { ReviewBatchSchema, type ReviewBatch } from './schema.js';
 
-export const TOKEN_HEADER = 'x-idea-review-token';
+export const TOKEN_HEADER = 'x-y-review-token';
 export const EVENTS_PATH = '/events';
 export const RESOLVE_PATH = '/resolve';
 

@@ -33,7 +33,7 @@ const batch: ReviewBatch = {
 const textOf = (result: unknown): string =>
     ((result as { content: { type: string; text: string }[] }).content ?? []).map(part => part.text).join('\n');
 
-describe('the idea-review channel', () => {
+describe('the y-review channel', () => {
     const reported: string[][] = [];
     const failures: string[] = [];
 
@@ -78,8 +78,8 @@ describe('the idea-review channel', () => {
         expect(client.getInstructions()).toContain('review_resolve');
     });
 
-    test('is named idea-review so the source attribute reads idea-review', () => {
-        expect(SERVER_NAME).toBe('idea-review');
+    test('is named y-review so the source attribute reads y-review', () => {
+        expect(SERVER_NAME).toBe('y-review');
     });
 
     test('offers the review_resolve tool with an ids array', async () => {

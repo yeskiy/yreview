@@ -1,0 +1,6 @@
+<idea-plugin>
+  <extensions defaultExtensionNs="com.intellij">
+    <toolWindow id="Claude Review" anchor="bottom" canCloseContents="false"
+                factoryClass="com.yeskiy.yreview.session.ClaudeSessionToolWindowFactory" />
+  </extensions>
+</idea-plugin>

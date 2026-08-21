@@ -1,6 +1,6 @@
 <idea-plugin>
-  <id>com.yeskiy.ideareview</id>
-  <name>IDEA Review</name>
+  <id>com.yeskiy.yreview</id>
+  <name>Y Review</name>
   <vendor>yeskiy</vendor>
   <description><![CDATA[
     Write review comments on any line, in the editor and in the diff.
@@ -9,44 +9,44 @@
 
   <depends>com.intellij.modules.platform</depends>
   <depends>Git4Idea</depends>
-  <depends optional="true" config-file="idea-review-mcp.xml">com.intellij.mcpServer</depends>
-  <depends optional="true" config-file="idea-review-terminal.xml">org.jetbrains.plugins.terminal</depends>
+  <depends optional="true" config-file="y-review-mcp.xml">com.intellij.mcpServer</depends>
+  <depends optional="true" config-file="y-review-terminal.xml">org.jetbrains.plugins.terminal</depends>
 
   <extensions defaultExtensionNs="com.intellij">
-    <diff.DiffExtension implementation="com.yeskiy.ideareview.diff.ReviewDiffExtension" />
+    <diff.DiffExtension implementation="com.yeskiy.yreview.diff.ReviewDiffExtension" />
 
     <intentionAction>
       <language />
-      <className>com.yeskiy.ideareview.action.AddCommentIntention</className>
+      <className>com.yeskiy.yreview.action.AddCommentIntention</className>
       <category>Review comments</category>
     </intentionAction>
 
     <codeInsight.lineMarkerProvider
         language=""
-        implementationClass="com.yeskiy.ideareview.gutter.CommentGutterProvider" />
+        implementationClass="com.yeskiy.yreview.gutter.CommentGutterProvider" />
 
     <toolWindow id="Review Comments" anchor="bottom"
-                factoryClass="com.yeskiy.ideareview.toolwindow.ReviewToolWindowFactory" />
+                factoryClass="com.yeskiy.yreview.toolwindow.ReviewToolWindowFactory" />
 
-    <notificationGroup id="IDEA Review" displayType="BALLOON" />
+    <notificationGroup id="Y Review" displayType="BALLOON" />
 
     <projectConfigurable parentId="tools"
-                         id="com.yeskiy.ideareview.settings"
+                         id="com.yeskiy.yreview.settings"
                          displayName="Review Comments"
                          nonDefaultProject="true"
-                         instance="com.yeskiy.ideareview.settings.ReviewConfigurable" />
+                         instance="com.yeskiy.yreview.settings.ReviewConfigurable" />
   </extensions>
 
   <actions>
-    <action id="com.yeskiy.ideareview.AddComment"
-            class="com.yeskiy.ideareview.action.AddCommentAction"
+    <action id="com.yeskiy.yreview.AddComment"
+            class="com.yeskiy.yreview.action.AddCommentAction"
             text="Add Review Comment"
             description="Write a review comment on the selected lines.">
       <add-to-group group-id="EditorPopupMenu" anchor="last" />
     </action>
 
-    <action id="com.yeskiy.ideareview.AddDiffComment"
-            class="com.yeskiy.ideareview.diff.AddDiffCommentAction"
+    <action id="com.yeskiy.yreview.AddDiffComment"
+            class="com.yeskiy.yreview.diff.AddDiffCommentAction"
             text="Add Review Comment"
             description="Write a review comment on the selected lines of this diff side.">
       <add-to-group group-id="Diff.EditorPopupMenu" anchor="last" />

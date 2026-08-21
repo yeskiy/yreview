@@ -1,12 +1,12 @@
 {
-  "name": "idea-review-channel",
+  "name": "y-review-channel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Claude Code channel server that pushes IDEA review comments into an open session",
+  "description": "Claude Code channel server that pushes Y Review comments into an open session",
   "license": "MIT",
   "bin": {
-    "idea-review-channel": "./dist/main.js"
+    "y-review-channel": "./dist/main.js"
   },
   "files": [
     "dist"

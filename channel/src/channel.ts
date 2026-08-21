@@ -4,15 +4,15 @@ import { z } from 'zod';
 import { buildBatchMeta, formatBatchContent } from './format.js';
 import type { ReviewBatch } from './schema.js';
 
-export const SERVER_NAME = 'idea-review';
+export const SERVER_NAME = 'y-review';
 export const SERVER_VERSION = '0.1.0';
 export const CHANNEL_METHOD = 'notifications/claude/channel';
 
 const MAX_OPEN_BATCHES = 32;
 
 export const INSTRUCTIONS = [
-    'The idea-review channel carries code review comments from IntelliJ IDEA.',
-    'Each event arrives as a channel tag with the source attribute set to idea-review.',
+    'The y-review channel carries code review comments from IntelliJ IDEA.',
+    'Each event arrives as a channel tag with the source attribute set to y-review.',
     'The attributes give the branch, the commit, the comment count, and the batch id.',
     'The body of the tag lists the comments. A blank line divides two comments.',
     'The first line of a comment has this form:',

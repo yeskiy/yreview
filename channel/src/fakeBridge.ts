@@ -131,14 +131,14 @@ export const startFakeBridge = async (options: FakeBridgeOptions = {}): Promise<
 };
 
 const runFromStdin = async (): Promise<void> => {
-    const fromEnv = process.env['IDEA_REVIEW_BRIDGE_TOKEN'];
+    const fromEnv = process.env['Y_REVIEW_BRIDGE_TOKEN'];
     const bridge = await startFakeBridge({
         ...(fromEnv === undefined ? {} : { token: fromEnv }),
         onResolve: ids => console.error(`the model resolved: ${ids.join(', ')}`)
     });
     console.error('fake bridge running. Put these two values in the MCP configuration file:');
-    console.error(`IDEA_REVIEW_BRIDGE_URL=${bridge.url}`);
-    console.error(`IDEA_REVIEW_BRIDGE_TOKEN=${bridge.token}`);
+    console.error(`Y_REVIEW_BRIDGE_URL=${bridge.url}`);
+    console.error(`Y_REVIEW_BRIDGE_TOKEN=${bridge.token}`);
     console.error('Paste one batch as one line of JSON, then press Enter.');
     createInterface({ input: process.stdin }).on('line', line => {
         if (line.trim().length === 0) {
