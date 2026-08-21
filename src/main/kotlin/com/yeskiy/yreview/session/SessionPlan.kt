@@ -24,13 +24,17 @@ data class SessionPlan(
                         BridgeDiscovery.URL_VARIABLE to bridge.url,
                         BridgeDiscovery.TOKEN_VARIABLE to bridge.token
                     )
-                    is BridgeLookup.Unavailable -> emptyMap()
+                    is BridgeLookup.Unavailable, BridgeLookup.ChannelOff -> emptyMap()
                 },
                 status = when (bridge) {
                     is BridgeLookup.Available -> "The review bridge is ready at ${bridge.url}."
                     is BridgeLookup.Unavailable ->
                         "The review bridge is not available yet. ${bridge.reason} " +
                             "The session starts without the comment channel. " +
+                            "The agent can still read the comments through the IDE server."
+                    BridgeLookup.ChannelOff ->
+                        "The review channel is off in the settings. " +
+                            "The session starts without the channel. " +
                             "The agent can still read the comments through the IDE server."
                 },
                 bridgeReady = bridge is BridgeLookup.Available

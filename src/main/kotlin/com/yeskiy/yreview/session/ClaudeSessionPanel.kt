@@ -15,6 +15,7 @@ import com.intellij.terminal.ui.TerminalWidget
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
+import com.yeskiy.yreview.settings.ReviewSettings
 import org.jetbrains.plugins.terminal.ShellTerminalWidget
 import java.awt.BorderLayout
 import javax.swing.JPanel
@@ -85,11 +86,19 @@ class ClaudeSessionPanel(
      * the file. A second start returns the address of the first one.
      */
     private fun awaitBridge(basePath: String): BridgeLookup {
-        val found = BridgeDiscovery.find(basePath)
-        if (found is BridgeLookup.Available) return found
+        val found = lookup(basePath)
+        if (found !is BridgeLookup.Unavailable) return found
         if (BridgeService.getInstance(project).start() == null) return found
         return BridgeWait.poll(probe = { BridgeDiscovery.find(basePath) })
     }
+
+    /** The switch comes first, so a closed channel never reads the file of an earlier run. */
+    private fun lookup(basePath: String): BridgeLookup =
+        if (ReviewSettings.getInstance(project).channel) {
+            BridgeDiscovery.find(basePath)
+        } else {
+            BridgeLookup.ChannelOff
+        }
 
     private fun mount(basePath: String, bridge: BridgeLookup) {
         starting = false
@@ -183,7 +192,7 @@ class ClaudeSessionPanel(
 
     private fun bridgeState(): String {
         val basePath = project.basePath ?: return NO_DIRECTORY
-        return SessionPlan.of(basePath, BridgeDiscovery.find(basePath)).status
+        return SessionPlan.of(basePath, lookup(basePath)).status
     }
 
     /** A text area, not a label. The status text wraps, and it never renders markup. */

@@ -12,7 +12,14 @@ sealed interface BridgeLookup {
 
     data class Available(val url: String, val token: String) : BridgeLookup
 
+    /** The bridge is not there, and the reason says what the lookup found instead. */
     data class Unavailable(val reason: String) : BridgeLookup
+
+    /**
+     * The user turned the channel off in the settings. The plugin opens no port then, so
+     * the session must never read the file of an earlier run.
+     */
+    data object ChannelOff : BridgeLookup
 }
 
 /**

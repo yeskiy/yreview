@@ -59,6 +59,39 @@ class SessionPlanTest {
     }
 
     @Test
+    fun `a closed channel starts the session without the bridge`() {
+        val plan = SessionPlan.of(project, BridgeLookup.ChannelOff)
+        assertEquals(ClaudeCommand.shellCommand(), plan.command)
+        assertEquals(project, plan.workingDirectory)
+        assertTrue(plan.environment.isEmpty())
+        assertFalse(plan.bridgeReady)
+    }
+
+    @Test
+    fun `a closed channel names the switch in the status text`() {
+        val plan = SessionPlan.of(project, BridgeLookup.ChannelOff)
+        assertTrue(plan.status.contains("The review channel is off in the settings."), plan.status)
+        assertTrue(plan.status.contains("The session starts without the channel."), plan.status)
+    }
+
+    @Test
+    fun `a closed channel never asks the user to wait`() {
+        val plan = SessionPlan.of(project, BridgeLookup.ChannelOff)
+        assertFalse(plan.status.contains("yet"), plan.status)
+        assertFalse(plan.status.contains("not available"), plan.status)
+    }
+
+    @Test
+    fun `the three cases each carry their own words`() {
+        val texts = listOf(
+            SessionPlan.of(project, ready).status,
+            SessionPlan.of(project, BridgeLookup.Unavailable("The bridge file does not exist yet.")).status,
+            SessionPlan.of(project, BridgeLookup.ChannelOff).status,
+        )
+        assertEquals(texts.size, texts.distinct().size)
+    }
+
+    @Test
     fun `the plan converts a wsl project path`() {
         assertEquals(project, SessionPlan.of("/mnt/e/Projects/Opened/y-review", ready).workingDirectory)
     }
