@@ -49,6 +49,11 @@
             text="Add Review Comment"
             description="Write a review comment on the selected lines.">
       <add-to-group group-id="EditorPopupMenu" anchor="last" />
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift G" />
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="control shift G" remove="true" />
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift G" remove="true" />
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="control shift G" remove="true" />
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift G" remove="true" />
     </action>
 
     <action id="com.yeskiy.yreview.AddDiffComment"
@@ -57,6 +62,11 @@
             text="Add Review Comment"
             description="Write a review comment on the selected lines of this diff side.">
       <add-to-group group-id="Diff.EditorPopupMenu" anchor="last" />
+      <keyboard-shortcut keymap="$default" first-keystroke="control shift G" />
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="control shift G" remove="true" />
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta shift G" remove="true" />
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="control shift G" remove="true" />
+      <keyboard-shortcut keymap="Mac OS X 10.5+" first-keystroke="meta shift G" remove="true" />
     </action>
   </actions>
 </idea-plugin>

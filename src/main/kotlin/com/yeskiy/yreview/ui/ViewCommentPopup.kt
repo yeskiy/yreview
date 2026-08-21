@@ -5,8 +5,6 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.awt.RelativePoint
 import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBScrollPane
-import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
@@ -40,10 +38,9 @@ object ViewCommentPopup {
     }
 
     private fun open(project: Project, root: VirtualFile, point: RelativePoint, stored: StoredComment) {
-        val body = JBTextArea(stored.comment.description.orEmpty(), 6, 60)
-        body.isEditable = false
-        body.lineWrap = true
-        body.wrapStyleWord = true
+        val body = CommentField(project)
+        body.isViewer = true
+        body.text = stored.comment.description.orEmpty()
 
         val resolveButton = JButton("Resolve")
         val closeButton = JButton("Close")
@@ -51,7 +48,7 @@ object ViewCommentPopup {
         val panel = JPanel(BorderLayout(0, JBUI.scale(8)))
         panel.border = JBUI.Borders.empty(8)
         panel.add(head(stored), BorderLayout.NORTH)
-        panel.add(JBScrollPane(body), BorderLayout.CENTER)
+        panel.add(body, BorderLayout.CENTER)
         panel.add(ReviewPopup.buttons(resolveButton, closeButton), BorderLayout.SOUTH)
 
         val popup = ReviewPopup.build(panel, body, TITLE, Dimension(JBUI.scale(420), JBUI.scale(200)))
