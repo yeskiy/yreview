@@ -34,11 +34,15 @@ import javax.swing.JSeparator
  */
 object ReadBox {
 
+    /**
+     * Builds the card of [comments]. A handler carries its own button, and a null handler
+     * leaves that button out. A card that takes no handler therefore only reads the text.
+     */
     fun build(
         project: Project,
         comments: List<StoredComment>,
-        resolve: (StoredComment) -> Unit,
-        close: () -> Unit,
+        resolve: ((StoredComment) -> Unit)?,
+        close: (() -> Unit)?,
     ): JComponent {
         val column = JPanel().also { it.layout = BoxLayout(it, BoxLayout.Y_AXIS) }
         column.isOpaque = false
@@ -46,28 +50,31 @@ object ReadBox {
             if (index > 0) column.add(JSeparator())
             column.add(block(project, stored, resolve))
         }
-        val closeButton = JButton("Close")
-        closeButton.addActionListener { close() }
-        return BoxParts.card(BorderLayout(0, JBUI.scale(8))).also {
-            it.add(column, BorderLayout.CENTER)
-            it.add(BoxParts.row(closeButton), BorderLayout.SOUTH)
+        return BoxParts.card(BorderLayout(0, JBUI.scale(8))).also { card ->
+            card.add(column, BorderLayout.CENTER)
+            close?.let { card.add(BoxParts.row(closeButton(it)), BorderLayout.SOUTH) }
         }
     }
 
-    private fun block(project: Project, stored: StoredComment, resolve: (StoredComment) -> Unit): JPanel {
+    private fun closeButton(close: () -> Unit): JButton =
+        JButton("Close").also { button -> button.addActionListener { close() } }
+
+    private fun resolveButton(stored: StoredComment, resolve: (StoredComment) -> Unit): JButton =
+        JButton("Resolve").also { button ->
+            button.isEnabled = stored.comment.resolved != true
+            button.addActionListener { resolve(stored) }
+        }
+
+    private fun block(project: Project, stored: StoredComment, resolve: ((StoredComment) -> Unit)?): JPanel {
         val body = CommentField(project)
         body.isViewer = true
         body.text = stored.comment.description?.trim().orEmpty().ifEmpty { CommentCard.NO_TEXT }
 
-        val resolveButton = JButton("Resolve")
-        resolveButton.isEnabled = stored.comment.resolved != true
-        resolveButton.addActionListener { resolve(stored) }
-
-        return JPanel(BorderLayout(0, JBUI.scale(6))).also {
-            it.isOpaque = false
-            it.add(head(stored), BorderLayout.NORTH)
-            it.add(body, BorderLayout.CENTER)
-            it.add(BoxParts.row(resolveButton), BorderLayout.SOUTH)
+        return JPanel(BorderLayout(0, JBUI.scale(6))).also { panel ->
+            panel.isOpaque = false
+            panel.add(head(stored), BorderLayout.NORTH)
+            panel.add(body, BorderLayout.CENTER)
+            resolve?.let { panel.add(BoxParts.row(resolveButton(stored, it)), BorderLayout.SOUTH) }
         }
     }
 
