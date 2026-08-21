@@ -19,13 +19,14 @@
       <language />
       <className>com.yeskiy.yreview.action.AddCommentIntention</className>
       <category>Review comments</category>
+      <skipBeforeAfter>true</skipBeforeAfter>
     </intentionAction>
 
     <codeInsight.lineMarkerProvider
         language=""
         implementationClass="com.yeskiy.yreview.gutter.CommentGutterProvider" />
 
-    <toolWindow id="Review Comments" anchor="bottom"
+    <toolWindow id="Review Comments" anchor="bottom" icon="/icons/yReviewComments.svg"
                 factoryClass="com.yeskiy.yreview.toolwindow.ReviewToolWindowFactory" />
 
     <notificationGroup id="Y Review" displayType="BALLOON" />
