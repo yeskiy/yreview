@@ -4,8 +4,8 @@ import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
+import com.yeskiy.yreview.gutter.CommentGutter
 import com.yeskiy.yreview.store.ReviewService
-import com.yeskiy.yreview.ui.AddCommentPopup
 import com.yeskiy.yreview.ui.CommentText
 
 class AddCommentIntention : IntentionAction {
@@ -31,9 +31,9 @@ class AddCommentIntention : IntentionAction {
         val root = service.repositoryRoot(virtualFile) ?: return
         val target = CommentTarget.fromEditor(editor, path)
 
-        AddCommentPopup.show(
-            project,
+        CommentGutter.getInstance(project).openWriteBox(
             editor,
+            target.lastLine,
             CommentText.header(target.path, target.startLine, target.endLine),
         ) { text, share -> CommentWriter.write(project, root, commit, target, text, share) }
     }

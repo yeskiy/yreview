@@ -130,4 +130,34 @@ class CommentIndexTest {
     fun `a comment without a range covers no line`() {
         assertEquals(emptyList(), CommentIndex.lineSpans(listOf(stored("a.kt", null, "no anchor")), "a.kt"))
     }
+
+    @Test
+    fun `the box sits under the last line of one comment`() {
+        assertEquals(20, CommentIndex.lastLine(listOf(stored("a.kt", 10, "one", endLine = 20))))
+    }
+
+    @Test
+    fun `the box sits under the last line of every comment of the icon`() {
+        assertEquals(
+            30,
+            CommentIndex.lastLine(
+                listOf(stored("a.kt", 10, "short", endLine = 12), stored("a.kt", 10, "long", endLine = 30)),
+            ),
+        )
+    }
+
+    @Test
+    fun `a range that ends before it starts still names its last line`() {
+        assertEquals(9, CommentIndex.lastLine(listOf(stored("a.kt", 9, "reversed", endLine = 7))))
+    }
+
+    @Test
+    fun `a comment without a range names no line`() {
+        assertEquals(0, CommentIndex.lastLine(listOf(stored("a.kt", null, "no anchor"))))
+    }
+
+    @Test
+    fun `an empty list names no line`() {
+        assertEquals(0, CommentIndex.lastLine(emptyList()))
+    }
 }

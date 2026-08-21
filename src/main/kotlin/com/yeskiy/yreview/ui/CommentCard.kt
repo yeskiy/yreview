@@ -43,7 +43,7 @@ object CommentCard {
         "${stored.comment.author}, ${time(stored.comment)}"
 
     /** The lines under the comment, the ref that holds it, and the state of the work. */
-    private fun state(stored: StoredComment): String =
+    fun state(stored: StoredComment): String =
         listOf(
             stored.comment.location?.range?.let { "lines ${it.startLine}-${it.endLine}" } ?: "no lines",
             if (NoteRefs.isShared(stored.ref)) "shared" else "local",

@@ -62,8 +62,6 @@ import com.intellij.ui.tree.StructureTreeModel
 import com.intellij.ui.tree.TreeVisitor
 import com.intellij.ui.treeStructure.Tree
 import com.intellij.usageView.UsageInfo
-import com.intellij.usages.UsageViewPresentation
-import com.intellij.usages.impl.UsagePreviewPanel
 import com.intellij.util.EditSourceOnDoubleClickHandler
 import com.intellij.util.EditSourceOnEnterKeyHandler
 import com.intellij.util.ui.JBUI
@@ -165,7 +163,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private val splitter = OnePixelSplitter(false, "$PREVIEW_PROPORTION.${scope.name}", 0.6f)
 
-    private val preview = UsagePreviewPanel(project, UsageViewPresentation())
+    private val preview = CommentPreviewPanel(project)
 
     private val scopeChooser: ScopeChooserCombo? =
         if (scope == TaskScope.SCOPE_BASED) {
@@ -618,13 +616,18 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         if (!tab().showPreview) return
         val task = TaskChoice.previewTask(selectedTasks(), allTasks())
         if (task == null) {
+            preview.showComment(null)
             preview.updateLayout(project, emptyList())
             return
         }
         ApplicationManager.getApplication().executeOnPooledThread {
             if (project.isDisposed) return@executeOnPooledThread
             val found = ReadAction.nonBlocking<List<UsageInfo>> { usages(task) }.executeSynchronously()
-            ApplicationManager.getApplication().invokeLater({ preview.updateLayout(project, found) }, project.disposed)
+            val comment = CommentPreviewPanel.commentOf(project, task)
+            ApplicationManager.getApplication().invokeLater({
+                preview.showComment(comment)
+                preview.updateLayout(project, found)
+            }, project.disposed)
         }
     }
 
