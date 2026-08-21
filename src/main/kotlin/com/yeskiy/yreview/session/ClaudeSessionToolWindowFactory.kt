@@ -9,8 +9,9 @@ import com.intellij.ui.content.ContentFactory
 class ClaudeSessionToolWindowFactory : ToolWindowFactory {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = ClaudeSessionPanel(project)
+        val panel = ClaudeSessionPanel(project, toolWindow)
         Disposer.register(toolWindow.disposable, panel)
         toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(panel, "", false))
+        toolWindow.setTitleActions(panel.titleActions())
     }
 }
