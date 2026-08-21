@@ -18,6 +18,7 @@ import com.intellij.util.ui.UIUtil
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.StoredComment
 import java.awt.BorderLayout
+import java.awt.Dimension
 import java.awt.FlowLayout
 import java.awt.LayoutManager
 import javax.swing.BoxLayout
@@ -35,26 +36,62 @@ import javax.swing.JSeparator
 object ReadBox {
 
     /**
-     * Builds the card of [comments]. A handler carries its own button, and a null handler
-     * leaves that button out. A card that takes no handler therefore only reads the text.
+     * Builds the card that the file editor shows, inside the frame that keeps the card narrow.
+     * A handler carries its own button, and a null handler leaves that button out.
+     *
+     * One comment keeps every button in one row at the foot of the card. Several comments give
+     * each block the buttons of its own comment, and the foot of the card then holds Close
+     * alone, because Close acts on the card and the other buttons act on one comment.
      */
     fun build(
         project: Project,
         comments: List<StoredComment>,
         resolve: ((StoredComment) -> Unit)?,
+        delete: ((StoredComment) -> Unit)?,
         close: (() -> Unit)?,
-    ): JComponent {
+    ): JComponent = CardHost(card(project, comments, resolve, delete, close))
+
+    /** Builds the card that the preview pane shows. That pane reads a comment back and writes nothing. */
+    fun preview(project: Project, comments: List<StoredComment>): JComponent =
+        card(project, comments, null, null, null)
+
+    /** Ties the Delete key of the keymap to [run] while the focus stays inside [card]. */
+    fun bindDelete(card: JComponent, parent: Disposable, run: () -> Unit) {
+        DumbAwareAction.create { run() }.registerCustomShortcutSet(CommonShortcuts.getDelete(), card, parent)
+    }
+
+    private fun card(
+        project: Project,
+        comments: List<StoredComment>,
+        resolve: ((StoredComment) -> Unit)?,
+        delete: ((StoredComment) -> Unit)?,
+        close: (() -> Unit)?,
+    ): JPanel {
+        val alone = comments.singleOrNull()
         val column = JPanel().also { it.layout = BoxLayout(it, BoxLayout.Y_AXIS) }
         column.isOpaque = false
         comments.forEachIndexed { index, stored ->
             if (index > 0) column.add(JSeparator())
-            column.add(block(project, stored, resolve))
+            column.add(block(project, stored, resolve.takeIf { alone == null }, delete.takeIf { alone == null }))
         }
         return BoxParts.card(BorderLayout(0, JBUI.scale(8))).also { card ->
             card.add(column, BorderLayout.CENTER)
-            close?.let { card.add(BoxParts.row(closeButton(it)), BorderLayout.SOUTH) }
+            BoxParts.row(buttons(alone, resolve, delete) + listOfNotNull(close?.let { closeButton(it) }))
+                ?.let { card.add(it, BorderLayout.SOUTH) }
         }
     }
+
+    /** The buttons of one comment. The list is empty while the card holds more than one comment. */
+    private fun buttons(
+        stored: StoredComment?,
+        resolve: ((StoredComment) -> Unit)?,
+        delete: ((StoredComment) -> Unit)?,
+    ): List<JButton> =
+        if (stored == null) emptyList()
+        else listOfNotNull(
+            resolve?.let { resolveButton(stored, it) },
+            delete?.let { deleteButton(stored, it) },
+        )
 
     private fun closeButton(close: () -> Unit): JButton =
         JButton("Close").also { button -> button.addActionListener { close() } }
@@ -65,7 +102,18 @@ object ReadBox {
             button.addActionListener { resolve(stored) }
         }
 
-    private fun block(project: Project, stored: StoredComment, resolve: ((StoredComment) -> Unit)?): JPanel {
+    private fun deleteButton(stored: StoredComment, delete: (StoredComment) -> Unit): JButton =
+        JButton("Delete").also { button ->
+            button.toolTipText = "Remove this comment from the git notes. You cannot put it back."
+            button.addActionListener { delete(stored) }
+        }
+
+    private fun block(
+        project: Project,
+        stored: StoredComment,
+        resolve: ((StoredComment) -> Unit)?,
+        delete: ((StoredComment) -> Unit)?,
+    ): JPanel {
         val body = CommentField(project)
         body.isViewer = true
         body.text = stored.comment.description?.trim().orEmpty().ifEmpty { CommentCard.NO_TEXT }
@@ -74,7 +122,7 @@ object ReadBox {
             panel.isOpaque = false
             panel.add(head(stored), BorderLayout.NORTH)
             panel.add(body, BorderLayout.CENTER)
-            resolve?.let { panel.add(BoxParts.row(resolveButton(stored, it)), BorderLayout.SOUTH) }
+            BoxParts.row(buttons(stored, resolve, delete))?.let { panel.add(it, BorderLayout.SOUTH) }
         }
     }
 
@@ -202,6 +250,33 @@ private object BoxParts {
             controls.forEach { line.add(it) }
         }
 
+    /** The same row of controls, and null while the list holds no control at all. */
+    fun row(controls: List<JButton>): JPanel? =
+        controls.takeIf { it.isNotEmpty() }?.let { row(*it.toTypedArray()) }
+
     fun small(text: String): JBLabel =
         JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER)
+}
+
+/**
+ * The frame of one card in the file editor.
+ *
+ * The editor gives a block inlay the width of its own view, and the frame takes that width. The
+ * frame paints nothing, and it keeps the card at the width that the text of the card asks for.
+ * A view that is narrower than the card cuts no button, because the card then takes the width
+ * that is left.
+ */
+private class CardHost(private val card: JComponent) : JPanel() {
+
+    init {
+        layout = null
+        isOpaque = false
+        add(card)
+    }
+
+    override fun doLayout() = card.setBounds(0, 0, card.preferredSize.width.coerceAtMost(width), height)
+
+    override fun getPreferredSize(): Dimension = card.preferredSize
+
+    override fun getMinimumSize(): Dimension = card.minimumSize
 }
