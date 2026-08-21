@@ -19,7 +19,6 @@ import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskKind
-import com.yeskiy.yreview.ui.CommentResolve
 import com.yeskiy.yreview.ui.ReadBox
 
 /** The comment that the preview pane shows, and the repository root that holds it. */
@@ -31,6 +30,9 @@ data class PreviewComment(val root: VirtualFile, val stored: StoredComment)
  * The pane builds an editor of its own and releases it again. The card is a block inlay of that
  * editor, so the card goes with the editor. [onEditorCreated] therefore draws the card again for
  * every new editor, and [showComment] draws it when the pane keeps the editor it already has.
+ *
+ * The card of this pane takes no handler, so the card carries no button. The pane reads a
+ * comment back, and the card of the file editor keeps the controls.
  */
 class CommentPreviewPanel(private val project: Project) :
     UsagePreviewPanel(project, UsageViewPresentation()) {
@@ -75,7 +77,7 @@ class CommentPreviewPanel(private val project: Project) :
         card = editor.addComponentInlay(
             editor.document.getLineEndOffset(line - 1),
             InlayProperties().showAbove(false).relatesToPrecedingText(true),
-            ReadBox.build(project, listOf(comment.stored), { stored -> resolve(comment.root, stored) }, ::clear),
+            ReadBox.build(project, listOf(comment.stored), null, null),
             ComponentInlayAlignment.FIT_VIEWPORT_WIDTH,
         )
     }
@@ -83,16 +85,6 @@ class CommentPreviewPanel(private val project: Project) :
     /** The pane keeps its editor between two rows of the same file, so the card checks the file. */
     private fun pathOf(comment: PreviewComment): String? =
         comment.stored.comment.location?.let { "${comment.root.path}/${it.path}" }
-
-    private fun clear() {
-        wanted = null
-        draw()
-    }
-
-    private fun resolve(root: VirtualFile, stored: StoredComment) {
-        clear()
-        CommentResolve.run(project, root, stored)
-    }
 
     companion object {
 
