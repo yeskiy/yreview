@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -136,7 +137,8 @@ class TaskChoiceTest {
         val target = TaskChoice.writeTarget(emptyList(), listOf(task("a")))
 
         assertEquals(WriteScope.SELECTED, target.scope)
-        assertTrue(target.empty)
+        assertFalse(target.empty)
+        assertFalse(target.hasComments)
         assertEquals(listOf("a"), target.todos.map { it.id })
     }
 
@@ -152,9 +154,43 @@ class TaskChoiceTest {
         val target = TaskChoice.writeTarget(listOf(comment("x"), comment("y")), emptyList())
 
         assertEquals(
-            "You cannot undo this delete. The plugin removes 2 review comments from the git notes.",
+            "You cannot put a review comment back. " +
+                "The plugin removes 2 review comments from the git notes.",
             target.deleteQuestion,
         )
+    }
+
+    @Test
+    fun `the delete question of todo rows only names the source`() {
+        val target = TaskChoice.writeTarget(emptyList(), listOf(task("a")))
+
+        assertEquals(
+            "The plugin removes 1 TODO item from the source. One undo step puts the text back.",
+            target.deleteQuestion,
+        )
+    }
+
+    @Test
+    fun `the delete question of a mixed selection names both counts`() {
+        val target = TaskChoice.writeTarget(emptyList(), listOf(comment("y"), task("a"), task("b")))
+
+        assertEquals(
+            "You cannot put a review comment back. " +
+                "The plugin removes 1 review comment from the git notes. " +
+                "The plugin removes 2 TODO items from the source. One undo step puts the text back.",
+            target.deleteQuestion,
+        )
+    }
+
+    @Test
+    fun `a resolve needs a review comment and a delete does not`() {
+        val todosOnly = TaskChoice.writeTarget(emptyList(), listOf(task("a")))
+        val nothing = TaskChoice.writeTarget(emptyList(), emptyList())
+
+        assertFalse(todosOnly.hasComments)
+        assertFalse(todosOnly.empty)
+        assertFalse(nothing.hasComments)
+        assertTrue(nothing.empty)
     }
 
     @Test

@@ -17,6 +17,9 @@ import javax.swing.tree.TreeCellRenderer
  * nodes of the platform. The check box therefore lives in the renderer, and the checked
  * identifiers live beside the model. The layout copies the platform renderer, so the row
  * keeps the look of a check box tree.
+ *
+ * A tree asks the component of the renderer for the tooltip of a row. That component is
+ * this panel, so the panel takes over the tooltip of the text renderer inside it.
  */
 class TaskCheckRenderer(private val state: (TaskHolder) -> CheckState) : JPanel(BorderLayout()), TreeCellRenderer {
 
@@ -52,6 +55,7 @@ class TaskCheckRenderer(private val state: (TaskHolder) -> CheckState) : JPanel(
         box.isVisible = holder != null
         if (holder != null) box.state = swing(state(holder))
         text.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus)
+        toolTipText = text.toolTipText
         revalidate()
         return this
     }

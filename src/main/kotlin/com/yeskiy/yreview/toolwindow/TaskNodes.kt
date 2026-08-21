@@ -126,10 +126,9 @@ class TaskNode(project: Project, task: ReviewTask) :
     override fun update(presentation: PresentationData) {
         presentation.setIcon(TaskNodes.icon(value))
         presentation.addText(TaskLabels.taskTitle(value), TaskNodes.attributes(value))
-        val tail = TaskLabels.taskTail(value)
-        if (tail.isNotEmpty()) presentation.addText(" $tail", SimpleTextAttributes.GRAYED_ATTRIBUTES)
         val state = TaskLabels.taskState(value)
         if (state.isNotEmpty()) presentation.addText("  [$state]", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        presentation.tooltip = TaskLabels.taskTooltip(value)
     }
 
     override fun canNavigate(): Boolean = descriptor() != null
