@@ -28,6 +28,8 @@
 
     <editorFactoryListener implementation="com.yeskiy.yreview.gutter.CommentGutterListener" />
 
+    <postStartupActivity implementation="com.yeskiy.yreview.bridge.BridgeStartup" />
+
     <toolWindow id="Review Comments" anchor="bottom" icon="/icons/yReviewComments.svg"
                 factoryClass="com.yeskiy.yreview.toolwindow.ReviewToolWindowFactory" />
 
@@ -43,6 +45,7 @@
   <actions>
     <action id="com.yeskiy.yreview.AddComment"
             class="com.yeskiy.yreview.action.AddCommentAction"
+            icon="AllIcons.Diff.AddComment_14x14"
             text="Add Review Comment"
             description="Write a review comment on the selected lines.">
       <add-to-group group-id="EditorPopupMenu" anchor="last" />
@@ -50,6 +53,7 @@
 
     <action id="com.yeskiy.yreview.AddDiffComment"
             class="com.yeskiy.yreview.diff.AddDiffCommentAction"
+            icon="AllIcons.Diff.AddComment_14x14"
             text="Add Review Comment"
             description="Write a review comment on the selected lines of this diff side.">
       <add-to-group group-id="Diff.EditorPopupMenu" anchor="last" />

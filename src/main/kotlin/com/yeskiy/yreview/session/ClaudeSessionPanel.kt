@@ -13,19 +13,20 @@ import com.intellij.terminal.JBTerminalWidget
 import com.intellij.terminal.ui.TerminalWidget
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
+import com.yeskiy.yreview.bridge.BridgeService
 import java.awt.BorderLayout
 import javax.swing.JPanel
 import javax.swing.JTextArea
 
 /**
- * The content of the Claude Review tool window. It holds a terminal that runs one review
- * session. The plugin owns the command line, so the channel flags are never missing.
+ * The content of the Claude tool window. It holds a terminal that runs one review session.
+ * The plugin owns the command line, so the channel flags are never missing.
  *
- * The buttons live in the tool window title bar, so a terminal gets the whole content area.
- * A terminal stays on screen after the session ends, and the last output stays readable.
- * The title of the tool window carries the state. Start and Restart drop the dead terminal
- * and mount a new one. The empty state with the bridge status shows before the first
- * session of the project only.
+ * One button in the tool window title bar carries both states. It starts a session while
+ * none runs, and it ends the running one. A terminal stays on screen after the session
+ * ends, and the last output stays readable. The title of the tool window carries the
+ * state. A new start drops the dead terminal and mounts a new one. The empty state with
+ * the bridge status shows before the first session of the project only.
  */
 class ClaudeSessionPanel(
     private val project: Project,
@@ -34,8 +35,15 @@ class ClaudeSessionPanel(
 
     private val status = statusArea()
     private val idle = JBPanelWithEmptyText(BorderLayout()).apply { add(status, BorderLayout.SOUTH) }
+
+    /** The widget on screen. It stays after the session ends, because the output stays. */
     private var terminal: TerminalWidget? = null
-    private var running = false
+
+    /** The widget of the running session. It becomes null the moment the session ends. */
+    private var session: TerminalWidget? = null
+
+    /** True between the press on Start and the mount of the terminal. */
+    private var starting = false
 
     init {
         showIdle(NO_SESSION)
@@ -44,19 +52,48 @@ class ClaudeSessionPanel(
     override fun dispose() = Unit
 
     val isRunning: Boolean
-        get() = running
+        get() = session != null
 
-    fun titleActions(): List<AnAction> = listOf(StartAction(), StopAction(), RestartAction())
+    fun titleActions(): List<AnAction> = listOf(SessionAction())
 
+    /**
+     * The bridge opens a port and writes a file, so the wait for it stays off this thread.
+     * The terminal mounts on this thread again, after the bridge answers or after the wait
+     * ends. A second press during the wait does nothing.
+     */
     fun start() {
-        if (running) return
+        if (isRunning || starting) return
         val basePath = project.basePath ?: return failed(NO_SESSION)
-        val started = ReviewTerminal.open(project, SessionPlan.of(basePath, BridgeDiscovery.find(basePath)), this)
+        starting = true
+        toolWindow.setTitle(STARTING_TITLE)
+        if (terminal == null) status.text = BRIDGE_WAIT
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val bridge = awaitBridge(basePath)
+            ApplicationManager.getApplication().invokeLater({ mount(basePath, bridge) }, project.disposed)
+        }
+    }
+
+    /**
+     * The startup activity of the project opens the bridge. A tool window can open before
+     * that activity ends, so the session starts the bridge again and waits a short time for
+     * the file. A second start returns the address of the first one.
+     */
+    private fun awaitBridge(basePath: String): BridgeLookup {
+        val found = BridgeDiscovery.find(basePath)
+        if (found is BridgeLookup.Available) return found
+        if (BridgeService.getInstance(project).start() == null) return found
+        return BridgeWait.poll(probe = { BridgeDiscovery.find(basePath) })
+    }
+
+    private fun mount(basePath: String, bridge: BridgeLookup) {
+        starting = false
+        if (isRunning) return
+        val started = ReviewTerminal.open(project, SessionPlan.of(basePath, bridge), this)
             ?: return failed(NO_TERMINAL)
         terminal?.let { drop(it) }
         remove(idle)
         terminal = started
-        running = true
+        session = started
         started.addTerminationCallback(Runnable { onTermination(started) }, jediTerm(started) ?: this)
         add(started.component, BorderLayout.CENTER)
         toolWindow.setTitle(RUNNING_TITLE)
@@ -67,26 +104,21 @@ class ClaudeSessionPanel(
 
     /**
      * The connector close reaches the destroy call of the process. The widget stays alive,
-     * so the last output of the session stays on screen.
+     * so the last output of the session stays on screen. A second press does nothing.
      */
     fun stop() {
-        if (!running) return
-        terminal?.let { jediTerm(it)?.ttyConnector?.close() }
+        val live = session ?: return
+        jediTerm(live)?.ttyConnector?.close()
         endSession()
     }
 
-    fun restart() {
-        stop()
-        start()
-    }
-
-    /** The callback runs on the emulator thread, and a restart can outrun it. */
+    /** The callback runs on the emulator thread, and a new start can outrun it. */
     private fun onTermination(ended: TerminalWidget) = ApplicationManager.getApplication().invokeLater {
-        if (terminal === ended) endSession()
+        if (session === ended) endSession()
     }
 
     private fun endSession() {
-        running = false
+        session = null
         toolWindow.setTitle(ENDED_TITLE)
     }
 
@@ -94,24 +126,25 @@ class ClaudeSessionPanel(
      * The widget close stops the emulator and the terminal panel. The connector close makes
      * sure that the operating system process is gone.
      */
-    private fun drop(session: TerminalWidget) {
-        remove(session.component)
-        val widget = jediTerm(session) ?: return
-        Disposer.dispose(widget)
-        widget.ttyConnector?.close()
+    private fun drop(widget: TerminalWidget) {
+        remove(widget.component)
+        val jedi = jediTerm(widget) ?: return
+        Disposer.dispose(jedi)
+        jedi.ttyConnector?.close()
     }
 
     /** The widget of the terminal, not the bridge in front of it. The bridge closes nothing. */
-    private fun jediTerm(session: TerminalWidget): JBTerminalWidget? =
-        JBTerminalWidget.asJediTermWidget(session)
+    private fun jediTerm(widget: TerminalWidget): JBTerminalWidget? =
+        JBTerminalWidget.asJediTermWidget(widget)
 
     private fun failed(headline: String) {
+        starting = false
         toolWindow.setTitle(NOT_STARTED_TITLE)
         if (terminal == null) showIdle(headline)
     }
 
     private fun showIdle(headline: String) {
-        idle.emptyText.setText(headline).appendLine(START_HINT)
+        idle.emptyText.setText(headline).appendLine(PRESS_START)
         status.text = bridgeState()
         add(idle, BorderLayout.CENTER)
         revalidate()
@@ -134,51 +167,37 @@ class ClaudeSessionPanel(
         border = JBUI.Borders.empty(4, 8)
     }
 
-    private inner class StartAction : AnAction(
-        "Start Claude Review",
-        "Start a review session with the IDE server and the comment channel.",
-        AllIcons.Actions.Execute
-    ) {
+    /**
+     * One button for both states. The update thread stays the user interface thread,
+     * because the state of the session lives there and no data call reads it.
+     */
+    private inner class SessionAction : AnAction() {
+
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = !running
+            val live = isRunning
+            event.presentation.text = if (live) STOP_TEXT else START_TEXT
+            event.presentation.description = if (live) STOP_HINT else START_HINT
+            event.presentation.icon = if (live) AllIcons.Actions.Suspend else AllIcons.Actions.Execute
         }
 
-        override fun actionPerformed(event: AnActionEvent) = start()
-    }
-
-    private inner class StopAction : AnAction(
-        "Stop Claude Review",
-        "End the review session and the process behind it.",
-        AllIcons.Actions.Suspend
-    ) {
-        override fun getActionUpdateThread() = ActionUpdateThread.EDT
-
-        override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = running
-        }
-
-        override fun actionPerformed(event: AnActionEvent) = stop()
-    }
-
-    private inner class RestartAction : AnAction(
-        "Restart Claude Review",
-        "End the review session, then start a new one.",
-        AllIcons.Actions.Restart
-    ) {
-        override fun getActionUpdateThread() = ActionUpdateThread.EDT
-
-        override fun actionPerformed(event: AnActionEvent) = restart()
+        override fun actionPerformed(event: AnActionEvent) = if (isRunning) stop() else start()
     }
 
     private companion object {
         const val RUNNING_TITLE = "Running"
         const val ENDED_TITLE = "Ended"
         const val NOT_STARTED_TITLE = "Not started"
+        const val STARTING_TITLE = "Starting"
         const val NO_SESSION = "No review session runs."
         const val NO_TERMINAL = "The terminal did not start. The IDE log holds the reason."
         const val NO_DIRECTORY = "This project has no directory, so a session cannot start here."
-        const val START_HINT = "Press Start in the title bar to open a session with the comment channel."
+        const val PRESS_START = "Press Start in the title bar to open a session with the comment channel."
+        const val BRIDGE_WAIT = "The review bridge starts now. The session opens after the bridge answers."
+        const val START_TEXT = "Start Claude"
+        const val START_HINT = "Start a review session with the IDE server and the comment channel."
+        const val STOP_TEXT = "Stop Claude"
+        const val STOP_HINT = "End the review session and the process behind it."
     }
 }
