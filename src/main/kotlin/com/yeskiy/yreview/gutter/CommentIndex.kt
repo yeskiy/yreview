@@ -25,6 +25,14 @@ object CommentIndex {
                 }
             }
 
+    /**
+     * The last line that these comments cover. The box of the editor sits under that line.
+     * The answer is 0 when no comment of the list carries a line range.
+     */
+    fun lastLine(comments: List<StoredComment>): Int =
+        comments.mapNotNull { it.comment.location?.range }
+            .maxOfOrNull { maxOf(it.startLine, it.endLine) } ?: 0
+
     private fun spanOf(stored: StoredComment, path: String): IntRange? {
         val location = stored.comment.location ?: return null
         if (location.path != path) return null

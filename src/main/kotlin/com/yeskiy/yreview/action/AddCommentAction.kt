@@ -8,11 +8,15 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
+import com.yeskiy.yreview.gutter.CommentGutter
 import com.yeskiy.yreview.store.ReviewService
-import com.yeskiy.yreview.ui.AddCommentPopup
 import com.yeskiy.yreview.ui.CommentText
 
-data class Target(val path: String, val startLine: Int, val endLine: Int)
+data class Target(val path: String, val startLine: Int, val endLine: Int) {
+
+    /** The line the box of the editor sits under. */
+    val lastLine: Int get() = maxOf(startLine, endLine)
+}
 
 object CommentTarget {
     /** Editor lines are zero based. Every stored line number is one based. */
@@ -61,9 +65,9 @@ class AddCommentAction : AnAction() {
         val root = service.repositoryRoot(file) ?: return
         val target = CommentTarget.fromEditor(editor, path)
 
-        AddCommentPopup.show(
-            project,
+        CommentGutter.getInstance(project).openWriteBox(
             editor,
+            target.lastLine,
             CommentText.header(target.path, target.startLine, target.endLine),
         ) { text, share -> CommentWriter.write(project, root, commit, target, text, share) }
     }
