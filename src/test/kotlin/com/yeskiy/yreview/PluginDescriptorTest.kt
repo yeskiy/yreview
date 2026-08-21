@@ -1,5 +1,6 @@
 package com.yeskiy.yreview
 
+import com.yeskiy.yreview.settings.SessionWindow
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -76,8 +77,9 @@ class PluginDescriptorTest {
     @Test
     fun `the session tool window keeps its identifier`() {
         assertTrue(
-            terminal.contains("id=\"Claude Review\""),
-            "the visible name comes from the factory, so the saved layout of the user survives"
+            terminal.contains("id=\"${SessionWindow.ID}\""),
+            "the settings page shows and hides the window by this identifier"
         )
+        assertEquals("Claude Review", SessionWindow.ID)
     }
 }

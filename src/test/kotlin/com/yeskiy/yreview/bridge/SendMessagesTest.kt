@@ -78,12 +78,26 @@ class SendMessagesTest {
     }
 
     @Test
-    fun `reports the clipboard route`() {
+    fun `names the missing session on the clipboard route`() {
         val notice = SendMessages.of(
-            SendReport(tasks = 4, batches = 0, streams = 0, route = SendRoute.CLIPBOARD, folder = ".git/y-review")
+            SendReport(tasks = 4, batches = 0, streams = 0, route = SendRoute.NO_SESSION, folder = ".git/y-review")
         )
         assertEquals(
-            "The IDE wrote 4 tasks to .git/y-review and copied the prompt to the clipboard.",
+            "No Claude Code session reads this project, so the IDE wrote 4 tasks to .git/y-review " +
+                "and copied the prompt to the clipboard.",
+            notice.text,
+        )
+        assertFalse(notice.warning)
+    }
+
+    @Test
+    fun `names the closed switch on the clipboard route`() {
+        val notice = SendMessages.of(
+            SendReport(tasks = 4, batches = 0, streams = 0, route = SendRoute.CHANNEL_OFF, folder = ".git/y-review")
+        )
+        assertEquals(
+            "The review channel is off in the settings, so the IDE wrote 4 tasks to .git/y-review " +
+                "and copied the prompt to the clipboard.",
             notice.text,
         )
         assertFalse(notice.warning)
@@ -98,7 +112,7 @@ class SendMessagesTest {
                 streams = 0,
                 dropped = 1,
                 dropReason = BatchBuilder.PATH_REASON,
-                route = SendRoute.CLIPBOARD,
+                route = SendRoute.NO_SESSION,
                 folder = ".git/y-review",
             )
         )

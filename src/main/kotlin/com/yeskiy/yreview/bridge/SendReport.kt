@@ -2,8 +2,27 @@ package com.yeskiy.yreview.bridge
 
 import com.yeskiy.yreview.tasks.TaskLabels
 
-/** The route one send took. */
-enum class SendRoute { CHANNEL, CLIPBOARD }
+/**
+ * The route one send took.
+ *
+ * A route other than [CHANNEL] carries the reason the send went to the clipboard, so the
+ * user never has to guess why the channel stayed out of the work.
+ */
+enum class SendRoute(val clipboardReason: String?) {
+    CHANNEL(null),
+    NO_SESSION("No Claude Code session reads this project"),
+    CHANNEL_OFF("The review channel is off in the settings"),
+}
+
+/** Picks the route of one send. The switch of the user beats the number of readers. */
+object SendRoutes {
+
+    fun of(channel: Boolean, readers: Int): SendRoute = when {
+        !channel -> SendRoute.CHANNEL_OFF
+        readers > 0 -> SendRoute.CHANNEL
+        else -> SendRoute.NO_SESSION
+    }
+}
 
 /** What one press of Send did. */
 data class SendReport(
@@ -32,9 +51,9 @@ object SendMessages {
     fun of(report: SendReport): Notice = when {
         report.problem != null -> Notice(report.problem, warning = true)
         report.tasks == 0 && report.dropped == 0 -> Notice("This repository has no open task.", warning = false)
-        report.route == SendRoute.CLIPBOARD -> Notice(
-            "The IDE wrote ${TaskLabels.count(report.tasks, "task")} to ${report.folder} " +
-                "and copied the prompt to the clipboard." + lost(report),
+        report.route.clipboardReason != null -> Notice(
+            "${report.route.clipboardReason}, so the IDE wrote ${TaskLabels.count(report.tasks, "task")} " +
+                "to ${report.folder} and copied the prompt to the clipboard." + lost(report),
             warning = false,
         )
         report.streams == 0 -> Notice(

@@ -69,6 +69,7 @@ import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.bridge.SendMessages
 import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
+import com.yeskiy.yreview.bridge.SendRoutes
 import com.yeskiy.yreview.handoff.DoneWatch
 import com.yeskiy.yreview.handoff.GitDir
 import com.yeskiy.yreview.handoff.HandoffFiles
@@ -398,8 +399,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     /**
      * Hands the chosen tasks to an agent.
      *
-     * The channel carries them when a session reads it. When no session reads it, the
-     * plugin writes the files of the file protocol and copies a short prompt instead.
+     * The channel carries them when it is on and a session reads it. In every other case
+     * the plugin writes the files of the file protocol and copies a short prompt instead.
      */
     private fun send() {
         val chosen = target().tasks
@@ -436,7 +437,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun deliver(repository: RepositoryTasks, tasks: List<ReviewTask>): SendOutcome {
         val files = writeFiles(repository, tasks)
         val bridge = BridgeService.getInstance(project)
-        if (bridge.readerCount() > 0) return SendOutcome(bridge.sendTasks(repository.root, tasks), null)
+        val route = SendRoutes.of(ReviewSettings.getInstance(project).channel, bridge.readerCount())
+        if (route == SendRoute.CHANNEL) return SendOutcome(bridge.sendTasks(repository.root, tasks), null)
         if (files == null) {
             return SendOutcome(
                 SendReport(0, 0, 0, "The plugin did not find the git directory of ${repository.root.name}."),
@@ -445,7 +447,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
         val folder = GitDir.label(files.folder, Path.of(repository.root.path))
         return SendOutcome(
-            SendReport(tasks.size, 0, 0, route = SendRoute.CLIPBOARD, folder = folder),
+            SendReport(tasks.size, 0, 0, route = route, folder = folder),
             HandoffPrompt.of(folder, repository.commit, tasks),
         )
     }

@@ -7,6 +7,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskCompletion
 import git4idea.repo.GitRepositoryManager
@@ -31,8 +32,14 @@ class BridgeService(private val project: Project) : Disposable {
     @Volatile
     private var address: BridgeAddress? = null
 
-    /** Starts the server once. Returns where it listens, or null when it cannot start. */
+    /**
+     * Starts the server once. Returns where it listens, or null when it cannot start.
+     *
+     * The switch of the settings page comes first, so a closed channel opens no port at
+     * all. Every caller of the bridge reaches the port through this one method.
+     */
     fun start(): BridgeAddress? {
+        if (!ReviewSettings.getInstance(project).channel) return null
         synchronized(lock) {
             address?.let { return it }
             val basePath = project.basePath ?: return null
@@ -75,6 +82,17 @@ class BridgeService(private val project: Project) : Disposable {
      * the file protocol and copies the prompt instead.
      */
     fun readerCount(): Int = startedServer()?.streamCount() ?: 0
+
+    /**
+     * Applies the channel switch now. A closed switch gives the port back and removes the
+     * file that a session reads, so no session finds a dead address.
+     */
+    fun applySwitch(enabled: Boolean) {
+        when {
+            !enabled -> stop()
+            GitRepositoryManager.getInstance(project).repositories.isNotEmpty() -> startLater()
+        }
+    }
 
     fun stop() {
         synchronized(lock) {

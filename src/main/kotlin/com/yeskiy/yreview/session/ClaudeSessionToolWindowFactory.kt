@@ -5,6 +5,7 @@ import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
+import com.yeskiy.yreview.settings.ReviewSettings
 
 class ClaudeSessionToolWindowFactory : ToolWindowFactory {
 
@@ -15,6 +16,17 @@ class ClaudeSessionToolWindowFactory : ToolWindowFactory {
     override fun init(toolWindow: ToolWindow) {
         toolWindow.stripeTitle = STRIPE_TITLE
     }
+
+    /**
+     * The platform asks once, while the project opens, and it asks away from the user
+     * interface thread. The search for a Claude installation therefore runs here, and it
+     * keeps its answer for the whole application.
+     *
+     * The window stays registered whatever this answer is, so the settings page can show
+     * it again without a restart.
+     */
+    override fun shouldBeAvailable(project: Project): Boolean =
+        ReviewSettings.getInstance(project).sessionWindowShown(ClaudeDetection.getInstance().install().found)
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = ClaudeSessionPanel(project, toolWindow)

@@ -51,6 +51,17 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         @JvmField
         var sharing: CommentSharing = CommentSharing.LOCAL_ONLY
 
+        /** True while the plugin may open the bridge port and push a task to a session. */
+        @JvmField
+        var channel: Boolean = true
+
+        /**
+         * Whether the Claude tool window appears. A null value means that the user never
+         * chose, and then the search for a Claude installation decides.
+         */
+        @JvmField
+        var sessionWindow: Boolean? = null
+
         @JvmField
         var projectTab: TabState = TabState()
 
@@ -74,6 +85,22 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         set(value) {
             current.sharing = value
         }
+
+    var channel: Boolean
+        get() = current.channel
+        set(value) {
+            current.channel = value
+        }
+
+    /** The choice of the user about the Claude tool window, or null while nobody chose. */
+    var sessionWindow: Boolean?
+        get() = current.sessionWindow
+        set(value) {
+            current.sessionWindow = value
+        }
+
+    /** True when the Claude tool window may appear. An unset choice follows the search. */
+    fun sessionWindowShown(claudeFound: Boolean): Boolean = current.sessionWindow ?: claudeFound
 
     /** The view state of one tab. Every toolbar action of that tab reads and writes it. */
     fun tab(scope: TaskScope): TabState = when (scope) {
