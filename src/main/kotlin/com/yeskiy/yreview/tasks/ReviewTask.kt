@@ -22,6 +22,11 @@ enum class TaskKind {
  * The first fields go to tasks.json, so an agent outside the IDE reads them. The fields
  * after them stay in memory. The tree needs a file path, and the channel needs a git
  * revision. An agent needs neither one.
+ *
+ * The module carries the name of the IDE module that holds the file, and it is empty when
+ * the file sits outside every module. The pattern rule is the rule text of the TODO
+ * pattern that matched, as the user wrote it under Settings, Editor, TODO. The tree takes
+ * the icon, the color and the filter of a row from that rule.
  */
 @Serializable
 data class ReviewTask(
@@ -37,6 +42,8 @@ data class ReviewTask(
     @Transient val rootPath: String = "",
     @Transient val revision: String = "",
     @Transient val state: String = "",
+    @Transient val module: String = "",
+    @Transient val patternRule: String = "",
 )
 
 /**

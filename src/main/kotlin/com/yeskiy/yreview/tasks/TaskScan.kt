@@ -3,7 +3,9 @@ package com.yeskiy.yreview.tasks
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.psi.PsiDocumentManager
@@ -59,8 +61,26 @@ object TaskScan {
         return RepositoryTasks(
             repository.root,
             commit,
-            comments(project, repository.root, onlyFile) + todos(project, repository.root, commit, onlyFile),
+            withModules(
+                project,
+                comments(project, repository.root, onlyFile) + todos(project, repository.root, commit, onlyFile),
+            ),
         )
+    }
+
+    /** The module of every task, so the tree can put a module row above the files. */
+    private fun withModules(project: Project, tasks: List<ReviewTask>): List<ReviewTask> {
+        if (tasks.isEmpty()) return tasks
+        return ReadAction.nonBlocking<List<ReviewTask>> {
+            val index = ProjectFileIndex.getInstance(project)
+            tasks.map { task -> task.copy(module = moduleOf(index, task)) }
+        }.inSmartMode(project).executeSynchronously()
+    }
+
+    private fun moduleOf(index: ProjectFileIndex, task: ReviewTask): String {
+        if (task.filePath.isEmpty()) return ""
+        val file = LocalFileSystem.getInstance().findFileByPath(task.filePath) ?: return ""
+        return index.getModuleForFile(file)?.name.orEmpty()
     }
 
     private fun comments(project: Project, root: VirtualFile, onlyFile: VirtualFile?): List<ReviewTask> {
@@ -140,7 +160,7 @@ object TaskScan {
     private fun todoTask(item: TodoItem, document: Document, place: TodoPlace): ReviewTask? {
         val ranges = (listOf(item.textRange) + item.additionalTextRanges).filter { inside(document, it) }
         if (ranges.isEmpty()) return null
-        val text = ranges.map { document.getText(it).trim() }.filter { it.isNotEmpty() }.joinToString(" ")
+        val text = ranges.map { document.getText(it).trim() }.filter { it.isNotEmpty() }.joinToString(LINE_BREAK)
         if (text.isEmpty()) return null
         val startLine = document.getLineNumber(ranges.first().startOffset) + 1
         val endLine = document.getLineNumber(ranges.last().endOffset) + 1
@@ -152,6 +172,7 @@ object TaskScan {
             endLine = endLine,
             text = text,
             pattern = TodoWord.of(text),
+            patternRule = item.pattern?.patternString.orEmpty(),
             filePath = place.filePath,
             rootPath = place.rootPath,
             revision = place.commit,
@@ -160,6 +181,9 @@ object TaskScan {
 
     private fun inside(document: Document, range: TextRange): Boolean =
         range.startOffset >= 0 && range.endOffset <= document.textLength && !range.isEmpty
+
+    /** A multi-line TODO keeps its lines, so the tree can show the ones after the first. */
+    private const val LINE_BREAK = "\n"
 }
 
 /**

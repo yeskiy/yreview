@@ -63,6 +63,35 @@ class TaskLabelsTest {
     }
 
     @Test
+    fun `names one row of a directory tree by its file name`() {
+        val group = TaskGroup("src/main/kotlin/Parser.kt", listOf(comment), name = "Parser.kt")
+        assertEquals("Parser.kt", TaskLabels.fileTitle(group))
+    }
+
+    @Test
+    fun `names a folder and counts every task under it`() {
+        val folder = TaskFolder(
+            "core",
+            FolderKind.MODULE,
+            files = listOf(TaskGroup("src/main/kotlin/Parser.kt", listOf(comment, todo))),
+        )
+        assertEquals("core", TaskLabels.folderTitle(folder))
+        assertEquals("2 tasks", TaskLabels.folderCount(folder))
+    }
+
+    @Test
+    fun `shows no tail for a todo of one line`() {
+        assertEquals("", TaskLabels.taskTail(todo))
+    }
+
+    @Test
+    fun `shows the lines after the first one`() {
+        val long = todo.copy(text = listOf("TODO: drop this", "after the release", "of the parser").joinToString("\n"))
+        assertEquals("12: TODO: drop this", TaskLabels.taskTitle(long))
+        assertEquals("after the release of the parser", TaskLabels.taskTail(long))
+    }
+
+    @Test
     fun `writes the whole identifier in the plain text`() {
         assertEquals(
             "a1b2c3 comment src/main/kotlin/Parser.kt:88-94\nfirst line\nsecond line",

@@ -3,14 +3,22 @@ package com.yeskiy.yreview.tasks
 /** The text of one row of the review tree, and the text one task takes in the clipboard. */
 object TaskLabels {
 
-    fun fileTitle(group: TaskGroup): String = group.path
+    fun fileTitle(group: TaskGroup): String = group.name
 
     fun fileCount(group: TaskGroup): String = count(group.tasks.size, "task")
+
+    fun folderTitle(folder: TaskFolder): String = folder.name
+
+    fun folderCount(folder: TaskFolder): String = count(TaskTree.tasksOf(folder).size, "task")
 
     fun lines(task: ReviewTask): String =
         if (task.endLine <= task.startLine) "${task.startLine}" else "${task.startLine}-${task.endLine}"
 
     fun taskTitle(task: ReviewTask): String = "${lines(task)}: ${head(task.text)}"
+
+    /** The lines after the first one. A multi-line TODO shows them after the title. */
+    fun taskTail(task: ReviewTask): String =
+        task.text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.drop(1).joinToString(" ")
 
     /** The word after the title. A comment shows how it is stored, and a TODO shows its word. */
     fun taskState(task: ReviewTask): String =
