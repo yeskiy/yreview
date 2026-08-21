@@ -37,6 +37,10 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.ThrowableComputable
+import com.intellij.openapi.vcs.changes.Change
+import com.intellij.openapi.vcs.changes.ChangeList
+import com.intellij.openapi.vcs.changes.ChangeListListener
+import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.pom.Navigatable
 import com.intellij.psi.PsiDocumentManager
@@ -52,6 +56,7 @@ import com.intellij.ui.PopupHandler
 import com.intellij.ui.ScrollPaneFactory
 import com.intellij.ui.TreeUIHelper
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.content.Content
 import com.intellij.ui.tree.AsyncTreeModel
 import com.intellij.ui.tree.StructureTreeModel
 import com.intellij.ui.tree.TreeVisitor
@@ -79,6 +84,9 @@ import com.yeskiy.yreview.settings.grouping
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ideGitRunner
+import com.yeskiy.yreview.tasks.ChangeListFacts
+import com.yeskiy.yreview.tasks.ChangeListScan
+import com.yeskiy.yreview.tasks.ChangeListTab
 import com.yeskiy.yreview.tasks.CheckState
 import com.yeskiy.yreview.tasks.CloseReport
 import com.yeskiy.yreview.tasks.RemoveReport
@@ -117,8 +125,12 @@ import javax.swing.tree.TreeSelectionModel
 /** The tasks that went out, and the text the user pastes when the channel is out of reach. */
 private data class SendOutcome(val report: SendReport, val clipboard: String?)
 
-/** The tasks the panel read, and the rows they build after the filters run. */
-private data class TreeContent(val repositories: List<RepositoryTasks>, val layout: TaskLayout)
+/** The tasks the panel read, the rows they build after the filters run, and the local changes. */
+private data class TreeContent(
+    val repositories: List<RepositoryTasks>,
+    val layout: TaskLayout,
+    val changeList: ChangeListFacts,
+)
 
 /**
  * One tab of the review tool window, an enhanced TODO view.
@@ -175,6 +187,11 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     @Volatile
     private var repositories: List<RepositoryTasks> = emptyList()
 
+    @Volatile
+    private var changeList = ChangeListFacts()
+
+    private var content: Content? = null
+
     init {
         tree.isRootVisible = false
         tree.showsRootHandles = true
@@ -206,6 +223,11 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     override fun dispose() = Unit
+
+    /** The tab that holds this panel. The changelist tab writes the list name on it. */
+    fun attach(content: Content) {
+        this.content = content
+    }
 
     /** The platform reads the selection here, so double click, Enter and the menu work. */
     override fun uiDataSnapshot(sink: DataSink) {
@@ -274,13 +296,25 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         val chosen = chosenScope()
         ApplicationManager.getApplication().executeOnPooledThread {
             if (project.isDisposed) return@executeOnPooledThread
+            val changes = readChangeList()
             val found = try {
                 TaskScan.read(project, onlyFile)
             } catch (failure: RuntimeException) {
                 logger.warn("the review tool window could not read the tasks", failure)
                 emptyList()
             }
-            publish(TreeContent(found, layoutOf(found, chosen)))
+            publish(TreeContent(found, layoutOf(found, chosen, changes), changes))
+        }
+    }
+
+    /** The changelist tab reads the local changes. Every other tab keeps the empty record. */
+    private fun readChangeList(): ChangeListFacts {
+        if (scope != TaskScope.CHANGE_LIST) return ChangeListFacts()
+        return try {
+            ChangeListScan.read(project)
+        } catch (failure: RuntimeException) {
+            logger.warn("the review tool window could not read the local changes", failure)
+            ChangeListFacts()
         }
     }
 
@@ -288,9 +322,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun redraw() {
         val found = repositories
         val chosen = chosenScope()
+        val changes = changeList
         ApplicationManager.getApplication().executeOnPooledThread {
             if (project.isDisposed) return@executeOnPooledThread
-            publish(TreeContent(found, layoutOf(found, chosen)))
+            publish(TreeContent(found, layoutOf(found, chosen, changes), changes))
         }
     }
 
@@ -299,31 +334,52 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private fun show(content: TreeContent) {
         repositories = content.repositories
+        changeList = content.changeList
         structure.layout = content.layout
+        if (scope == TaskScope.CHANGE_LIST) showChangeList(content.changeList)
         treeModel.invalidateAsync()
         toolbar.updateActionsAsync()
         updatePreview()
+    }
+
+    /** The tab names the changelist it reads, and the empty tree says why it holds no row. */
+    private fun showChangeList(facts: ChangeListFacts) {
+        tree.emptyText.text = ChangeListTab.emptyText(facts)
+        content?.let {
+            it.displayName = ChangeListTab.tabTitle(facts)
+            it.description = ChangeListTab.tabTooltip(facts)
+        }
     }
 
     /**
      * Builds the rows of the tree. The caller runs it off the user interface thread, because
      * a scope test reads the project index.
      */
-    private fun layoutOf(found: List<RepositoryTasks>, chosen: SearchScope?): TaskLayout {
+    private fun layoutOf(
+        found: List<RepositoryTasks>,
+        chosen: SearchScope?,
+        changes: ChangeListFacts,
+    ): TaskLayout {
         val several = found.size > 1
         return TaskTree.layout(
-            TaskTree.group(inside(chosen, TaskFilter.apply(found.flatMap { it.tasks }, filterRules(), kindFilter()))) {
-                label(it, several)
-            },
+            TaskTree.group(
+                inside(chosen, changes, TaskFilter.apply(found.flatMap { it.tasks }, filterRules(), kindFilter()))
+            ) { label(it, several) },
             tab().grouping(),
         )
     }
 
-    /** The rows whose file is in the chosen scope. A null scope keeps every row. */
-    private fun inside(chosen: SearchScope?, tasks: List<ReviewTask>): List<ReviewTask> {
-        if (chosen == null || tasks.isEmpty()) return tasks
+    /**
+     * The rows the tab keeps.
+     *
+     * The changelist tab drops every row whose file the changelist does not name. A chosen
+     * scope drops every row outside it, and a null scope keeps every row.
+     */
+    private fun inside(chosen: SearchScope?, changes: ChangeListFacts, tasks: List<ReviewTask>): List<ReviewTask> {
+        val kept = if (scope == TaskScope.CHANGE_LIST) ChangeListTab.keep(tasks, changes.files) else tasks
+        if (chosen == null || kept.isEmpty()) return kept
         return ReadAction.nonBlocking<List<ReviewTask>> {
-            tasks.filter { task -> TaskNodes.find(task)?.let { chosen.contains(it) } == true }
+            kept.filter { task -> TaskNodes.find(task)?.let { chosen.contains(it) } == true }
         }.executeSynchronously()
     }
 
@@ -648,6 +704,9 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                 },
             )
         }
+        if (scope == TaskScope.CHANGE_LIST) {
+            ChangeListManager.getInstance(project).addChangeListListener(ChangeListWatch(), this)
+        }
 
         val onApplication = ApplicationManager.getApplication().messageBus.connect(this)
         onApplication.subscribe(IndexPatternProvider.INDEX_PATTERNS_CHANGED, PropertyChangeListener { scheduleReload() })
@@ -708,6 +767,37 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                 manager.getAction(IdeActions.GROUP_VERSION_CONTROLS),
             )
         )
+    }
+
+    /**
+     * The signals of the local changes.
+     *
+     * The tab reloads when the user edits a file, moves a change or commits. The queue
+     * puts the signals of one moment together, so a burst gives one read.
+     */
+    private inner class ChangeListWatch : ChangeListListener {
+
+        override fun changeListUpdateDone() = scheduleReload()
+
+        override fun changeListChanged(list: ChangeList?) = scheduleReload()
+
+        override fun changesAdded(changes: Collection<Change>, toList: ChangeList?) = scheduleReload()
+
+        override fun changesRemoved(changes: Collection<Change>, fromList: ChangeList?) = scheduleReload()
+
+        override fun changesMoved(
+            changes: Collection<Change>,
+            fromList: ChangeList?,
+            toList: ChangeList?,
+        ) = scheduleReload()
+
+        override fun defaultListChanged(oldDefaultList: ChangeList?, newDefaultList: ChangeList?) = scheduleReload()
+
+        override fun changeListRenamed(list: ChangeList?, oldName: String?) = scheduleReload()
+
+        override fun allChangeListsMappingsChanged() = scheduleReload()
+
+        override fun changeListAvailabilityChanged() = scheduleReload()
     }
 
     private inner class RefreshAction :

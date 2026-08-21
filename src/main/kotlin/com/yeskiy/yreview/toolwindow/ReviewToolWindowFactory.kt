@@ -20,12 +20,12 @@ class ReviewToolWindowFactory : ToolWindowFactory {
         TaskScope.entries.forEach { scope ->
             val panel = ReviewTreePanel(project, scope)
             Disposer.register(toolWindow.disposable, panel)
-            toolWindow.contentManager.addContent(
-                ContentFactory.getInstance().createContent(panel, scope.title, false).apply {
-                    isCloseable = false
-                    description = scope.summary
-                }
-            )
+            val content = ContentFactory.getInstance().createContent(panel, scope.title, false).apply {
+                isCloseable = false
+                description = scope.summary
+            }
+            panel.attach(content)
+            toolWindow.contentManager.addContent(content)
         }
     }
 }
