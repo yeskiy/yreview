@@ -2,6 +2,9 @@ package com.yeskiy.yreview.store
 
 data class StoredComment(val id: String, val ref: String, val comment: Comment)
 
+/** One note, named by the ref that holds it and by the commit it belongs to. */
+private data class NoteKey(val ref: String, val commit: String)
+
 class CommentBook(
     private val gateway: NotesGateway,
     private val author: String,
@@ -73,6 +76,36 @@ class CommentBook(
         commits(refs).firstNotNullOfOrNull { commit ->
             list(commit, refs).firstOrNull { it.id == id }
         }
+
+    /** The records with these identifiers, searched over every commit that carries a note. */
+    fun findAll(ids: Set<String>, refs: List<String> = NoteRefs.ALL): List<StoredComment> =
+        commits(refs).flatMap { commit -> list(commit, refs).filter { it.id in ids } }
+
+    /**
+     * Drops these records from the notes and reports how many lines went.
+     *
+     * One record is one line of the note of its commit. The method reads that note, keeps
+     * every other line byte for byte, and writes the note again. A resolve record that
+     * points at a deleted record goes with it, so no line of the note is left dangling.
+     */
+    fun remove(records: List<StoredComment>): Int =
+        records.mapNotNull { record -> record.comment.location?.commit?.let { NoteKey(record.ref, it) to record.id } }
+            .groupBy({ it.first }, { it.second })
+            .map { (key, ids) -> removeFrom(key, ids.toSet()) }
+            .sum()
+
+    private fun removeFrom(key: NoteKey, ids: Set<String>): Int {
+        val lines = gateway.readLines(key.ref, key.commit)
+        val kept = lines.filterNot { drops(it, ids) }
+        if (kept.size == lines.size) return 0
+        gateway.rewrite(key.ref, key.commit, kept)
+        return lines.size - kept.size
+    }
+
+    private fun drops(line: String, ids: Set<String>): Boolean {
+        val comment = runCatching { CommentJson.decode(line) }.getOrNull() ?: return false
+        return comment.id() in ids || comment.original.orEmpty() in ids
+    }
 
     private fun closedIds(all: List<StoredComment>): Set<String> =
         all.mapNotNull { stored -> stored.comment.original.takeIf { stored.comment.resolved == true } }.toSet()

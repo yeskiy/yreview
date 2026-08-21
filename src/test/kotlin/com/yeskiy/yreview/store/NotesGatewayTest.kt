@@ -77,6 +77,83 @@ class NotesGatewayTest {
     }
 
     @Test
+    fun `rewrite keeps the lines it is given and drops the rest`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.txt", "one")
+            val gateway = NotesGateway(repo.git)
+            val lines = (1..3).map { """{"timestamp":"170000000$it","author":"a@b.c","description":"fix it"}""" }
+            lines.forEach { gateway.append(NoteRefs.LOCAL, head, it) }
+
+            gateway.rewrite(NoteRefs.LOCAL, head, listOf(lines[0], lines[2]))
+
+            assertEquals(listOf(lines[0], lines[2]), gateway.readLines(NoteRefs.LOCAL, head))
+        }
+    }
+
+    @Test
+    fun `rewrite writes the same layout that append writes`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.txt", "one")
+            val gateway = NotesGateway(repo.git)
+            val first = """{"timestamp":"1700000000","author":"a@b.c"}"""
+            val second = """{"timestamp":"1700000001","author":"a@b.c"}"""
+            gateway.append(NoteRefs.LOCAL, head, first)
+            gateway.append(NoteRefs.LOCAL, head, second)
+            val appended = repo.git.run("notes", "--ref", NoteRefs.LOCAL, "show", head).stdout
+
+            gateway.rewrite(NoteRefs.LOCAL, head, listOf(first, second))
+
+            assertEquals(appended, repo.git.run("notes", "--ref", NoteRefs.LOCAL, "show", head).stdout)
+        }
+    }
+
+    @Test
+    fun `rewrite with no line removes the note and keeps the ref`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.txt", "one")
+            val gateway = NotesGateway(repo.git)
+            gateway.append(NoteRefs.LOCAL, head, """{"timestamp":"1700000000","author":"a@b.c"}""")
+
+            gateway.rewrite(NoteRefs.LOCAL, head, emptyList())
+
+            assertTrue(gateway.readLines(NoteRefs.LOCAL, head).isEmpty())
+            assertTrue(gateway.commitsWithNotes(NoteRefs.LOCAL).isEmpty())
+        }
+    }
+
+    @Test
+    fun `rewrite with no line accepts a commit that carries no note`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.txt", "one")
+            NotesGateway(repo.git).rewrite(NoteRefs.LOCAL, head, emptyList())
+        }
+    }
+
+    @Test
+    fun `rewrite keeps the other ref untouched`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.txt", "one")
+            val gateway = NotesGateway(repo.git)
+            gateway.append(NoteRefs.LOCAL, head, """{"timestamp":"1700000000","author":"local"}""")
+            gateway.append(NoteRefs.DISCUSS, head, """{"timestamp":"1700000001","author":"shared"}""")
+
+            gateway.rewrite(NoteRefs.LOCAL, head, emptyList())
+
+            assertTrue(gateway.readLines(NoteRefs.DISCUSS, head).single().contains("shared"))
+        }
+    }
+
+    @Test
+    fun `reports a rewrite against a revision that does not resolve`() {
+        TempRepo().use { repo ->
+            repo.commit("a.txt", "one")
+            assertFailsWith<NotesWriteException> {
+                NotesGateway(repo.git).rewrite(NoteRefs.LOCAL, "not-a-rev", listOf("{}"))
+            }
+        }
+    }
+
+    @Test
     fun `reports a write against a revision that does not resolve`() {
         TempRepo().use { repo ->
             repo.commit("a.txt", "one")

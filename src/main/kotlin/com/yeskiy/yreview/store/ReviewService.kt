@@ -15,6 +15,9 @@ import git4idea.repo.GitRepositoryManager
 /** The comment that was written, and the reason the push failed when it did. */
 data class CommentWriteResult(val stored: StoredComment, val shareError: String?)
 
+/** How many note lines a delete removed, and the reason the push failed when it did. */
+data class CommentDeleteResult(val removed: Int, val shareError: String?)
+
 @Service(Service.Level.PROJECT)
 class ReviewService(private val project: Project) {
 
@@ -49,6 +52,23 @@ class ReviewService(private val project: Project) {
 
     fun resolveComment(root: VirtualFile, stored: StoredComment): CommentWriteResult =
         finish(root, bookForRoot(root).resolve(stored))
+
+    /**
+     * Removes these comments from the git notes and pushes every shared ref they touched.
+     *
+     * A delete is final, because the plugin keeps no copy of the removed line. A failed
+     * push leaves the note where it is, and the next successful push carries the change.
+     */
+    fun deleteComments(root: VirtualFile, records: List<StoredComment>): CommentDeleteResult {
+        val removed = bookForRoot(root).remove(records)
+        if (removed == 0) return CommentDeleteResult(0, null)
+        val errors = records.map { it.ref }.distinct()
+            .filter { NoteRefs.isShared(it) }
+            .mapNotNull { runShare(root, it).takeIf { result -> !result.ok }?.message }
+        BridgeService.getInstance(project).startLater()
+        notifyChanged()
+        return CommentDeleteResult(removed, errors.joinToString(" ").ifEmpty { null })
+    }
 
     private fun finish(root: VirtualFile, stored: StoredComment): CommentWriteResult {
         val error = share(root, stored)
