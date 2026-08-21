@@ -14,6 +14,9 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
     class State {
         @JvmField
         var sharing: CommentSharing = CommentSharing.LOCAL_ONLY
+
+        @JvmField
+        var currentFileOnly: Boolean = false
     }
 
     private var current = State()
@@ -28,6 +31,13 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         get() = current.sharing
         set(value) {
             current.sharing = value
+        }
+
+    /** True when the review tool window shows the tasks of the open file only. */
+    var currentFileOnly: Boolean
+        get() = current.currentFileOnly
+        set(value) {
+            current.currentFileOnly = value
         }
 
     companion object {

@@ -3,6 +3,7 @@ import { z } from 'zod';
 const MAX_COMMENTS = 200;
 const MAX_TEXT = 20_000;
 
+// The same rule stands in BatchBuilder.kt. Keep the two copies equal.
 const opaqueId = z
     .string()
     .min(1)
