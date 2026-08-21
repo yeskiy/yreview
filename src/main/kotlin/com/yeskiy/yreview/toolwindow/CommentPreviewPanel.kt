@@ -77,7 +77,7 @@ class CommentPreviewPanel(private val project: Project) :
         card = editor.addComponentInlay(
             editor.document.getLineEndOffset(line - 1),
             InlayProperties().showAbove(false).relatesToPrecedingText(true),
-            ReadBox.build(project, listOf(comment.stored), null, null),
+            ReadBox.preview(project, listOf(comment.stored)),
             ComponentInlayAlignment.FIT_VIEWPORT_WIDTH,
         )
     }

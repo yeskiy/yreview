@@ -41,20 +41,23 @@ class CommentField(project: Project, private val minHeight: Int = 0) :
     }
 
     /**
-     * The box grows with the text of the user. [MAX_HEIGHT] stops the growth, and the editor
-     * scrolls after that point. A call to setPreferredSize would end the growth, because the
-     * parent class then returns the fixed value and never measures the text.
+     * The box grows with the text of the user. [MAX_WIDTH] and [MAX_HEIGHT] stop the growth,
+     * and the editor scrolls the text after that point. A call to setPreferredSize would end
+     * the growth, because the parent class then returns the fixed value and never measures the
+     * text.
      *
-     * The width comes from the box, and never from the text. The parent class answers with the
-     * width of the longest line of the editor. A host that reads that answer then holds the box
-     * open at the width of that line, and no line of the text ever wraps. [START_WIDTH] answers
-     * for a box that no host measured yet.
+     * The parent class answers with the width of the widest visual line of the editor, so a
+     * short text asks for a short box. [MAX_WIDTH] stops a long text. The box keeps that width,
+     * the editor breaks the lines at that width, and the widest visual line then measures the
+     * same width. The answer therefore does not move after one more round of layout.
      */
     override fun getPreferredSize(): Dimension =
-        Dimension(
-            width.takeIf { it > 0 } ?: JBUI.scale(START_WIDTH),
-            super.getPreferredSize().height.coerceIn(JBUI.scale(minHeight), JBUI.scale(MAX_HEIGHT)),
-        )
+        super.getPreferredSize().let {
+            Dimension(
+                it.width.coerceIn(JBUI.scale(MIN_WIDTH), JBUI.scale(MAX_WIDTH)),
+                it.height.coerceIn(JBUI.scale(minHeight), JBUI.scale(MAX_HEIGHT)),
+            )
+        }
 
     /**
      * Breaks the lines of the text again for a new width of the box.
@@ -83,7 +86,9 @@ class CommentField(project: Project, private val minHeight: Int = 0) :
 
         const val MAX_HEIGHT = 320
 
-        const val START_WIDTH = 420
+        const val MIN_WIDTH = 240
+
+        const val MAX_WIDTH = 560
 
         /** The registry answers UNKNOWN when no plugin claims the extension. */
         fun markdownOrPlainText(): FileType =

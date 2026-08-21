@@ -16,6 +16,7 @@ import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.ui.CommentDelete
 import com.yeskiy.yreview.ui.CommentResolve
 import com.yeskiy.yreview.ui.ReadBox
 import com.yeskiy.yreview.ui.ReviewColors
@@ -66,6 +67,9 @@ class CommentGutter(private val project: Project) : Disposable {
     /**
      * Shows the card of these comments under their last line, or closes the card that the same
      * icon already opened. One icon therefore never carries two cards.
+     *
+     * The Delete key acts on a card that holds one comment. The key does nothing on a card of
+     * several comments, because the key cannot name the comment that the user means.
      */
     fun toggleCard(editor: Editor, root: VirtualFile, comments: List<StoredComment>) {
         val key = InlayKey(InlayKind.CARD, comments.firstOrNull()?.id.orEmpty())
@@ -79,7 +83,11 @@ class CommentGutter(private val project: Project) : Disposable {
             close()
             CommentResolve.run(project, root, stored)
         }
-        inlays.show(key, CommentIndex.lastLine(comments), ReadBox.build(project, comments, resolve, close))
+        val delete = { stored: StoredComment -> CommentDelete.run(project, stored, close) }
+        val card = ReadBox.build(project, comments, resolve, delete, close)
+        val inlay = inlays.show(key, CommentIndex.lastLine(comments), card)
+        val alone = comments.singleOrNull()
+        if (inlay != null && alone != null) ReadBox.bindDelete(card, inlay) { delete(alone) }
     }
 
     /** Opens the box that writes a new comment under [line]. A second call replaces the open box. */
