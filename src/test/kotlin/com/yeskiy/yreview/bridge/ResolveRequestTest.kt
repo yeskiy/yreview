@@ -89,6 +89,22 @@ class ResolveRequestTest {
     }
 
     @Test
+    fun `reads the identifier of a todo task`() {
+        val todo = "todo-0123456789abcdef0123456789abcdef01234567-88"
+        assertEquals(listOf(todo), ids("""{"ids":["$todo"]}"""))
+    }
+
+    @Test
+    fun `refuses a todo identifier without a line number`() {
+        assertTrue(reason("""{"ids":["todo-0123456789abcdef0123456789abcdef01234567"]}""").isNotEmpty())
+    }
+
+    @Test
+    fun `refuses an id that starts with a hyphen`() {
+        assertTrue(reason("""{"ids":["--upload-pack"]}""").isNotEmpty())
+    }
+
+    @Test
     fun `refuses an id that holds a git argument`() {
         assertTrue(reason("""{"ids":["--exec=calc.exe"]}""").isNotEmpty())
     }

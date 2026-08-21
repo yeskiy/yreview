@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.bridge
 
+import com.yeskiy.yreview.tasks.TaskIds
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -15,8 +16,8 @@ sealed interface ResolveParse {
  * Reads the body of POST /resolve.
  *
  * Every value in the body comes from outside the IDE, so the plugin checks each one here.
- * A value that reaches this far is a comment id and nothing else. No other text ever
- * reaches git.
+ * A value that reaches this far is an identifier the plugin itself made, and nothing else.
+ * No other text ever reaches git.
  */
 object ResolveRequest {
 
@@ -24,9 +25,7 @@ object ResolveRequest {
 
     private const val FIELD = "ids"
 
-    private val ID = Regex("^[0-9a-f]{40}$")
-
-    fun isId(text: String): Boolean = ID.matches(text)
+    fun isId(text: String): Boolean = TaskIds.isKnown(text)
 
     fun parse(body: String): ResolveParse {
         val root = runCatching { Json.parseToJsonElement(body) }.getOrNull() as? JsonObject
@@ -43,7 +42,10 @@ object ResolveRequest {
             val text = (element as? JsonPrimitive)?.takeIf { it.isString }?.content
                 ?: return ResolveParse.Bad("Every id must be a string.")
             if (!isId(text)) {
-                return ResolveParse.Bad("An id must hold 40 lowercase hexadecimal characters.")
+                return ResolveParse.Bad(
+                    "An id must be a comment id of 40 lowercase hexadecimal characters, " +
+                        "or a todo id in the form todo-<40 hexadecimal characters>-<line>."
+                )
             }
             text
         }

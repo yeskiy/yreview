@@ -7,9 +7,8 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.yeskiy.yreview.store.NoteRefs
-import com.yeskiy.yreview.store.NotesWriteException
-import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.tasks.ReviewTask
+import com.yeskiy.yreview.tasks.TaskCompletion
 import git4idea.repo.GitRepositoryManager
 import java.io.IOException
 
@@ -69,6 +68,14 @@ class BridgeService(private val project: Project) : Disposable {
         return server
     }
 
+    /**
+     * The number of sessions that read the channel right now.
+     *
+     * Zero means that the channel cannot carry a task, so the caller writes the files of
+     * the file protocol and copies the prompt instead.
+     */
+    fun readerCount(): Int = startedServer()?.streamCount() ?: 0
+
     fun stop() {
         synchronized(lock) {
             discovery?.let { file -> runCatching { file.delete() } }
@@ -81,8 +88,8 @@ class BridgeService(private val project: Project) : Disposable {
 
     override fun dispose() = stop()
 
-    /** Reads the open comments of one repository and pushes them to every connected session. */
-    fun sendOpenComments(root: VirtualFile): SendReport {
+    /** Pushes the given tasks of one repository to every connected session. */
+    fun sendTasks(root: VirtualFile, tasks: List<ReviewTask>): SendReport {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForRootQuick(root)
             ?: return SendReport(0, 0, 0, "The folder ${root.name} is not a git repository.")
         val commit = repository.currentRevision
@@ -90,38 +97,33 @@ class BridgeService(private val project: Project) : Disposable {
         val running = startedServer()
             ?: return SendReport(0, 0, 0, "The review bridge is not running.")
 
-        val book = ReviewService.getInstance(project).bookForRoot(root)
-        val batches = BatchBuilder().build(
-            repository.currentBranch?.name.orEmpty(),
-            commit,
-            book.commits(NoteRefs.ALL).flatMap { book.open(it, NoteRefs.ALL) },
-        )
+        val plan = BatchBuilder().build(repository.currentBranch?.name.orEmpty(), commit, tasks)
+        reportLoss(plan)
         val streams = running.streamCount()
-        batches.forEach { running.send(it) }
-        return SendReport(batches.sumOf { it.comments.size }, batches.size, streams)
+        plan.batches.forEach { running.send(it) }
+        return SendReport(
+            tasks = plan.tasks,
+            batches = plan.batches.size,
+            streams = streams,
+            dropped = plan.dropped.size,
+            dropReason = plan.reason.ifEmpty { null },
+        )
+    }
+
+    /** A task the channel refuses is a loss, so the log names every identifier it lost. */
+    private fun reportLoss(plan: BatchPlan) {
+        if (plan.dropped.isEmpty()) return
+        logger.warn(
+            "the review bridge dropped ${plan.dropped.size} tasks: " +
+                plan.dropped.joinToString(", ") { "${it.id} (${it.reason})" }
+        )
     }
 
     /**
-     * Marks every id the session reports. The ids arrive checked, so each one is a comment
-     * id and nothing else. A missing id gives the session a reason it can show the model.
+     * Closes every identifier the session reports. [ResolveRequest] checks each one first,
+     * so an identifier that arrives here is a comment id or a todo id and nothing else.
      */
-    private fun resolveIds(ids: List<String>): String? {
-        val service = ReviewService.getInstance(project)
-        val roots = GitRepositoryManager.getInstance(project).repositories.map { it.root }
-        val problems = ids.mapNotNull { id -> problemOf(service, roots, id) }
-        return if (problems.isEmpty()) null else problems.joinToString(" ")
-    }
-
-    private fun problemOf(service: ReviewService, roots: List<VirtualFile>, id: String): String? {
-        val hit = roots.firstNotNullOfOrNull { root -> service.bookForRoot(root).find(id)?.let { root to it } }
-            ?: return "The IDE holds no comment with the id $id."
-        return try {
-            service.resolveComment(hit.first, hit.second)
-            null
-        } catch (failure: NotesWriteException) {
-            "The IDE could not resolve $id. ${failure.message}"
-        }
-    }
+    private fun resolveIds(ids: List<String>): String? = TaskCompletion.getInstance(project).close(ids).problem
 
     companion object {
         private val logger = logger<BridgeService>()

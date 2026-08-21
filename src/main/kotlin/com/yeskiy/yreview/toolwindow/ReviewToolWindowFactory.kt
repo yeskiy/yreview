@@ -9,7 +9,7 @@ import com.intellij.ui.content.ContentFactory
 class ReviewToolWindowFactory : ToolWindowFactory {
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = CommentListPanel(project)
+        val panel = ReviewTreePanel(project)
         Disposer.register(toolWindow.disposable, panel)
         toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(panel, "", false))
     }
