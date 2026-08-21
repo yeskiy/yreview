@@ -13,4 +13,13 @@ enum class TaskScope(val title: String, val summary: String) {
     CURRENT_FILE("Current File", "The open review tasks of the file in the editor."),
 
     SCOPE_BASED("Scope Based", "The open review tasks of the chosen scope."),
+
+    /**
+     * The tab of the default changelist.
+     *
+     * The title here is the title the tab shows before the first read of the local
+     * changes. After that read the tab carries the name of the changelist, as the bundled
+     * TODO window does. See [ChangeListTab.tabTitle].
+     */
+    CHANGE_LIST("Changelist", "The open review tasks of the files of the default changelist."),
 }

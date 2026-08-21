@@ -70,6 +70,9 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
 
         @JvmField
         var scopeTab: TabState = TabState()
+
+        @JvmField
+        var changeListTab: TabState = TabState()
     }
 
     private var current = State()
@@ -107,6 +110,7 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         TaskScope.PROJECT -> current.projectTab
         TaskScope.CURRENT_FILE -> current.currentFileTab
         TaskScope.SCOPE_BASED -> current.scopeTab
+        TaskScope.CHANGE_LIST -> current.changeListTab
     }
 
     companion object {

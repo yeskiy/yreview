@@ -77,21 +77,25 @@ class ReviewViewStateTest {
     }
 
     @Test
-    fun `keeps the three tabs apart after a write and a read`() {
+    fun `keeps the four tabs apart after a write and a read`() {
         val state = ReviewSettings.State()
         state.projectTab.byDirectory = true
         state.currentFileTab.showPreview = true
         state.scopeTab.kindFilter = TaskKindFilter.TODOS
+        state.changeListTab.byModule = true
 
         val back = read(state)
 
         assertEquals(true, back.projectTab.byDirectory)
         assertFalse(back.currentFileTab.byDirectory)
         assertFalse(back.scopeTab.byDirectory)
+        assertFalse(back.changeListTab.byDirectory)
         assertEquals(true, back.currentFileTab.showPreview)
         assertFalse(back.projectTab.showPreview)
         assertEquals(TaskKindFilter.TODOS, back.scopeTab.kindFilter)
         assertEquals(TaskKindFilter.BOTH, back.projectTab.kindFilter)
+        assertEquals(true, back.changeListTab.byModule)
+        assertFalse(back.projectTab.byModule)
     }
 
     @Test
@@ -107,7 +111,29 @@ class ReviewViewStateTest {
 
     @Test
     fun `names one state record per tab`() {
-        assertEquals(3, TaskScope.entries.size)
-        assertEquals(listOf("Project", "Current File", "Scope Based"), TaskScope.entries.map { it.title })
+        assertEquals(4, TaskScope.entries.size)
+        assertEquals(
+            listOf("Project", "Current File", "Scope Based", "Changelist"),
+            TaskScope.entries.map { it.title },
+        )
+    }
+
+    @Test
+    fun `gives every tab its own state record`() {
+        val settings = ReviewSettings()
+
+        assertEquals(TaskScope.entries.size, TaskScope.entries.map { settings.tab(it) }.distinct().size)
+    }
+
+    @Test
+    fun `keeps the state of the changelist tab after a write and a read`() {
+        val state = ReviewSettings.State()
+        state.changeListTab.showPreview = true
+        state.changeListTab.kindFilter = TaskKindFilter.COMMENTS
+
+        val back = read(state).changeListTab
+
+        assertEquals(true, back.showPreview)
+        assertEquals(TaskKindFilter.COMMENTS, back.kindFilter)
     }
 }
