@@ -12,6 +12,10 @@
   <depends optional="true" config-file="y-review-mcp.xml">com.intellij.mcpServer</depends>
   <depends optional="true" config-file="y-review-terminal.xml">org.jetbrains.plugins.terminal</depends>
 
+  <dependencies>
+    <module name="intellij.platform.collaborationTools" />
+  </dependencies>
+
   <extensions defaultExtensionNs="com.intellij">
     <diff.DiffExtension implementation="com.yeskiy.yreview.diff.ReviewDiffExtension" />
 
@@ -21,9 +25,7 @@
       <category>Review comments</category>
     </intentionAction>
 
-    <codeInsight.lineMarkerProvider
-        language=""
-        implementationClass="com.yeskiy.yreview.gutter.CommentGutterProvider" />
+    <editorFactoryListener implementation="com.yeskiy.yreview.gutter.CommentGutterListener" />
 
     <toolWindow id="Review Comments" anchor="bottom"
                 factoryClass="com.yeskiy.yreview.toolwindow.ReviewToolWindowFactory" />

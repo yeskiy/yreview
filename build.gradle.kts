@@ -27,6 +27,9 @@ dependencies {
         bundledModule("intellij.platform.vcs.impl")
         bundledModule("intellij.platform.vcs.dvcs")
         bundledModule("intellij.platform.vcs.dvcs.impl")
+        // intellij.platform.collaborationTools holds icons.CollaborationToolsIcons,
+        // the speech bubble that the bundled pull request plugins paint in the gutter.
+        bundledModule("intellij.platform.collaborationTools")
     }
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     testImplementation(kotlin("test"))
