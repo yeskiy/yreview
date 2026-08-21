@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
@@ -14,6 +15,7 @@ import com.intellij.terminal.ui.TerminalWidget
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
+import org.jetbrains.plugins.terminal.ShellTerminalWidget
 import java.awt.BorderLayout
 import javax.swing.JPanel
 import javax.swing.JTextArea
@@ -27,6 +29,10 @@ import javax.swing.JTextArea
  * ends, and the last output stays readable. The title of the tool window carries the
  * state. A new start drops the dead terminal and mounts a new one. The empty state with
  * the bridge status shows before the first session of the project only.
+ *
+ * The state follows the process behind the terminal, not the terminal widget. Two signals
+ * report the end, and each one alone is enough. The first signal is the exit of the
+ * process. The second signal is the termination callback of the widget.
  */
 class ClaudeSessionPanel(
     private val project: Project,
@@ -95,12 +101,32 @@ class ClaudeSessionPanel(
         terminal = started
         session = started
         started.addTerminationCallback(Runnable { onTermination(started) }, jediTerm(started) ?: this)
+        watch(started)
         add(started.component, BorderLayout.CENTER)
         toolWindow.setTitle(RUNNING_TITLE)
-        revalidate()
+        // The layout runs now, and not on the next pass of the event queue. The terminal
+        // runner waits two seconds for a real size, then it falls back to 80 by 24. A
+        // session that starts larger than the window pushes its first lines into the
+        // history buffer, and the scroll bar of the terminal appears.
+        validate()
         repaint()
         started.requestFocus()
     }
+
+    /**
+     * Follows the process behind the terminal. The terminal gets its connector after the
+     * session opens, so the accessor holds this call until the connector exists. The
+     * command line carries no -NoExit flag, and PowerShell exits with the agent. The exit
+     * callback runs on a pooled thread, and [onTermination] moves the work to the user
+     * interface thread.
+     */
+    private fun watch(started: TerminalWidget) =
+        started.ttyConnectorAccessor.executeWithTtyConnector { connector ->
+            ShellTerminalWidget.getProcessTtyConnector(connector)?.process?.let { process ->
+                thisLogger().info("The review session runs under process ${process.pid()}.")
+                process.onExit().thenRun { onTermination(started) }
+            }
+        }
 
     /**
      * The connector close reaches the destroy call of the process. The widget stays alive,
@@ -112,7 +138,11 @@ class ClaudeSessionPanel(
         endSession()
     }
 
-    /** The callback runs on the emulator thread, and a new start can outrun it. */
+    /**
+     * Both signals of the end arrive here, and neither one runs on the user interface
+     * thread. The first signal ends the session. A later signal finds no session of
+     * [ended], and it changes nothing. A new start can also outrun a late signal.
+     */
     private fun onTermination(ended: TerminalWidget) = ApplicationManager.getApplication().invokeLater {
         if (session === ended) endSession()
     }
