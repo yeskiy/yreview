@@ -11,7 +11,7 @@ import kotlin.test.assertEquals
 
 class CommentIndexTest {
 
-    private fun stored(path: String, startLine: Int?, text: String): StoredComment {
+    private fun stored(path: String, startLine: Int?, text: String, endLine: Int? = null): StoredComment {
         val comment = Comment(
             timestamp = "1787194427",
             author = "a@b.c",
@@ -19,7 +19,7 @@ class CommentIndexTest {
             location = Location(
                 commit = "0123456789abcdef0123456789abcdef01234567",
                 path = path,
-                range = startLine?.let { Range(startLine = it, endLine = it + 1) },
+                range = startLine?.let { Range(startLine = it, endLine = endLine ?: (it + 1)) },
             ),
         )
         return StoredComment(comment.id(), NoteRefs.LOCAL, comment)
@@ -56,5 +56,78 @@ class CommentIndexTest {
     @Test
     fun `drops a comment that has no range`() {
         assertEquals(emptyMap(), CommentIndex.byStartLine(listOf(stored("a.kt", null, "no anchor")), "a.kt"))
+    }
+
+    @Test
+    fun `one comment covers the lines of its range`() {
+        assertEquals(
+            listOf(10..20),
+            CommentIndex.lineSpans(listOf(stored("a.kt", 10, "one", endLine = 20)), "a.kt"),
+        )
+    }
+
+    @Test
+    fun `two spans that overlap become one span`() {
+        assertEquals(
+            listOf(10..20),
+            CommentIndex.lineSpans(
+                listOf(stored("a.kt", 10, "outer", endLine = 18), stored("a.kt", 12, "inner", endLine = 20)),
+                "a.kt",
+            ),
+        )
+    }
+
+    @Test
+    fun `a span inside another span adds no second mark`() {
+        assertEquals(
+            listOf(10..30),
+            CommentIndex.lineSpans(
+                listOf(stored("a.kt", 10, "outer", endLine = 30), stored("a.kt", 15, "inner", endLine = 16)),
+                "a.kt",
+            ),
+        )
+    }
+
+    @Test
+    fun `two spans that touch become one span`() {
+        assertEquals(
+            listOf(10..25),
+            CommentIndex.lineSpans(
+                listOf(stored("a.kt", 10, "first", endLine = 14), stored("a.kt", 15, "second", endLine = 25)),
+                "a.kt",
+            ),
+        )
+    }
+
+    @Test
+    fun `two spans with a gap stay apart`() {
+        assertEquals(
+            listOf(10..14, 20..25),
+            CommentIndex.lineSpans(
+                listOf(stored("a.kt", 20, "down", endLine = 25), stored("a.kt", 10, "up", endLine = 14)),
+                "a.kt",
+            ),
+        )
+    }
+
+    @Test
+    fun `a span of another file is not covered`() {
+        assertEquals(
+            listOf(3..4),
+            CommentIndex.lineSpans(listOf(stored("a.kt", 3, "mine"), stored("b.kt", 40, "other")), "a.kt"),
+        )
+    }
+
+    @Test
+    fun `a range that ends before it starts still covers its lines`() {
+        assertEquals(
+            listOf(7..9),
+            CommentIndex.lineSpans(listOf(stored("a.kt", 9, "reversed", endLine = 7)), "a.kt"),
+        )
+    }
+
+    @Test
+    fun `a comment without a range covers no line`() {
+        assertEquals(emptyList(), CommentIndex.lineSpans(listOf(stored("a.kt", null, "no anchor")), "a.kt"))
     }
 }
