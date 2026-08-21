@@ -66,6 +66,14 @@ class PluginDescriptorTest {
     }
 
     @Test
+    fun `the color scheme page reaches the settings of the user`() {
+        assertTrue(
+            plugin.contains("<colorSettingsPage implementation=\"com.yeskiy.yreview.settings.ReviewColorsPage\" />"),
+            "without this line the user cannot change the color of a comment range"
+        )
+    }
+
+    @Test
     fun `the session tool window keeps its identifier`() {
         assertTrue(
             terminal.contains("id=\"Claude Review\""),

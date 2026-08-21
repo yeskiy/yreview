@@ -28,6 +28,8 @@
 
     <editorFactoryListener implementation="com.yeskiy.yreview.gutter.CommentGutterListener" />
 
+    <colorSettingsPage implementation="com.yeskiy.yreview.settings.ReviewColorsPage" />
+
     <postStartupActivity implementation="com.yeskiy.yreview.bridge.BridgeStartup" />
 
     <toolWindow id="Review Comments" anchor="bottom" icon="/icons/yReviewComments.svg"

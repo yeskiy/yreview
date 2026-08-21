@@ -9,7 +9,7 @@ import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.ui.awt.RelativePoint
 import com.yeskiy.yreview.store.StoredComment
-import com.yeskiy.yreview.ui.CommentText
+import com.yeskiy.yreview.ui.CommentCard
 import com.yeskiy.yreview.ui.ViewCommentPopup
 import icons.CollaborationToolsIcons
 import java.awt.event.MouseEvent
@@ -26,9 +26,11 @@ class CommentIconRenderer(
 
     override fun getAlignment(): Alignment = Alignment.LEFT
 
-    override fun getTooltipText(): String = comments.joinToString("\n\n") { CommentText.summary(it) }
+    override fun getTooltipText(): String = CommentCard.html(comments)
 
     override fun getAccessibleName(): String = "Review comment"
+
+    override fun getAccessibleTooltipText(): String = CommentCard.plain(comments)
 
     override fun getClickAction(): AnAction = DumbAwareAction.create { open(it) }
 

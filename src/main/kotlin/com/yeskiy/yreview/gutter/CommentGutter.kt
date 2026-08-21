@@ -6,6 +6,7 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.markup.HighlighterLayer
+import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
@@ -14,13 +15,23 @@ import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.ui.ReviewColors
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 import java.util.concurrent.ConcurrentHashMap
 
+/** The icons and the line spans that one file needs. The plugin builds this off the user interface thread. */
+data class CommentMarks(val byLine: Map<Int, List<StoredComment>>, val spans: List<IntRange>) {
+
+    companion object {
+        val EMPTY = CommentMarks(emptyMap(), emptyList())
+    }
+}
+
 /**
- * Draws one comment icon per range in the markup model of an open editor. The plugin reads the
- * git notes once per editor, and again after every write, in place of once per daemon pass.
+ * Draws one comment icon per range in the markup model of an open editor, and a quiet background
+ * over the lines that the range covers. The plugin reads the git notes once per editor, and again
+ * after every write, in place of once per daemon pass.
  */
 @Service(Service.Level.PROJECT)
 class CommentGutter(private val project: Project) : Disposable {
@@ -46,28 +57,51 @@ class CommentGutter(private val project: Project) : Disposable {
 
     private fun repaintAll() = painted.keys.forEach { repaint(it) }
 
-    /** Reads the notes off the user interface thread, then draws the icons on it. */
+    /** Reads the notes off the user interface thread, then draws the marks on it. */
     private fun repaint(editor: Editor) {
         val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return
         ApplicationManager.getApplication().executeOnPooledThread {
             val service = ReviewService.getInstance(project)
             val root = service.repositoryRoot(file)
-            val path = service.relativePath(file)
-            val commit = service.headOf(file)
-            val byLine =
-                if (root == null || path == null || commit == null) emptyMap()
-                else CommentIndex.byStartLine(service.bookForRoot(root).open(commit), path)
-            ApplicationManager.getApplication().invokeLater({ draw(editor, root, byLine) }, project.disposed)
+            val marks = marksOf(service, file, root)
+            ApplicationManager.getApplication().invokeLater({ draw(editor, root, marks) }, project.disposed)
         }
     }
 
-    private fun draw(editor: Editor, root: VirtualFile?, byLine: Map<Int, List<StoredComment>>) {
+    private fun marksOf(service: ReviewService, file: VirtualFile, root: VirtualFile?): CommentMarks {
+        val path = service.relativePath(file)
+        val commit = service.headOf(file)
+        if (root == null || path == null || commit == null) return CommentMarks.EMPTY
+        val open = service.bookForRoot(root).open(commit)
+        return CommentMarks(CommentIndex.byStartLine(open, path), CommentIndex.lineSpans(open, path))
+    }
+
+    private fun draw(editor: Editor, root: VirtualFile?, marks: CommentMarks) {
         val old = painted[editor] ?: return
         if (editor.isDisposed) return
         old.forEach { editor.markupModel.removeHighlighter(it) }
         painted[editor] =
             if (root == null) emptyList()
-            else byLine.entries.mapNotNull { (line, here) -> mark(editor, root, line, here) }
+            else marks.spans.mapNotNull { paint(editor, it) } +
+                marks.byLine.entries.mapNotNull { (line, here) -> mark(editor, root, line, here) }
+    }
+
+    /**
+     * Paints the lines of one span. The color comes from the scheme of the editor through a
+     * [com.intellij.openapi.editor.colors.TextAttributesKey], so a new theme repaints the span.
+     * The layer stays under the caret row, so the row of the caret still reads.
+     */
+    private fun paint(editor: Editor, span: IntRange): RangeHighlighter? {
+        val lines = editor.document.lineCount
+        if (span.first < 1 || span.first > lines) return null
+        val last = minOf(span.last, lines)
+        return editor.markupModel.addRangeHighlighter(
+            ReviewColors.COMMENT_RANGE,
+            editor.document.getLineStartOffset(span.first - 1),
+            editor.document.getLineEndOffset(last - 1),
+            HighlighterLayer.CARET_ROW - 1,
+            HighlighterTargetArea.LINES_IN_RANGE,
+        )
     }
 
     private fun mark(
