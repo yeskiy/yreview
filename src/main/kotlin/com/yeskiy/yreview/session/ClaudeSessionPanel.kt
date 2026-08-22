@@ -58,7 +58,7 @@ class ClaudeSessionPanel(
     private var configFile: Path? = null
 
     init {
-        showIdle(NO_SESSION)
+        showIdle(NO_SESSION, AUTO_START)
     }
 
     override fun dispose() = dropConfig()
@@ -69,6 +69,17 @@ class ClaudeSessionPanel(
     fun titleActions(): List<AnAction> = listOf(SessionAction())
 
     /**
+     * The tool window opens the first session through this method, because a fresh panel
+     * can hold no size yet. The terminal runner reads the size of its component, so a
+     * session that starts too early gets 80 columns by 24 rows.
+     */
+    fun startWhenSized() = SizeGate.run(this) { start() }
+
+    /**
+     * The window factory reaches this through [startWhenSized]. The title bar button calls
+     * it for every later session, and it calls it whatever the size is, because the user
+     * looks at a window that is on screen.
+     *
      * The bridge opens a port and writes a file, so the wait for it stays off this thread.
      * The terminal mounts on this thread again, after the bridge answers or after the wait
      * ends. A second press during the wait does nothing.
@@ -218,11 +229,11 @@ class ClaudeSessionPanel(
     private fun failed(headline: String) {
         starting = false
         toolWindow.setTitle(NOT_STARTED_TITLE)
-        if (terminal == null) showIdle(headline)
+        if (terminal == null) showIdle(headline, PRESS_START)
     }
 
-    private fun showIdle(headline: String) {
-        idle.emptyText.setText(headline).appendLine(PRESS_START)
+    private fun showIdle(headline: String, hint: String) {
+        idle.emptyText.setText(headline).appendLine(hint)
         status.text = bridgeState()
         add(idle, BorderLayout.CENTER)
         revalidate()
@@ -272,6 +283,7 @@ class ClaudeSessionPanel(
         const val NO_TERMINAL = "The terminal did not start. The IDE log holds the reason."
         const val NO_DIRECTORY = "This project has no directory, so a session cannot start here."
         const val PRESS_START = "Press Start in the title bar to open a session with the comment channel."
+        const val AUTO_START = "The session opens by itself with the comment channel."
         const val BRIDGE_WAIT = "The review bridge starts now. The session opens after the bridge answers."
         const val START_TEXT = "Start Claude"
         const val START_HINT = "Start a review session with the IDE server and the comment channel."
