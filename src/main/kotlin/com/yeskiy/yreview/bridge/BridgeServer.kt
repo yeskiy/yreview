@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 data class BridgeAddress(val url: String, val token: String, val port: Int)
 
 /**
- * The two endpoints the channel talks to. See channel/README.md for the contract.
+ * The two endpoints the channel talks to. The channel-server module holds the other side.
  *
  * The server holds no IDE class, so a test starts it on an ephemeral port and talks to it
  * with a plain HTTP client. The plugin passes the resolve work in through [onResolve],

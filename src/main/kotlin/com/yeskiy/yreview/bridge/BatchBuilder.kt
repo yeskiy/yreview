@@ -74,7 +74,7 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
 
         private const val BATCH_ID_BYTES = 6
 
-        // The same rule stands in channel/src/schema.ts. Keep the two copies equal.
+        // The same rule stands in channel-server Schema.kt. Keep the two copies equal.
         private val ID = Regex("^[A-Za-z0-9_-]{1,200}$")
         private val REVISION = Regex("^[A-Za-z0-9._/-]{1,200}$")
 

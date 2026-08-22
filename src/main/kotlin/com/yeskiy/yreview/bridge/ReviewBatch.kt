@@ -5,7 +5,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * One comment as the channel reads it. The field names, the order, and the limits come
- * from channel/src/schema.ts. That schema is strict, so a field it does not name makes
+ * from the channel-server Schema.kt file. That schema is strict, so a field it does not name makes
  * the channel drop the whole batch.
  */
 @Serializable
