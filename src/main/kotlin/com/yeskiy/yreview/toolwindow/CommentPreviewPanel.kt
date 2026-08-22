@@ -71,6 +71,7 @@ class CommentPreviewPanel(private val project: Project) :
         val comment = wanted ?: return
         val editor = live?.takeIf { !it.isDisposed } ?: return
         if (editor !is EditorEx) return
+        startAtFirstColumn(editor)
         if (FileDocumentManager.getInstance().getFile(editor.document)?.path != pathOf(comment)) return
         val line = CommentIndex.lastLine(listOf(comment.stored))
         if (line < 1 || line > editor.document.lineCount) return
@@ -81,6 +82,18 @@ class CommentPreviewPanel(private val project: Project) :
             ComponentInlayAlignment.FIT_VIEWPORT_WIDTH,
         )
     }
+
+    /**
+     * Puts the view of the preview editor back on the first column.
+     *
+     * The pane scrolls the editor to the lines of the row, and that move also carries the view
+     * to the right. The reader then starts in the middle of a line. The reset waits for the
+     * move of the pane, because a scroll that runs now would win over an earlier reset.
+     */
+    private fun startAtFirstColumn(editor: Editor) =
+        editor.scrollingModel.runActionOnScrollingFinished {
+            if (!editor.isDisposed) editor.scrollingModel.scrollHorizontally(0)
+        }
 
     /** The pane keeps its editor between two rows of the same file, so the card checks the file. */
     private fun pathOf(comment: PreviewComment): String? =
