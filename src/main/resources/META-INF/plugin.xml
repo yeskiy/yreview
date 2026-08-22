@@ -31,6 +31,7 @@
     <colorSettingsPage implementation="com.yeskiy.yreview.settings.ReviewColorsPage" />
 
     <postStartupActivity implementation="com.yeskiy.yreview.bridge.BridgeStartup" />
+    <postStartupActivity implementation="com.yeskiy.yreview.settings.MaximizeStartup" />
 
     <toolWindow id="Review Comments" anchor="bottom" icon="/icons/yReviewComments.svg"
                 factoryClass="com.yeskiy.yreview.toolwindow.ReviewToolWindowFactory" />

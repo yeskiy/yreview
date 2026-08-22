@@ -20,6 +20,9 @@ class PluginDescriptorTest {
 
     private val startup = "<postStartupActivity implementation=\"com.yeskiy.yreview.bridge.BridgeStartup\" />"
 
+    private val maximizeStartup =
+        "<postStartupActivity implementation=\"com.yeskiy.yreview.settings.MaximizeStartup\" />"
+
     private val icon = "icon=\"AllIcons.Diff.AddComment_14x14\""
 
     private val shortcut = "<keyboard-shortcut keymap=\"\$default\" first-keystroke=\"control shift G\" />"
@@ -41,6 +44,14 @@ class PluginDescriptorTest {
         assertTrue(
             plugin.contains(startup),
             "a session must find the bridge whatever tool window the user opens first"
+        )
+    }
+
+    @Test
+    fun `every start writes the size of the main splitter again`() {
+        assertTrue(
+            plugin.contains(maximizeStartup),
+            "a switch that stands on must reach the splitter after a start of the IDE"
         )
     }
 

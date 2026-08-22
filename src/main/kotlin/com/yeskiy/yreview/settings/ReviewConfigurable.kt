@@ -25,6 +25,8 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val sessionWindow = JBCheckBox("Show the Claude tool window")
 
+    private val maximize = JBCheckBox("Hide the editor beside a maximized tool window")
+
     private val command = JBTextField()
 
     override fun getDisplayName(): String = "Review Comments"
@@ -74,6 +76,20 @@ class ReviewConfigurable(private val project: Project) : Configurable {
                         "An entry in a configuration file alone never registers a channel."
                 )
             }
+            row {
+                cell(maximize)
+            }
+            row {
+                comment(
+                    "A double click on the header of a tool window maximizes that window. " +
+                        "The switch changes one size of the whole IDE, the registry key " +
+                        EditorStrip.KEY + ". " +
+                        "That size holds for every tool window, and not for the windows of this plugin alone. " +
+                        "The IDE reads the new size at once, so no restart is needed. " +
+                        "With the switch on, the user can also drag the divider until the editor has zero size. " +
+                        "The plugin writes the earlier size again after the user clears this box."
+                )
+            }
         }
     }
 
@@ -81,6 +97,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         selected() != settings().sharing ||
             channel.isSelected != settings().channel ||
             sessionWindow.isSelected != shown() ||
+            maximize.isSelected != MaximizeSettings.getInstance().full ||
             command.text.trim() != settings().claudeCommand
 
     override fun apply() {
@@ -91,12 +108,14 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         command.text = settings().claudeCommand
         BridgeService.getInstance(project).applySwitch(channel.isSelected)
         SessionWindow.show(project, sessionWindow.isSelected)
+        MaximizeSettings.getInstance().switch(maximize.isSelected)
     }
 
     override fun reset() {
         choice.selectedItem = settings().sharing
         channel.isSelected = settings().channel
         sessionWindow.isSelected = shown()
+        maximize.isSelected = MaximizeSettings.getInstance().full
         command.text = settings().claudeCommand
     }
 
