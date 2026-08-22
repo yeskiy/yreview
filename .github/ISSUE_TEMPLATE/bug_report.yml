@@ -1,0 +1,143 @@
+name: Bug report
+description: Report something that the plugin does wrong.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the report. Fill every field below. A report without the version
+        numbers takes much longer to answer.
+
+        Do not report a security weakness here. Read
+        [SECURITY.md](https://github.com/yeskiy/y-review/blob/master/SECURITY.md) instead.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you write
+      options:
+        - label: I searched the open and the closed issues, and I found no report of this.
+          required: true
+        - label: I use the newest version of the plugin.
+          required: true
+
+  - type: textarea
+    id: what-happens
+    attributes:
+      label: What happens
+      description: Say what the plugin does now.
+      placeholder: The gutter icon disappears after I resolve a comment.
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-should-happen
+    attributes:
+      label: What you expected
+      description: Say what the plugin should do in place of that.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps that show it
+      description: Write one action per line. Start from a fresh IDE where you can.
+      value: |
+        1. Open a git repository.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: input
+    id: ide-build
+    attributes:
+      label: IDE build number
+      description: >-
+        Read it in Help, About. Copy the whole line, for example
+        "IntelliJ IDEA 2026.2.1 (Ultimate Edition), Build #IU-262.10315.19".
+      placeholder: IntelliJ IDEA 2026.2.1 (Ultimate Edition), Build #IU-262.10315.19
+    validations:
+      required: true
+
+  - type: input
+    id: plugin-version
+    attributes:
+      label: Plugin version
+      description: Read it in Settings, Plugins, Installed, Y-Review.
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: operating-system
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: operating-system-version
+    attributes:
+      label: Operating system version
+      placeholder: Windows 11 26200, or macOS 15.5, or Ubuntu 24.04
+    validations:
+      required: true
+
+  - type: dropdown
+    id: claude-installed
+    attributes:
+      label: Is Claude Code installed on this machine?
+      description: >-
+        The plugin works without Claude Code. The answer tells the maintainer whether the
+        session part of the plugin is involved.
+      options:
+        - "Yes, and the review session runs"
+        - "Yes, but the review session does not start"
+        - "No"
+        - "I do not know"
+    validations:
+      required: true
+
+  - type: input
+    id: exception-analyzer-id
+    attributes:
+      label: Report number from the JetBrains Exception Analyzer
+      description: >-
+        Optional. Send the report through the IDE error dialog first. Press Report in that
+        dialog. The dialog then shows a number, and that number opens the full stack trace
+        for the maintainer. Leave this field empty when the plugin showed no error dialog.
+      placeholder: IDEA-987654
+    validations:
+      required: false
+
+  - type: textarea
+    id: log
+    attributes:
+      label: The IDE log
+      description: >-
+        Optional, and it helps a lot. Run Help, Show Log in Explorer or Help, Show Log in
+        Finder. Open idea.log, and copy the lines around the time of the problem. Remove
+        anything private before you paste it.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: more
+    attributes:
+      label: Anything else
+      description: >-
+        Add a screenshot, a git configuration line, or a note about the repository. Never
+        paste a token, a key, or a password.
+    validations:
+      required: false

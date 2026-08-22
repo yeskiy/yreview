@@ -1,0 +1,32 @@
+Y-Review
+Copyright 2026 yeskiy
+
+Licensed under the Apache License, Version 2.0. The LICENSE file holds the full text.
+
+The plugin archive redistributes the third-party components below. The list comes from
+the resolved runtime classpath of the plugin and of the channel server. It names no
+IntelliJ Platform component, because the IDE supplies every platform class at run time
+and the archive carries none of them.
+
+Apache License, Version 2.0
+  org.jetbrains.kotlin:kotlin-stdlib
+  org.jetbrains.kotlinx:kotlinx-serialization-core-jvm
+  org.jetbrains.kotlinx:kotlinx-serialization-json-jvm
+  org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm
+  org.jetbrains.kotlinx:kotlinx-collections-immutable-jvm
+  org.jetbrains.kotlinx:kotlinx-io-core-jvm
+  org.jetbrains.kotlinx:kotlinx-io-bytestring-jvm
+  org.jetbrains:annotations
+    Copyright 2000-2026 JetBrains s.r.o. and Kotlin Programming Language contributors
+
+  io.github.oshai:kotlin-logging-jvm
+    Copyright 2016-2026 Ohad Shai
+
+MIT License
+  io.modelcontextprotocol:kotlin-sdk-server
+  io.modelcontextprotocol:kotlin-sdk-core
+    Copyright 2024-2026 Anthropic, PBC
+
+  org.slf4j:slf4j-nop
+    Copyright 2004-2022 QOS.ch Sarl (Switzerland)
+    The file META-INF/LICENSE.txt inside y-review-channel.jar holds the full text.

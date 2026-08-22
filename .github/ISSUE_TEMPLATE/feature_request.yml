@@ -1,0 +1,73 @@
+name: Feature request
+description: Ask for a behavior that the plugin does not have.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for the idea. Describe the problem first, then the shape you want. A
+        problem that is clear often has a simpler answer than the first idea.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before you write
+      options:
+        - label: I searched the open and the closed issues, and I found no request like this.
+          required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: >-
+        Say what you try to do and where the plugin stops you. Name the step that fails.
+      placeholder: >-
+        My repository names its push remote "upstream", so no shared comment reaches the
+        team.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you want the plugin to do
+      description: Describe the behavior. Name the place in the user interface where you expect it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: >-
+        Optional. Name the work you do today, or the other tool you use. This shows how
+        much the request is worth.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which part of the plugin
+      options:
+        - The comment in the editor
+        - The comment in the diff view
+        - The tool window and the task tree
+        - The git notes and the sharing
+        - The Claude Code session and the channel
+        - The settings
+        - Something else
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Would you write it?
+      options:
+        - label: I am ready to open a pull request for this.
+          required: false

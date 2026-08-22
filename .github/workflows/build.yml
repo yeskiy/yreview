@@ -1,0 +1,141 @@
+# The build, the tests, and the JetBrains Plugin Verifier.
+#
+# Three jobs run in place of one, so a red run names the step that broke. Every action is
+# pinned to a commit, because a tag can move to other code and these runners hold a cache.
+name: Build
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  JAVA_DISTRIBUTION: temurin
+  JAVA_VERSION: "25"
+
+jobs:
+
+  build:
+    name: Build the plugin
+    runs-on: ubuntu-latest
+    steps:
+      # The IntelliJ IDEA distribution takes about 1.6 GB, and the verifier takes as much
+      # again. The tool cache stays, because it holds the Java runtime of the next step.
+      - name: Free the disk
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # This action caches the Gradle user home, which holds the IntelliJ IDEA
+      # distribution as well. It writes the cache on the default branch only, and it
+      # reads the cache everywhere else. Never add a second cache over the same folder.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+
+      - name: Build the plugin archive
+        run: ./gradlew buildPlugin --console=plain
+
+      - name: Keep the archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-archive
+          path: build/distributions/*.zip
+
+  test:
+    name: Run the tests
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free the disk
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      # Two test sets run here. The plugin tests read the IntelliJ Platform. The channel
+      # server tests run in a plain JVM, and one Gradle command covers both.
+      - name: Run the plugin tests and the channel server tests
+        run: ./gradlew test :channel-server:test --console=plain
+
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-reports
+          path: |
+            build/reports/tests
+            build/test-results/test
+            channel-server/build/reports/tests
+            channel-server/build/test-results/test
+
+  verify:
+    name: Verify the plugin
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free the disk
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: false
+          large-packages: false
+
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: ${{ env.JAVA_DISTRIBUTION }}
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Check the project configuration and the archive structure
+        run: ./gradlew verifyPluginProjectConfiguration verifyPluginStructure --console=plain
+
+      # The Marketplace review team runs the same tool. A call to an internal platform
+      # method fails this step, and a call to an experimental method only warns.
+      - name: Run the JetBrains Plugin Verifier
+        run: ./gradlew verifyPlugin --console=plain
+
+      - name: Keep the verifier report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: plugin-verifier-report
+          path: build/reports/pluginVerifier

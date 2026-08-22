@@ -4,3 +4,10 @@ build/
 .idea/
 !.idea/icon.svg
 *.iml
+.kotlin/
+docs/superpowers/
+
+# The signing material of a release. It never belongs in the repository.
+*.pem
+*.crt
+*.jks
