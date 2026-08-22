@@ -1,7 +1,6 @@
 package com.yeskiy.yreview.session
 
-import com.intellij.ide.plugins.PluginManagerCore
-import com.intellij.openapi.extensions.PluginId
+import com.intellij.ide.plugins.cl.PluginAwareClassLoader
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -53,5 +52,5 @@ object ChannelServer {
 
     /** Null while no platform answers, so a test outside a running IDE reads no folder. */
     fun pluginPath(): Path? =
-        runCatching { PluginManagerCore.getPlugin(PluginId.getId(PLUGIN_ID))?.pluginPath }.getOrNull()
+        (javaClass.classLoader as? PluginAwareClassLoader)?.pluginDescriptor?.pluginPath
 }
