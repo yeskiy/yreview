@@ -137,6 +137,7 @@ class CommentRemovalTest {
             val unknown = StoredComment(
                 id = "0000000000000000000000000000000000000000",
                 ref = NoteRefs.LOCAL,
+                commit = head,
                 comment = Comment(
                     timestamp = "1700000000",
                     author = "a@b.c",

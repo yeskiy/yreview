@@ -150,6 +150,7 @@ object ReadBox {
 class WriteBox(
     project: Project,
     header: String,
+    canPush: Boolean,
     private val close: () -> Unit,
     private val save: (String, Boolean) -> Unit,
 ) {
@@ -160,8 +161,13 @@ class WriteBox(
         "Share this comment with the remote",
         ReviewSettings.getInstance(project).sharing.shareByDefault,
     ).also {
-        it.toolTipText = "The plugin pushes a shared comment to origin. " +
-            "A comment that you do not share stays in this repository."
+        it.toolTipText = if (canPush) {
+            "The plugin pushes a shared comment to origin. " +
+                "A comment that you do not share stays in this repository."
+        } else {
+            "No git repository covers this file, so the plugin cannot push yet. " +
+                "A shared comment reaches the remote after the comments move into the git notes."
+        }
     }
 
     private val error = BoxParts.small("").also {

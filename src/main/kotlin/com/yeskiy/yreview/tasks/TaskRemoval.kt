@@ -7,7 +7,6 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
-import git4idea.repo.GitRepositoryManager
 
 /** What one delete of review comments did. */
 data class RemoveReport(val removed: Int, val problems: List<String> = emptyList()) {
@@ -32,7 +31,7 @@ class TaskRemoval(private val project: Project) {
         val wanted = ids.distinct().filterNot { TaskIds.isTodo(it) }.toSet()
         if (wanted.isEmpty()) return RemoveReport(0)
         val service = ReviewService.getInstance(project)
-        val found = GitRepositoryManager.getInstance(project).repositories
+        val found = service.storeRoots()
             .map { it.root }
             .associateWith { root -> service.bookForRoot(root).findAll(wanted) }
             .filterValues { it.isNotEmpty() }

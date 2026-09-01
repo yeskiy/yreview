@@ -36,7 +36,7 @@ object CommentDelete {
     private fun asks(project: Project): Boolean =
         Messages.showYesNoDialog(
             project,
-            "You cannot put a review comment back. The plugin removes this comment from the git notes.",
+            "You cannot put a review comment back. The plugin removes this comment from its store.",
             TITLE,
             Messages.getWarningIcon(),
         ) == Messages.YES

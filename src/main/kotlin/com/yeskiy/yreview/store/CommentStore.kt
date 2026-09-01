@@ -1,12 +1,13 @@
 package com.yeskiy.yreview.store
 
-data class StoredComment(val id: String, val ref: String, val comment: Comment)
+/** One record, the ref that holds it, and the key of the note it was read from. */
+data class StoredComment(val id: String, val ref: String, val commit: String, val comment: Comment)
 
 /** One note, named by the ref that holds it and by the commit it belongs to. */
 private data class NoteKey(val ref: String, val commit: String)
 
 class CommentBook(
-    private val gateway: NotesGateway,
+    private val gateway: NoteStore,
     private val author: String,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
 ) {
@@ -40,9 +41,7 @@ class CommentBook(
             resolved = true,
             location = stored.comment.location,
         )
-        val commit = stored.comment.location?.commit
-            ?: error("a comment without a location cannot be resolved")
-        return write(stored.ref, commit, update)
+        return write(stored.ref, stored.commit, update)
     }
 
     fun list(commit: String, refs: List<String> = NoteRefs.ALL): List<StoredComment> =
@@ -50,7 +49,7 @@ class CommentBook(
             gateway.readLines(ref, commit).mapNotNull { line ->
                 runCatching { CommentJson.decode(line) }
                     .getOrNull()
-                    ?.let { StoredComment(it.id(), ref, it) }
+                    ?.let { StoredComment(it.id(), ref, commit, it) }
             }
         }
 
@@ -89,8 +88,7 @@ class CommentBook(
      * points at a deleted record goes with it, so no line of the note is left dangling.
      */
     fun remove(records: List<StoredComment>): Int =
-        records.mapNotNull { record -> record.comment.location?.commit?.let { NoteKey(record.ref, it) to record.id } }
-            .groupBy({ it.first }, { it.second })
+        records.groupBy({ NoteKey(it.ref, it.commit) }, { it.id })
             .map { (key, ids) -> removeFrom(key, ids.toSet()) }
             .sum()
 
@@ -112,6 +110,6 @@ class CommentBook(
 
     private fun write(ref: String, commit: String, comment: Comment): StoredComment {
         gateway.append(ref, commit, CommentJson.encode(comment))
-        return StoredComment(comment.id(), ref, comment)
+        return StoredComment(comment.id(), ref, commit, comment)
     }
 }

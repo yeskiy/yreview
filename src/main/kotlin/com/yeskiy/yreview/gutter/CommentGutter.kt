@@ -12,7 +12,9 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
+import com.yeskiy.yreview.store.ReviewAnchor
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
@@ -90,12 +92,23 @@ class CommentGutter(private val project: Project) : Disposable {
         if (inlay != null && alone != null) ReadBox.bindDelete(card, inlay) { delete(alone) }
     }
 
-    /** Opens the box that writes a new comment under [line]. A second call replaces the open box. */
-    fun openWriteBox(editor: Editor, line: Int, header: String, save: (String, Boolean) -> Unit) {
+    /**
+     * Opens the box that writes a new comment under [line]. A second call replaces the open box.
+     *
+     * [canPush] is false for a folder store, and the box then states that a shared comment
+     * reaches the remote only after the comments move into the git notes.
+     */
+    fun openWriteBox(
+        editor: Editor,
+        line: Int,
+        header: String,
+        canPush: Boolean = true,
+        save: (String, Boolean) -> Unit,
+    ) {
         val key = InlayKey(InlayKind.WRITE, line.toString())
         val inlays = inlaysOf(editor)
         inlays.close(key)
-        val box = WriteBox(project, header, { inlays.close(key) }) { text, share ->
+        val box = WriteBox(project, header, canPush, { inlays.close(key) }) { text, share ->
             inlays.close(key)
             save(text, share)
         }
@@ -123,23 +136,24 @@ class CommentGutter(private val project: Project) : Disposable {
 
     private fun repaintAll() = painted.keys.forEach { repaint(it) }
 
-    /** Reads the notes off the user interface thread, then draws the marks on it. */
+    /** Reads the store off the user interface thread, then draws the marks on it. */
     private fun repaint(editor: Editor) {
         val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return
         ApplicationManager.getApplication().executeOnPooledThread {
-            val service = ReviewService.getInstance(project)
-            val root = service.repositoryRoot(file)
-            val marks = marksOf(service, file, root)
-            ApplicationManager.getApplication().invokeLater({ draw(editor, root, marks) }, project.disposed)
+            val found = ReviewService.getInstance(project).anchorOf(file)
+            val anchor = (found as? AnchorResult.Found)?.anchor
+            val marks = marksOf(anchor)
+            ApplicationManager.getApplication().invokeLater({ draw(editor, anchor?.root, marks) }, project.disposed)
         }
     }
 
-    private fun marksOf(service: ReviewService, file: VirtualFile, root: VirtualFile?): CommentMarks {
-        val path = service.relativePath(file)
-        val commit = service.headOf(file)
-        if (root == null || path == null || commit == null) return CommentMarks.EMPTY
-        val open = service.bookForRoot(root).open(commit)
-        return CommentMarks(CommentIndex.byStartLine(open, path), CommentIndex.lineSpans(open, path))
+    private fun marksOf(anchor: ReviewAnchor?): CommentMarks {
+        if (anchor == null) return CommentMarks.EMPTY
+        val open = ReviewService.getInstance(project).bookFor(anchor).open(anchor.key)
+        return CommentMarks(
+            CommentIndex.byStartLine(open, anchor.path),
+            CommentIndex.lineSpans(open, anchor.path),
+        )
     }
 
     /**

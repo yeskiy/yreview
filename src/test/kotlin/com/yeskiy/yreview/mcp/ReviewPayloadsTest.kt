@@ -17,6 +17,7 @@ class ReviewPayloadsTest {
         StoredComment(
             id = "abc123",
             ref = ref,
+            commit = "deadbeef",
             comment = Comment(
                 timestamp = "1755600000",
                 author = "dev@example.com",
@@ -64,7 +65,7 @@ class ReviewPayloadsTest {
 
     @Test
     fun `a comment without a location has no row`() {
-        val orphan = StoredComment("id", NoteRefs.LOCAL, Comment(timestamp = "1", author = "a"))
+        val orphan = StoredComment("id", NoteRefs.LOCAL, "deadbeef", Comment(timestamp = "1", author = "a"))
         assertNull(ReviewPayloads.rowOf(orphan, resolved = false))
     }
 
