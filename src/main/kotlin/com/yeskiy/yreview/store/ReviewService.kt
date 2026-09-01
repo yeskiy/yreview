@@ -2,15 +2,24 @@ package com.yeskiy.yreview.store
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.ThrowableComputable
+import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.bridge.BridgeService
+import com.yeskiy.yreview.handoff.GitDir
 import com.yeskiy.yreview.settings.ShareLog
+import com.yeskiy.yreview.ui.ReviewNotice
 import git4idea.repo.GitRepositoryManager
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.ConcurrentHashMap
 
 /** The comment that was written, and the reason the push failed when it did. */
 data class CommentWriteResult(val stored: StoredComment, val shareError: String?)
@@ -21,10 +30,9 @@ data class CommentDeleteResult(val removed: Int, val shareError: String?)
 @Service(Service.Level.PROJECT)
 class ReviewService(private val project: Project) {
 
-    fun bookForRoot(root: VirtualFile): CommentBook {
-        val runner = ideGitRunner(project, root)
-        return CommentBook(NotesGateway(runner), author = authorOf(runner))
-    }
+    private val migrating = ConcurrentHashMap.newKeySet<String>()
+
+    fun bookForRoot(root: VirtualFile): CommentBook = bookFor(storeAt(root))
 
     fun bookFor(file: VirtualFile): CommentBook? = repositoryRoot(file)?.let { bookForRoot(it) }
 
@@ -40,6 +48,149 @@ class ReviewService(private val project: Project) {
     fun repositoryRoot(file: VirtualFile): VirtualFile? =
         GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)?.root
 
+    /** The rule of the project, applied to one file. Every caller asks this and nothing else. */
+    fun anchorOf(file: VirtualFile): AnchorResult {
+        val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)
+        if (repository != null) {
+            val head = repository.currentRevision ?: return AnchorResult.NoCommit
+            val path = AnchorRules.relative(file.path, repository.root.path) ?: return AnchorResult.NoPlace
+            return AnchorResult.Found(ReviewAnchor(StoreKind.GIT, repository.root, head, path))
+        }
+        val rootPath = AnchorRules.folderRoot(file.path, projectDirPath(), contentRootPaths())
+            ?: return AnchorResult.NoPlace
+        val root = LocalFileSystem.getInstance().findFileByPath(rootPath) ?: return AnchorResult.NoPlace
+        val path = AnchorRules.relative(file.path, rootPath) ?: return AnchorResult.NoPlace
+        return AnchorResult.Found(ReviewAnchor(StoreKind.FOLDER, root, FolderStore.WORKTREE, path))
+    }
+
+    fun bookFor(anchor: ReviewAnchor): CommentBook = bookFor(StoreRoot(anchor.kind, anchor.root))
+
+    /**
+     * The book of one store.
+     *
+     * A folder root is not a repository, and `git config user.email` still answers there, so
+     * both kinds name the author the same way.
+     */
+    fun bookFor(store: StoreRoot): CommentBook {
+        val runner = ideGitRunner(project, store.root)
+        return CommentBook(
+            if (store.kind == StoreKind.GIT) NotesGateway(runner) else folderNotesOf(store.root),
+            author = authorOf(runner),
+        )
+    }
+
+    /**
+     * The store that owns this root.
+     *
+     * Every caller that holds a root and not an anchor asks this. The answer keeps the old
+     * signatures of [resolveComment] and [deleteComments], so no caller of those two changes.
+     */
+    fun storeAt(root: VirtualFile): StoreRoot =
+        if (GitRepositoryManager.getInstance(project).getRepositoryForRootQuick(root) != null) {
+            StoreRoot(StoreKind.GIT, root)
+        } else {
+            StoreRoot(StoreKind.FOLDER, root)
+        }
+
+    fun folderNotesOf(root: VirtualFile): FolderNotes = FolderNotes(Path.of(root.path))
+
+    /** Every git root, and then every folder that already holds a store. */
+    fun storeRoots(): List<StoreRoot> =
+        GitRepositoryManager.getInstance(project).repositories.map { StoreRoot(StoreKind.GIT, it.root) } +
+            folderStoreRoots().map { StoreRoot(StoreKind.FOLDER, it) }
+
+    /**
+     * Every folder root that still holds records.
+     *
+     * The migration runs first, over every candidate root, and it runs before the filter that
+     * drops a root which a repository now covers. A root that the filter dropped first would
+     * never migrate, and its records would stay in the folder for good.
+     */
+    fun folderStoreRoots(): List<VirtualFile> {
+        val roots = candidateFolderRoots()
+        roots.forEach { migrateFolderIfNeeded(it) }
+        return roots
+            .filter { storeAt(it).kind == StoreKind.FOLDER }
+            .filter { root -> NoteRefs.ALL.any { folderNotesOf(root).commitsWithNotes(it).isNotEmpty() } }
+    }
+
+    /**
+     * Moves a folder store into the git notes after a repository covers its root.
+     *
+     * The check runs on every read, so a repository that appeared while the project was
+     * closed still reaches this path. The guard keeps two reads from moving the same folder
+     * at once, and the copy itself repeats without harm.
+     *
+     * The copy and the check run first. The move runs last. A crash between them leaves both
+     * copies, and the next read repeats the copy without a duplicate.
+     */
+    fun migrateFolderIfNeeded(root: VirtualFile) {
+        val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(root) ?: return
+        val head = repository.currentRevision ?: return
+        val folder = folderNotesOf(root)
+        if (NoteRefs.ALL.none { folder.commitsWithNotes(it).isNotEmpty() }) return
+        if (!migrating.add(root.path)) return
+        try {
+            val runner = ideGitRunner(project, repository.root)
+            val report = FolderMigration.copy(folder, NotesGateway(runner), NoteRefs.ALL, head)
+            if (report.problem != null) {
+                ReviewNotice.warn(project, "The plugin did not move the review comments of ${root.name}. ${report.problem}")
+                return
+            }
+            val kept = GitDir.reviewFolder(runner)?.resolve("migrated-${System.currentTimeMillis()}")
+            if (kept == null || !moveFolder(root, kept)) return
+            ReviewNotice.say(
+                project,
+                "The plugin moved ${report.moved} review comment${if (report.moved == 1) "" else "s"} " +
+                    "into the git notes of ${repository.root.name}. The old folder now sits at $kept.",
+            )
+            notifyChanged()
+        } finally {
+            migrating.remove(root.path)
+        }
+    }
+
+    /** The old folder goes into the git directory, which git never tracks, so it needs no ignore entry. */
+    private fun moveFolder(root: VirtualFile, target: Path): Boolean = runCatching {
+        Files.createDirectories(target.parent)
+        Files.move(Path.of(root.path).resolve(FolderStore.FOLDER), target)
+        true
+    }.getOrElse {
+        ReviewNotice.warn(
+            project,
+            "The plugin copied the review comments, and it left the folder at " +
+                "${root.path}/${FolderStore.FOLDER}.",
+        )
+        false
+    }
+
+    private fun candidateFolderRoots(): List<VirtualFile> {
+        val local = LocalFileSystem.getInstance()
+        return (listOfNotNull(projectDirPath()) + contentRootPaths())
+            .distinct()
+            .mapNotNull { local.findFileByPath(it) }
+    }
+
+    /**
+     * The folder the project opens.
+     *
+     * The documentation of `basePath` warns against its use, because that path is not always
+     * the parent of the .idea folder. `guessProjectDir` is the call that JetBrains names.
+     */
+    private fun projectDirPath(): String? =
+        runCatching { project.guessProjectDir()?.path }.getOrNull()
+
+    /**
+     * A content root read needs a read lock, so the call runs inside one.
+     *
+     * A thread that already holds the lock runs the block as it is, so the same call works
+     * from a pooled thread and from inside the read action of an intention.
+     */
+    private fun contentRootPaths(): List<String> =
+        ReadAction.nonBlocking<List<String>> {
+            ProjectRootManager.getInstance(project).contentRoots.map { it.path }
+        }.executeSynchronously()
+
     fun addComment(
         root: VirtualFile,
         ref: String,
@@ -50,8 +201,25 @@ class ReviewService(private val project: Project) {
         text: String,
     ): CommentWriteResult = finish(root, bookForRoot(root).add(ref, commit, path, startLine, endLine, text))
 
-    fun resolveComment(root: VirtualFile, stored: StoredComment): CommentWriteResult =
-        finish(root, bookForRoot(root).resolve(stored))
+    /** A folder store has no remote, so it takes no share step and it starts no bridge. */
+    fun addComment(anchor: ReviewAnchor, ref: String, startLine: Int, endLine: Int, text: String): CommentWriteResult {
+        val stored = bookFor(anchor).add(ref, anchor.key, anchor.path, startLine, endLine, text)
+        if (anchor.kind == StoreKind.FOLDER) {
+            notifyChanged()
+            return CommentWriteResult(stored, null)
+        }
+        return finish(anchor.root, stored)
+    }
+
+    fun resolveComment(root: VirtualFile, stored: StoredComment): CommentWriteResult {
+        val store = storeAt(root)
+        val update = bookFor(store).resolve(stored)
+        if (store.kind == StoreKind.FOLDER) {
+            notifyChanged()
+            return CommentWriteResult(update, null)
+        }
+        return finish(root, update)
+    }
 
     /**
      * Removes these comments from the git notes and pushes every shared ref they touched.
@@ -60,8 +228,13 @@ class ReviewService(private val project: Project) {
      * push leaves the note where it is, and the next successful push carries the change.
      */
     fun deleteComments(root: VirtualFile, records: List<StoredComment>): CommentDeleteResult {
-        val removed = bookForRoot(root).remove(records)
+        val store = storeAt(root)
+        val removed = bookFor(store).remove(records)
         if (removed == 0) return CommentDeleteResult(0, null)
+        if (store.kind == StoreKind.FOLDER) {
+            notifyChanged()
+            return CommentDeleteResult(removed, null)
+        }
         val errors = records.map { it.ref }.distinct()
             .filter { NoteRefs.isShared(it) }
             .mapNotNull { runShare(root, it).takeIf { result -> !result.ok }?.message }

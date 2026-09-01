@@ -4,15 +4,15 @@ import java.nio.file.Files
 
 class NotesWriteException(message: String) : RuntimeException(message)
 
-class NotesGateway(private val git: GitRunner) {
+class NotesGateway(private val git: GitRunner) : NoteStore {
 
-    fun readLines(ref: String, commit: String): List<String> {
+    override fun readLines(ref: String, commit: String): List<String> {
         val result = git.run("notes", "--ref", ref, "show", commit)
         if (!result.ok) return emptyList()
         return result.stdout.lineSequence().filter { it.isNotBlank() }.toList()
     }
 
-    fun append(ref: String, commit: String, line: String) =
+    override fun append(ref: String, commit: String, line: String) =
         withFile(line, "git notes append failed") { path ->
             listOf("notes", "--ref", ref, "append", "-F", path, commit)
         }
@@ -24,7 +24,7 @@ class NotesGateway(private val git: GitRunner) {
      * divides two lines, because `git notes append` writes the note that way. A rewrite adds
      * one commit to the note ref, so a later push of that ref stays a fast forward.
      */
-    fun rewrite(ref: String, commit: String, lines: List<String>) {
+    override fun rewrite(ref: String, commit: String, lines: List<String>) {
         if (lines.isEmpty()) {
             val result = git.run("notes", "--ref", ref, "remove", "--ignore-missing", commit)
             if (!result.ok) throw NotesWriteException(result.stderr.trim().ifEmpty { "git notes remove failed" })
@@ -35,7 +35,7 @@ class NotesGateway(private val git: GitRunner) {
         }
     }
 
-    fun commitsWithNotes(ref: String): List<String> {
+    override fun commitsWithNotes(ref: String): List<String> {
         val result = git.run("notes", "--ref", ref, "list")
         if (!result.ok) return emptyList()
         return result.stdout.lineSequence()

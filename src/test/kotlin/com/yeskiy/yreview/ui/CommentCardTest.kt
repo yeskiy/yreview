@@ -11,6 +11,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+private const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
 class CommentCardTest {
 
     private val time: (Comment) -> String = { "3 hours ago (Aug 18, 2026, 9:33 AM)" }
@@ -28,12 +30,12 @@ class CommentCardTest {
             description = text,
             resolved = resolved,
             location = Location(
-                commit = "0123456789abcdef0123456789abcdef01234567",
+                commit = COMMIT,
                 path = "src/main/kotlin/Parser.kt",
                 range = startLine?.let { Range(startLine = it, endLine = it + 6) },
             ),
         )
-        return StoredComment(comment.id(), ref, comment)
+        return StoredComment(comment.id(), ref, COMMIT, comment)
     }
 
     @Test

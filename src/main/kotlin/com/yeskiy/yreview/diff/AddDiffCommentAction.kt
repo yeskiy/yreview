@@ -9,6 +9,8 @@ import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.action.CommentTarget
 import com.yeskiy.yreview.action.CommentWriter
+import com.yeskiy.yreview.store.ReviewAnchor
+import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.ui.AddCommentPopup
 import com.yeskiy.yreview.ui.CommentText
 
@@ -45,7 +47,13 @@ class AddDiffCommentAction : AnAction() {
         )
 
         AddCommentPopup.show(project, editor, header) { text, share ->
-            CommentWriter.write(project, root, anchor.commit, target, text, share)
+            CommentWriter.write(
+                project,
+                ReviewAnchor(StoreKind.GIT, root, anchor.commit, anchor.path),
+                target,
+                text,
+                share,
+            )
         }
     }
 }

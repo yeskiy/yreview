@@ -15,8 +15,11 @@ import com.intellij.psi.search.PsiTodoSearchHelper
 import com.intellij.psi.search.TodoItem
 import com.intellij.util.Processor
 import com.yeskiy.yreview.settings.ShareLog
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.store.StoreKind
+import com.yeskiy.yreview.store.StoreRoot
 import com.yeskiy.yreview.store.StoredComment
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
@@ -38,11 +41,11 @@ data class RepositoryTasks(val root: VirtualFile, val commit: String, val tasks:
  */
 object TaskScan {
 
-    /** The tasks of every git repository of the project, one entry per repository. */
+    /** The tasks of every store of the project, one entry per git repository and per folder. */
     fun read(project: Project, onlyFile: VirtualFile?): List<RepositoryTasks> =
         GitRepositoryManager.getInstance(project).repositories.mapNotNull { repository ->
             repositoryTasks(project, repository, onlyFile)
-        }
+        } + folderTasks(project, onlyFile)
 
     /** The identifiers of the TODO lines that are still in the source. */
     fun openTodoIds(project: Project): Set<String> =
@@ -66,6 +69,36 @@ object TaskScan {
                 comments(project, repository.root, onlyFile) + todos(project, repository.root, commit, onlyFile),
             ),
         )
+    }
+
+    /**
+     * The comments of every folder store, one entry per root.
+     *
+     * The entry carries no TODO item. A folder root usually contains the nested repositories,
+     * and the TODO reader keeps every file under its root, so a TODO of a nested repository
+     * would appear twice. A comment reaches exactly one store, so a comment cannot repeat.
+     */
+    private fun folderTasks(project: Project, onlyFile: VirtualFile?): List<RepositoryTasks> =
+        ReviewService.getInstance(project).storeRoots()
+            .filter { it.kind == StoreKind.FOLDER }
+            .filter { onlyFile == null || VfsUtilCore.isAncestor(it.root, onlyFile, false) }
+            .map { store ->
+                RepositoryTasks(
+                    store.root,
+                    FolderStore.WORKTREE,
+                    withModules(project, folderComments(project, store, onlyFile)),
+                )
+            }
+            .filter { it.tasks.isNotEmpty() }
+
+    private fun folderComments(project: Project, store: StoreRoot, onlyFile: VirtualFile?): List<ReviewTask> {
+        val book = ReviewService.getInstance(project).bookFor(store)
+        val log = ShareLog.getInstance(project)
+        val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, store.root, '/') }
+        return book.commits(NoteRefs.ALL)
+            .flatMap { book.open(it, NoteRefs.ALL) }
+            .mapNotNull { stored -> taskOf(stored, store.root, log.isUnshared(stored.id)) }
+            .filter { wanted == null || it.path == wanted }
     }
 
     /** The module of every task, so the tree can put a module row above the files. */
@@ -112,9 +145,10 @@ object TaskScan {
         )
     }
 
-    /** A comment of the local ref is never shared, so a failed push cannot change its state. */
+    /** A comment of the local ref is never shared, and a folder store never reaches a remote. */
     private fun state(stored: StoredComment, unshared: Boolean): String = when {
         !NoteRefs.isShared(stored.ref) -> "local"
+        stored.commit == FolderStore.WORKTREE -> "not shared"
         unshared -> "not shared"
         else -> "shared"
     }

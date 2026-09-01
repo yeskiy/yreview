@@ -9,6 +9,8 @@ import com.yeskiy.yreview.store.id
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+private const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
 class CommentIndexTest {
 
     private fun stored(path: String, startLine: Int?, text: String, endLine: Int? = null): StoredComment {
@@ -17,12 +19,12 @@ class CommentIndexTest {
             author = "a@b.c",
             description = text,
             location = Location(
-                commit = "0123456789abcdef0123456789abcdef01234567",
+                commit = COMMIT,
                 path = path,
                 range = startLine?.let { Range(startLine = it, endLine = endLine ?: (it + 1)) },
             ),
         )
-        return StoredComment(comment.id(), NoteRefs.LOCAL, comment)
+        return StoredComment(comment.id(), NoteRefs.LOCAL, COMMIT, comment)
     }
 
     @Test

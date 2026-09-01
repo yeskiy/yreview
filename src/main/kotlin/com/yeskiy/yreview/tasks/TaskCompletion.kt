@@ -8,7 +8,6 @@ import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
-import git4idea.repo.GitRepositoryManager
 
 /** What one batch of reported identifiers did. */
 data class CloseReport(val closed: Int, val problems: List<String> = emptyList()) {
@@ -57,7 +56,7 @@ class TaskCompletion(private val project: Project) {
     private fun closeComments(ids: List<String>): List<CommentOutcome> {
         if (ids.isEmpty()) return emptyList()
         val service = ReviewService.getInstance(project)
-        val roots = GitRepositoryManager.getInstance(project).repositories.map { it.root }
+        val roots = service.storeRoots().map { it.root }
         return ids.map { id -> outcomeOf(service, roots, id) }
     }
 
@@ -73,10 +72,8 @@ class TaskCompletion(private val project: Project) {
         }
     }
 
-    private fun isClosed(book: CommentBook, stored: StoredComment): Boolean {
-        val commit = stored.comment.location?.commit ?: return false
-        return book.closed(commit).any { it.id == stored.id }
-    }
+    private fun isClosed(book: CommentBook, stored: StoredComment): Boolean =
+        book.closed(stored.commit).any { it.id == stored.id }
 
     private fun openTodoIds(ids: List<String>): List<String> {
         if (ids.isEmpty()) return emptyList()

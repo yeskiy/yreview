@@ -9,7 +9,9 @@ import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.gutter.CommentGutter
+import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.ui.CommentText
 
 data class Target(val path: String, val startLine: Int, val endLine: Int) {
@@ -52,28 +54,28 @@ class AddCommentAction : AnAction() {
         event.presentation.isEnabledAndVisible =
             project != null && editor != null && file != null &&
                 editor.editorKind != EditorKind.DIFF &&
-                ReviewService.getInstance(project).relativePath(file) != null
+                ReviewService.getInstance(project).anchorOf(file) !is AnchorResult.NoPlace
     }
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
         val editor = EditorPick.of(event) ?: return
         val file: VirtualFile = event.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
-        val service = ReviewService.getInstance(project)
 
-        val path = service.relativePath(file) ?: return
-        val commit = service.headOf(file) ?: run {
+        val found = ReviewService.getInstance(project).anchorOf(file)
+        if (found is AnchorResult.NoCommit) {
             Messages.showErrorDialog(project, "This repository has no commit yet.", CommentWriter.TITLE)
             return
         }
-        val root = service.repositoryRoot(file) ?: return
-        val target = CommentTarget.fromEditor(editor, path)
+        val anchor = (found as? AnchorResult.Found)?.anchor ?: return
+        val target = CommentTarget.fromEditor(editor, anchor.path)
 
         EditorPick.showTextSide(event)
         CommentGutter.getInstance(project).openWriteBox(
             editor,
             target.lastLine,
             CommentText.header(target.path, target.startLine, target.endLine),
-        ) { text, share -> CommentWriter.write(project, root, commit, target, text, share) }
+            anchor.kind == StoreKind.GIT,
+        ) { text, share -> CommentWriter.write(project, anchor, target, text, share) }
     }
 }

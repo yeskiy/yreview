@@ -26,6 +26,15 @@ class CommentStoreLogicTest {
     }
 
     @Test
+    fun `a stored comment carries the key it was read with`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", 88, 94, "fix this")
+            assertEquals(head, book(repo).list(head).single().commit)
+        }
+    }
+
+    @Test
     fun `stamps a ten digit timestamp and the author`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")

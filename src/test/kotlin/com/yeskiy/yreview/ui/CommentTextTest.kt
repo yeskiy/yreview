@@ -1,6 +1,7 @@
 package com.yeskiy.yreview.ui
 
 import com.yeskiy.yreview.store.Comment
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.Location
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.Range
@@ -10,20 +11,27 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
+private const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
 class CommentTextTest {
 
-    private fun stored(ref: String, text: String, startLine: Int? = 88): StoredComment {
+    private fun stored(
+        ref: String,
+        text: String,
+        startLine: Int? = 88,
+        commit: String = COMMIT,
+    ): StoredComment {
         val comment = Comment(
             timestamp = "1787194427",
             author = "a@b.c",
             description = text,
             location = Location(
-                commit = "0123456789abcdef0123456789abcdef01234567",
+                commit = commit,
                 path = "src/main/kotlin/Parser.kt",
                 range = startLine?.let { Range(startLine = it, endLine = it + 6) },
             ),
         )
-        return StoredComment(comment.id(), ref, comment)
+        return StoredComment(comment.id(), ref, commit, comment)
     }
 
     @Test
@@ -77,6 +85,14 @@ class CommentTextTest {
         assertEquals(
             "src/main/kotlin/Parser.kt @0123456",
             CommentText.location(stored(NoteRefs.LOCAL, "x", startLine = null)),
+        )
+    }
+
+    @Test
+    fun `a worktree anchor reads as working tree`() {
+        assertEquals(
+            "src/main/kotlin/Parser.kt:88-94 @working tree",
+            CommentText.location(stored(NoteRefs.LOCAL, "x", commit = FolderStore.WORKTREE)),
         )
     }
 

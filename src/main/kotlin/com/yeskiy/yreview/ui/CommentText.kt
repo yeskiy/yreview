@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.ui
 
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.Location
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.StoredComment
@@ -41,5 +42,7 @@ object CommentText {
     private fun firstLine(stored: StoredComment): String =
         stored.comment.description?.lineSequence()?.firstOrNull().orEmpty()
 
-    private fun short(commit: String): String = commit.take(7)
+    /** The seven character prefix of a commit. A record of a folder store names no commit. */
+    private fun short(commit: String): String =
+        if (commit == FolderStore.WORKTREE) "working tree" else commit.take(7)
 }
