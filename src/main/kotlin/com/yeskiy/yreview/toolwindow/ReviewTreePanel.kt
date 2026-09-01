@@ -19,6 +19,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.CommonShortcuts
 import com.intellij.openapi.actionSystem.DataContext
+import com.intellij.openapi.actionSystem.DataKey
 import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.IdeActions
@@ -126,6 +127,7 @@ import com.yeskiy.yreview.tasks.TaskScope
 import com.yeskiy.yreview.tasks.TaskTree
 import com.yeskiy.yreview.tasks.TodoRemoval
 import com.yeskiy.yreview.tasks.TodoReport
+import com.yeskiy.yreview.tasks.ToolbarFacts
 import com.yeskiy.yreview.tasks.WriteTarget
 import com.yeskiy.yreview.tasks.readScope
 import com.yeskiy.yreview.ui.ReviewNotice
@@ -191,11 +193,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      */
     private val treeCopy = object : CopyProvider {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun performCopy(dataContext: DataContext) = copy()
 
-        override fun isCopyEnabled(dataContext: DataContext): Boolean = target().scope != SendScope.NONE
+        override fun isCopyEnabled(dataContext: DataContext): Boolean =
+            factsOf(dataContext).send.scope != SendScope.NONE
 
         override fun isCopyVisible(dataContext: DataContext): Boolean = true
     }
@@ -305,17 +308,23 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         this.content = content
     }
 
-    /** The platform reads the selection here, so double click, Enter and the menu work. */
+    /**
+     * The platform reads the selection here, so double click, Enter and the menu work.
+     *
+     * The record of the toolbar goes into the same snapshot. The platform builds one
+     * snapshot for each expansion of a group, and it hands that snapshot to every button of
+     * the group. One expansion therefore reads the tasks of the tree once, and not once for
+     * each button.
+     */
     override fun uiDataSnapshot(sink: DataSink) {
         super.uiDataSnapshot(sink)
-        val files = TreeUtil.collectSelectedObjectsOfType(tree, TaskHolder::class.java)
-            .flatMap { it.tasks }
-            .mapNotNull { TaskNodes.find(it) }
-            .distinct()
+        val chosen = selectedTasks()
+        val files = chosen.mapNotNull { TaskNodes.find(it) }.distinct()
         if (files.isNotEmpty()) sink.set(CommonDataKeys.VIRTUAL_FILE_ARRAY, files.toTypedArray<VirtualFile>())
         val open = TreeUtil.collectSelectedObjectsOfType(tree, TaskNode::class.java) +
             TreeUtil.collectSelectedObjectsOfType(tree, FileNode::class.java)
         if (open.isNotEmpty()) sink.set(CommonDataKeys.NAVIGATABLE_ARRAY, open.toTypedArray<Navigatable>())
+        sink.set(TOOLBAR_FACTS, toolbarFacts(chosen))
     }
 
     private fun tab(): ReviewSettings.TabState = settings.tab(scope)
@@ -554,13 +563,23 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private fun allTasks(): List<ReviewTask> = TaskTree.tasksOf(structure.layout)
 
+    /** What the buttons of the toolbar read. The tab walks the tasks of the tree once here. */
+    private fun toolbarFacts(selected: List<ReviewTask>): ToolbarFacts {
+        val all = allTasks()
+        return ToolbarFacts.of(all, selected, checks.checkedOf(all), checks.size)
+    }
+
+    /** The record of the snapshot, or the empty record when the context carries none. */
+    private fun factsOf(event: AnActionEvent): ToolbarFacts = factsOf(event.dataContext)
+
+    private fun factsOf(context: DataContext): ToolbarFacts =
+        TOOLBAR_FACTS.getData(context) ?: ToolbarFacts.EMPTY
+
     /** Where the send goes. A check box beats a row, and a row beats the whole tree. */
-    private fun target(): SendTarget =
-        TaskChoice.sendTarget(checks.checkedOf(allTasks()), selectedTasks(), allTasks())
+    private fun target(): SendTarget = toolbarFacts(selectedTasks()).send
 
     /** What a resolve or a delete acts on. Neither one falls back to the whole tree. */
-    private fun writeTarget(): WriteTarget =
-        TaskChoice.writeTarget(checks.checkedOf(allTasks()), selectedTasks())
+    private fun writeTarget(): WriteTarget = toolbarFacts(selectedTasks()).write
 
     // --- Send ---
 
@@ -1064,7 +1083,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private inner class RefreshAction :
         AnAction("Refresh", "Read the tasks of this scope again.", AllIcons.Actions.Refresh) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun actionPerformed(event: AnActionEvent) = scheduleReload()
     }
@@ -1081,7 +1100,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             templatePresentation.icon = AllIcons.General.Filter
         }
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
             event.presentation.text = "Filter: ${filterLabel()}"
@@ -1107,7 +1126,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private inner class KindAction(private val kind: TaskKindFilter) :
         ToggleAction(kind.label, kind.summary, null) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun isSelected(event: AnActionEvent): Boolean = tab().kindFilter == kind
 
@@ -1120,7 +1139,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private inner class FilterAction(private val name: String) :
         ToggleAction(if (name.isEmpty()) "Show All TODO Items" else name) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun isSelected(event: AnActionEvent): Boolean = tab().todoFilterName == name
 
@@ -1137,7 +1156,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             templatePresentation.description = "Put a module row or a directory row above the files."
         }
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun getChildren(event: AnActionEvent?): Array<AnAction> =
             arrayOf(ModuleAction(), DirectoryAction(), FlattenAction())
@@ -1149,7 +1168,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         AllIcons.Actions.GroupByModule,
     ) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun isSelected(event: AnActionEvent): Boolean = tab().byModule
 
@@ -1165,7 +1184,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         AllIcons.Actions.GroupByPackage,
     ) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun isSelected(event: AnActionEvent): Boolean = tab().byDirectory
 
@@ -1181,7 +1200,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         AllIcons.ObjectBrowser.FlattenPackages,
     ) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
             super.update(event)
@@ -1202,7 +1221,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         AllIcons.Actions.PreviewDetails,
     ) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun isSelected(event: AnActionEvent): Boolean = tab().showPreview
 
@@ -1215,10 +1234,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private inner class CheckAllAction :
         AnAction("Check All", "Check every task of the tree.", AllIcons.Actions.Selectall) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = allTasks().isNotEmpty()
+            event.presentation.isEnabled = factsOf(event).anyTask
         }
 
         override fun actionPerformed(event: AnActionEvent) {
@@ -1230,10 +1249,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private inner class ClearChecksAction :
         AnAction("Clear Checks", "Clear every check box.", AllIcons.Actions.Unselectall) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = checks.size > 0
+            event.presentation.isEnabled = factsOf(event).anyCheck
         }
 
         override fun actionPerformed(event: AnActionEvent) {
@@ -1245,10 +1264,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private inner class ResolveAction :
         AnAction("Resolve", "Mark the checked review comments as resolved.", AllIcons.Actions.Commit) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = writeTarget().hasComments
+            event.presentation.isEnabled = factsOf(event).write.hasComments
         }
 
         override fun actionPerformed(event: AnActionEvent) = resolveSelected()
@@ -1260,10 +1279,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         AllIcons.General.Delete,
     ) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
-            event.presentation.isEnabled = !writeTarget().empty
+            event.presentation.isEnabled = !factsOf(event).write.empty
         }
 
         override fun actionPerformed(event: AnActionEvent) = deleteSelected()
@@ -1275,10 +1294,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         AllIcons.Actions.Upload,
     ) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
-            val target = target()
+            val target = factsOf(event).send
             event.presentation.text = target.text
             event.presentation.description = target.description
             event.presentation.isEnabled = target.scope != SendScope.NONE
@@ -1299,10 +1318,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         AllIcons.Actions.Copy,
     ) {
 
-        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
         override fun update(event: AnActionEvent) {
-            val target = target()
+            val target = factsOf(event).send
             event.presentation.text = target.copyText
             event.presentation.description = target.copyDescription
             event.presentation.isVisible = true
@@ -1313,6 +1332,15 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     companion object {
+        /**
+         * The record every button of the toolbar reads while it draws itself.
+         *
+         * The panel writes the record on the user interface thread, inside the snapshot of
+         * the data context. Each button reads it on a background thread, so no button holds
+         * the user interface thread while the toolbar opens.
+         */
+        private val TOOLBAR_FACTS: DataKey<ToolbarFacts> = DataKey.create("y.review.toolbar.facts")
+
         private const val RELOAD_DELAY = 400
 
         // The bundled TODO window waits the same time before it paints its spinner.
