@@ -11,6 +11,7 @@
   <depends>Git4Idea</depends>
   <depends optional="true" config-file="y-review-mcp.xml">com.intellij.mcpServer</depends>
   <depends optional="true" config-file="y-review-terminal.xml">org.jetbrains.plugins.terminal</depends>
+  <depends optional="true" config-file="y-review-markdown.xml">org.intellij.plugins.markdown</depends>
 
   <dependencies>
     <module name="intellij.platform.collaborationTools" />

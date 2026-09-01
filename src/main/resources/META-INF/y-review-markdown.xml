@@ -1,0 +1,7 @@
+<idea-plugin>
+  <actions>
+    <reference ref="com.yeskiy.yreview.AddComment">
+      <add-to-group group-id="Markdown.PreviewGroup" anchor="last" />
+    </reference>
+  </actions>
+</idea-plugin>
