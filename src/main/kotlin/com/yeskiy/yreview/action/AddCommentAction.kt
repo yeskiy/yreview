@@ -40,10 +40,14 @@ class AddCommentAction : AnAction() {
     /**
      * A diff editor holds the same file and the same project as an ordinary editor. This action
      * stops there, because the diff action anchors the comment at the revision of the diff.
+     *
+     * [EditorPick] answers for the preview side of a split editor too, and the editor it gives
+     * there is the text side of the same tab. That editor is a main editor, so the guard on the
+     * diff editor still holds.
      */
     override fun update(event: AnActionEvent) {
         val project = event.project
-        val editor = event.getData(CommonDataKeys.EDITOR)
+        val editor = EditorPick.of(event)
         val file = event.getData(CommonDataKeys.VIRTUAL_FILE)
         event.presentation.isEnabledAndVisible =
             project != null && editor != null && file != null &&
@@ -53,7 +57,7 @@ class AddCommentAction : AnAction() {
 
     override fun actionPerformed(event: AnActionEvent) {
         val project = event.project ?: return
-        val editor = event.getData(CommonDataKeys.EDITOR) ?: return
+        val editor = EditorPick.of(event) ?: return
         val file: VirtualFile = event.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
         val service = ReviewService.getInstance(project)
 
@@ -65,6 +69,7 @@ class AddCommentAction : AnAction() {
         val root = service.repositoryRoot(file) ?: return
         val target = CommentTarget.fromEditor(editor, path)
 
+        EditorPick.showTextSide(event)
         CommentGutter.getInstance(project).openWriteBox(
             editor,
             target.lastLine,
