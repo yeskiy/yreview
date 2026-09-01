@@ -160,15 +160,7 @@ class WriteBox(
     private val share = JBCheckBox(
         "Share this comment with the remote",
         ReviewSettings.getInstance(project).sharing.shareByDefault,
-    ).also {
-        it.toolTipText = if (canPush) {
-            "The plugin pushes a shared comment to origin. " +
-                "A comment that you do not share stays in this repository."
-        } else {
-            "No git repository covers this file, so the plugin cannot push yet. " +
-                "A shared comment reaches the remote after the comments move into the git notes."
-        }
-    }
+    ).also { it.toolTipText = CommentText.shareTooltip(canPush) }
 
     private val error = BoxParts.small("").also {
         it.foreground = JBColor.RED

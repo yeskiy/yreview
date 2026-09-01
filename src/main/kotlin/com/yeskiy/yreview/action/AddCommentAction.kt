@@ -12,7 +12,9 @@ import com.yeskiy.yreview.gutter.CommentGutter
 import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
+import com.yeskiy.yreview.ui.AddCommentPopup
 import com.yeskiy.yreview.ui.CommentText
+import com.yeskiy.yreview.ui.ReviewNotice
 
 data class Target(val path: String, val startLine: Int, val endLine: Int) {
 
@@ -70,12 +72,18 @@ class AddCommentAction : AnAction() {
         val anchor = (found as? AnchorResult.Found)?.anchor ?: return
         val target = CommentTarget.fromEditor(editor, anchor.path)
 
-        EditorPick.showTextSide(event)
-        CommentGutter.getInstance(project).openWriteBox(
-            editor,
-            target.lastLine,
-            CommentText.header(target.path, target.startLine, target.endLine),
-            anchor.kind == StoreKind.GIT,
-        ) { text, share -> CommentWriter.write(project, anchor, target, text, share) }
+        val header = CommentText.header(target.path, target.startLine, target.endLine)
+        val canPush = anchor.kind == StoreKind.GIT
+        if (CommentPlace.of(event) == BoxPlace.PREVIEW) {
+            AddCommentPopup.show(project, editor, header, canPush, event.dataContext) { text, share ->
+                if (CommentWriter.write(project, anchor, target, text, share)) {
+                    ReviewNotice.say(project, "The comment went to $header.")
+                }
+            }
+            return
+        }
+        CommentGutter.getInstance(project).openWriteBox(editor, target.lastLine, header, canPush) { text, share ->
+            CommentWriter.write(project, anchor, target, text, share)
+        }
     }
 }

@@ -5,7 +5,6 @@ import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.PlatformCoreDataKeys
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.fileEditor.TextEditor
-import com.intellij.openapi.fileEditor.TextEditorWithPreview
 
 /**
  * The editor that one action of the editor menu writes a comment in.
@@ -15,6 +14,9 @@ import com.intellij.openapi.fileEditor.TextEditorWithPreview
  * own. The context therefore names no editor while the preview holds the focus. The file
  * editor of the tab still answers there, and a split editor gives its text side through that
  * answer.
+ *
+ * The text side answers in every layout, and a hidden text side answers too. [CommentPlace]
+ * reads the layout and names the place of the box.
  */
 object EditorPick {
 
@@ -31,21 +33,4 @@ object EditorPick {
         event.getData(CommonDataKeys.EDITOR),
         event.getData(PlatformCoreDataKeys.FILE_EDITOR),
     ) { (it as? TextEditor)?.editor }
-
-    /**
-     * Shows the text side of a split editor that shows the preview alone.
-     *
-     * A split editor keeps both sides in the window, and it hides one of them. A box that
-     * opens in a hidden side reaches no user, so the text side must show first. The layout
-     * keeps the preview beside the text, and the IDE remembers the layout for the next file
-     * of the same kind.
-     *
-     * This method runs on the user interface thread.
-     */
-    fun showTextSide(event: AnActionEvent) {
-        val split = event.getData(PlatformCoreDataKeys.FILE_EDITOR) as? TextEditorWithPreview ?: return
-        if (split.getLayout() == TextEditorWithPreview.Layout.SHOW_PREVIEW) {
-            split.setLayout(TextEditorWithPreview.Layout.SHOW_EDITOR_AND_PREVIEW)
-        }
-    }
 }

@@ -1,6 +1,7 @@
 package com.yeskiy.yreview.ui
 
 import com.intellij.openapi.actionSystem.CommonShortcuts
+import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
@@ -27,8 +28,22 @@ object AddCommentPopup {
     /**
      * Opens the box beside the selection of the editor. The Save button hands the text and the
      * share choice to [save]. An empty text stays in the box, and the box states the reason.
+     *
+     * [canPush] is false for a folder store. The box then states that a shared comment reaches
+     * the remote only after the comments move into the git notes.
+     *
+     * [context] opens the box over the component of that context in place of the editor. The
+     * preview side of a split editor holds no editor of its own. A hidden text editor gives no
+     * point on the screen. The box therefore needs the context there.
      */
-    fun show(project: Project, editor: Editor, header: String, save: (String, Boolean) -> Unit) {
+    fun show(
+        project: Project,
+        editor: Editor,
+        header: String,
+        canPush: Boolean = true,
+        context: DataContext? = null,
+        save: (String, Boolean) -> Unit,
+    ) {
         val area = CommentField(project)
         area.setPlaceholder(PLACEHOLDER)
 
@@ -36,8 +51,7 @@ object AddCommentPopup {
             "Share this comment with the remote",
             ReviewSettings.getInstance(project).sharing.shareByDefault,
         )
-        share.toolTipText = "The plugin pushes a shared comment to origin. " +
-            "A comment that you do not share stays in this repository."
+        share.toolTipText = CommentText.shareTooltip(canPush)
 
         val error = JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.NORMAL)
         error.foreground = JBColor.RED
@@ -78,6 +92,6 @@ object AddCommentPopup {
             override fun documentChanged(event: DocumentEvent) = popup.pack(false, true)
         })
         DumbAwareAction.create { commit() }.registerCustomShortcutSet(CommonShortcuts.getCtrlEnter(), panel, popup)
-        popup.showInBestPositionFor(editor)
+        if (context != null) popup.showInBestPositionFor(context) else popup.showInBestPositionFor(editor)
     }
 }

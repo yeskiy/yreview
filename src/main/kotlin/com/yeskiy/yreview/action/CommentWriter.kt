@@ -19,7 +19,8 @@ object CommentWriter {
 
     const val TITLE = "Add Review Comment"
 
-    fun write(project: Project, anchor: ReviewAnchor, target: Target, text: String, share: Boolean) {
+    /** Returns true after the comment reaches the store. A write that fails tells the user. */
+    fun write(project: Project, anchor: ReviewAnchor, target: Target, text: String, share: Boolean): Boolean {
         val firstFolderWrite = anchor.kind == StoreKind.FOLDER &&
             !FolderNoticeLog.getInstance(project).told(anchor.root.path)
         try {
@@ -28,9 +29,10 @@ object CommentWriter {
                 .shareError?.let { ShareFailure.report(project, TITLE, it) }
         } catch (failure: NotesWriteException) {
             Messages.showErrorDialog(project, failure.message ?: "The comment was not written.", TITLE)
-            return
+            return false
         }
         if (firstFolderWrite) tellAboutFolder(project, anchor)
+        return true
     }
 
     /** The folder is new to the user, so the plugin says where the comments went and why. */
