@@ -2,6 +2,7 @@ package com.yeskiy.yreview.toolwindow
 
 import com.intellij.icons.AllIcons
 import com.intellij.ide.CommonActionsManager
+import com.intellij.ide.CopyProvider
 import com.intellij.ide.DefaultTreeExpander
 import com.intellij.ide.OccurenceNavigator
 import com.intellij.ide.actions.NextOccurenceToolbarAction
@@ -17,10 +18,13 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.actionSystem.CommonShortcuts
+import com.intellij.openapi.actionSystem.DataContext
 import com.intellij.openapi.actionSystem.DataSink
 import com.intellij.openapi.actionSystem.DefaultActionGroup
 import com.intellij.openapi.actionSystem.IdeActions
+import com.intellij.openapi.actionSystem.PlatformDataKeys
 import com.intellij.openapi.actionSystem.Separator
+import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
@@ -80,10 +84,13 @@ import com.yeskiy.yreview.bridge.SendMessages
 import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
 import com.yeskiy.yreview.bridge.SendRoutes
+import com.yeskiy.yreview.handoff.CopyPrompt
 import com.yeskiy.yreview.handoff.DoneWatch
 import com.yeskiy.yreview.handoff.GitDir
 import com.yeskiy.yreview.handoff.HandoffFiles
 import com.yeskiy.yreview.handoff.HandoffPrompt
+import com.yeskiy.yreview.handoff.PromptFolder
+import com.yeskiy.yreview.handoff.StoreKind
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.settings.grouping
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
@@ -136,6 +143,14 @@ import javax.swing.tree.TreeSelectionModel
 /** The tasks that went out, and the text the user pastes when the channel is out of reach. */
 private data class SendOutcome(val report: SendReport, val clipboard: String?)
 
+/**
+ * The prompt one copy built, and the folders the plugin could not write.
+ *
+ * A folder in [unwritten] holds no task file and no done file, so the plugin closes no
+ * task of that folder by itself. The prompt says so, and the notice names the folder.
+ */
+private data class CopyOutcome(val text: String, val tasks: Int, val folders: Int, val unwritten: List<String>)
+
 /** The tasks the panel read, the rows they build after the filters run, and the local changes. */
 private data class TreeContent(
     val repositories: List<RepositoryTasks>,
@@ -164,7 +179,27 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private val treeModel = StructureTreeModel(structure, this)
 
-    private val tree = Tree(AsyncTreeModel(treeModel, this))
+    /**
+     * The answer of the tree to the copy key of the keymap.
+     *
+     * The bundled copy action reads this provider out of the data context, so the key the
+     * user bound to a copy reaches the tree. No shortcut lives in this file.
+     */
+    private val treeCopy = object : CopyProvider {
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun performCopy(dataContext: DataContext) = copy()
+
+        override fun isCopyEnabled(dataContext: DataContext): Boolean = target().scope != SendScope.NONE
+
+        override fun isCopyVisible(dataContext: DataContext): Boolean = true
+    }
+
+    private val tree = object : Tree(AsyncTreeModel(treeModel, this)), UiDataProvider {
+
+        override fun uiDataSnapshot(sink: DataSink) = sink.set(PlatformDataKeys.COPY_PROVIDER, treeCopy)
+    }
 
     private val queue = MergingUpdateQueue("y-review-tasks", RELOAD_DELAY, true, this, this, this)
 
@@ -589,6 +624,84 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
     }
 
+    // --- Copy ---
+
+    /**
+     * Puts the chosen tasks in the clipboard, as a prompt an agent outside the IDE reads.
+     *
+     * The copy never takes the channel. It groups the tasks by repository, it writes the
+     * files of the file protocol for every group, then it builds one prompt of every group.
+     * A selection that spans two repositories therefore reaches one agent in one paste.
+     */
+    private fun copy() {
+        val chosen = target().tasks
+        if (chosen.isEmpty()) {
+            ReviewNotice.warn(project, NO_TASK)
+            return
+        }
+        report(
+            ProgressManager.getInstance().runProcessWithProgressSynchronously(
+                ThrowableComputable<CopyOutcome, RuntimeException> { collect(chosen) },
+                "Copying the Review Tasks",
+                true,
+                project,
+            )
+        )
+    }
+
+    private fun report(outcome: CopyOutcome) {
+        CopyPasteManager.copyTextToClipboard(outcome.text)
+        val head = "The clipboard holds ${TaskLabels.count(outcome.tasks, "task")} of " +
+            "${TaskLabels.count(outcome.folders, "folder")}."
+        if (outcome.unwritten.isEmpty()) {
+            ReviewNotice.say(project, head)
+            return
+        }
+        ReviewNotice.warn(
+            project,
+            "$head The plugin wrote no task file for ${outcome.unwritten.joinToString(", ")}, " +
+                "so it closes no task of that folder by itself. The prompt asks the agent to answer instead.",
+        )
+    }
+
+    /**
+     * Groups the tasks by repository and writes the files of every group.
+     *
+     * The order of the groups follows the tree, because [groupBy] keeps the key of the
+     * first task of each group. This method reads git, so the caller runs it under a
+     * progress window and off the user interface thread.
+     */
+    private fun collect(tasks: List<ReviewTask>): CopyOutcome {
+        val folders = tasks.groupBy { it.rootPath }.map { (root, group) -> folderOf(root, group) }
+        return CopyOutcome(
+            CopyPrompt.of(folders),
+            tasks.size,
+            folders.size,
+            folders.filter { !it.written }.map { it.name },
+        )
+    }
+
+    /**
+     * One group of the prompt.
+     *
+     * A repository that left the project between the scan and the copy keeps its tasks in
+     * the prompt, because the work is still real. That group carries no path of a done
+     * file, so the prompt asks the agent to name the finished identifiers in its answer.
+     */
+    private fun folderOf(root: String, tasks: List<ReviewTask>): PromptFolder {
+        val repository = repositories.firstOrNull { it.root.path == root }
+        val files = repository?.let { writeFiles(it, tasks) }
+        return PromptFolder(
+            store = StoreKind.GIT,
+            name = root.substringAfterLast('/'),
+            root = root,
+            done = files?.done?.toString()?.replace('\\', '/').orEmpty(),
+            commit = repository?.commit.orEmpty(),
+            tasks = tasks,
+            written = files != null,
+        )
+    }
+
     // --- Resolve ---
 
     private fun resolveSelected() {
@@ -821,6 +934,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             ResolveAction(),
             DeleteAction(),
             SendAction(),
+            CopyAction(),
         )
     }
 
@@ -830,6 +944,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         return DefaultActionGroup(
             listOfNotNull(
                 SendAction(),
+                CopyAction(),
                 ResolveAction(),
                 DeleteAction(),
                 Separator.getInstance(),
@@ -1151,6 +1266,31 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
 
         override fun actionPerformed(event: AnActionEvent) = send()
+    }
+
+    /**
+     * The copy button of the toolbar.
+     *
+     * The button stays on the toolbar at every moment. A tree with no open task disables
+     * it, and the button then says what it would copy.
+     */
+    private inner class CopyAction : AnAction(
+        "Copy for an Agent",
+        "Copy the checked tasks to the clipboard, as a prompt for an agent.",
+        AllIcons.Actions.Copy,
+    ) {
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.EDT
+
+        override fun update(event: AnActionEvent) {
+            val target = target()
+            event.presentation.text = target.copyText
+            event.presentation.description = target.copyDescription
+            event.presentation.isVisible = true
+            event.presentation.isEnabled = target.scope != SendScope.NONE
+        }
+
+        override fun actionPerformed(event: AnActionEvent) = copy()
     }
 
     companion object {

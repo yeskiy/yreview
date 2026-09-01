@@ -14,6 +14,21 @@ class AgentGuideTest {
     }
 
     @Test
+    fun `carries the shared rules whole`() {
+        assertTrue(AgentGuide.TEXT.contains(AgentGuide.RULES), "the file and the prompt read different rules")
+    }
+
+    @Test
+    fun `opens with the title the clipboard prompt uses`() {
+        assertEquals(AgentGuide.TITLE, AgentGuide.TEXT.lineSequence().first())
+    }
+
+    @Test
+    fun `names no single folder in the shared rules`() {
+        assertTrue(!AgentGuide.RULES.contains("this folder"), "the rules of every folder name one folder")
+    }
+
+    @Test
     fun `names the two files the plugin writes`() {
         assertTrue(AgentGuide.TEXT.contains("tasks.json"))
         assertTrue(AgentGuide.TEXT.contains("done.txt"))

@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
 
 /**
  * The three files of the file protocol, inside the git directory of one repository.
@@ -27,6 +28,17 @@ class HandoffFiles(val folder: Path) {
         Files.createDirectories(folder)
         replace(guide, AgentGuide.TEXT + "\n")
         replace(tasks, TaskJson.encode(document) + "\n")
+        open(done)
+    }
+
+    /**
+     * Makes an empty done file when there is none.
+     *
+     * The plugin names this path in the prompt, so the path has to open. The call writes
+     * no byte, and a file that already holds the lines of an agent keeps every one of them.
+     */
+    private fun open(target: Path) {
+        Files.newOutputStream(target, StandardOpenOption.CREATE, StandardOpenOption.APPEND).close()
     }
 
     private fun replace(target: Path, text: String) {

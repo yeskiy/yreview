@@ -6,6 +6,7 @@ import com.yeskiy.yreview.tasks.TaskKind
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.readText
+import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -72,7 +73,7 @@ class HandoffFilesTest {
     fun `leaves no temporary file behind`() {
         withFolder { folder ->
             HandoffFiles(folder).write(document())
-            assertEquals(2, folder.toFile().listFiles()?.size)
+            assertEquals(3, folder.toFile().listFiles()?.size)
         }
     }
 
@@ -84,11 +85,23 @@ class HandoffFilesTest {
     }
 
     @Test
-    fun `never writes the done file`() {
+    fun `makes an empty done file`() {
         withFolder { folder ->
             val files = HandoffFiles(folder)
             files.write(document())
-            assertFalse(Files.exists(files.done))
+            assertTrue(Files.isRegularFile(files.done))
+            assertEquals("", files.done.readText())
+        }
+    }
+
+    @Test
+    fun `keeps every line an agent already wrote`() {
+        withFolder { folder ->
+            val files = HandoffFiles(folder)
+            files.write(document())
+            files.done.writeText("firstTask\n")
+            files.write(document())
+            assertEquals("firstTask\n", files.done.readText())
         }
     }
 }

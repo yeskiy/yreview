@@ -25,6 +25,27 @@ data class SendTarget(val scope: SendScope, val tasks: List<ReviewTask>) {
                 "No row is checked, so the whole tree goes out. It holds ${TaskLabels.count(tasks.size, "task")}."
             SendScope.NONE -> "This project has no open review task."
         }
+
+    /** The words of the copy button. The copy takes the same rows the send takes. */
+    val copyText: String
+        get() = when (scope) {
+            SendScope.CHECKED -> "Copy Checked (${tasks.size})"
+            SendScope.SELECTED -> "Copy Selected (${tasks.size})"
+            SendScope.ALL -> "Copy All (${tasks.size})"
+            SendScope.NONE -> "Copy for an Agent"
+        }
+
+    val copyDescription: String
+        get() = when (scope) {
+            SendScope.CHECKED ->
+                "Copy the ${TaskLabels.count(tasks.size, "checked task")} to the clipboard, as a prompt for an agent."
+            SendScope.SELECTED ->
+                "Copy the ${TaskLabels.count(tasks.size, "selected row")} to the clipboard, as a prompt for an agent."
+            SendScope.ALL ->
+                "No row is checked, so the whole tree goes to the clipboard. " +
+                    "It holds ${TaskLabels.count(tasks.size, "task")}."
+            SendScope.NONE -> "This project has no open review task."
+        }
 }
 
 /**

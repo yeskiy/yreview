@@ -5,20 +5,26 @@ package com.yeskiy.yreview.handoff
  *
  * The rules live here, so the clipboard text stays short. The plugin writes this file on
  * every send, and the text never changes between two sends.
+ *
+ * [RULES] names no single folder, so the clipboard prompt of several repositories reads
+ * the same rules. [TEXT] puts the header of one repository in front of them.
  */
 object AgentGuide {
 
     const val FILE_NAME = "AGENT.md"
 
-    val TEXT: String = """
-        # How to work through the review tasks
+    const val TITLE = "# How to work through the review tasks"
 
-        This folder holds the open tasks of one repository. The plugin of the IDE writes
-        the tasks. You read them, you do the work, then you report every task you finish.
-
+    /**
+     * The rules that hold for every review folder.
+     *
+     * A prompt that carries the tasks of two repositories reads this text once, then it
+     * names the folder of each group beside the tasks of that group.
+     */
+    val RULES: String = """
         ## Where the tasks are
 
-        Read `tasks.json` in this folder. The file holds one JSON object.
+        Every review folder holds a `tasks.json` file. The file holds one JSON object.
 
         - `repository` is the path of the repository.
         - `commit` is the git commit the tasks belong to.
@@ -43,7 +49,7 @@ object AgentGuide {
         ## How to finish a task of the kind comment
 
         1. Make the change the `text` asks for.
-        2. Append the `id` of the task to `done.txt` in this folder.
+        2. Append the `id` of the task to the `done.txt` file of the folder that holds the task.
         3. Write one identifier on one line.
 
         The plugin reads the new lines, then it marks the comment as resolved.
@@ -52,7 +58,7 @@ object AgentGuide {
 
         1. Do the work the comment line asks for.
         2. Remove that comment line from the source file.
-        3. Append the `id` of the task to `done.txt`.
+        3. Append the `id` of the task to the `done.txt` file of the folder that holds the task.
 
         The plugin reads the source file again. The plugin reports a task that is still in
         the source.
@@ -63,4 +69,11 @@ object AgentGuide {
         in that file. The plugin picks up every new line by itself. You do not run a git
         command, and you do not edit a git note.
     """.trimIndent()
+
+    val TEXT: String = """
+        $TITLE
+
+        This folder holds the open tasks of one repository. The plugin of the IDE writes
+        the tasks. You read them, you do the work, then you report every task you finish.
+    """.trimIndent() + "\n\n" + RULES
 }
