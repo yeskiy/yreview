@@ -44,6 +44,8 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.Condition
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.ThrowableComputable
+import com.intellij.dvcs.repo.VcsRepositoryManager
+import com.intellij.dvcs.repo.VcsRepositoryMappingListener
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
 import com.intellij.openapi.vcs.VcsMappingListener
 import com.intellij.openapi.vcs.changes.Change
@@ -278,6 +280,19 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         subscribe()
         showState()
         BridgeService.getInstance(project).startLater()
+        scheduleReload()
+    }
+
+    /**
+     * Reads the scope again when the tab reaches the screen.
+     *
+     * A panel starts before the project holds its repositories, so the first read of a tab
+     * that nobody opened yet can find none. The tab then names an empty scope, and only the
+     * refresh button corrects it. A tab that reaches the screen therefore reads the scope
+     * again.
+     */
+    override fun addNotify() {
+        super.addNotify()
         scheduleReload()
     }
 
@@ -891,6 +906,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         val onProject = project.messageBus.connect(this)
         onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener { scheduleReload() })
         onProject.subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { scheduleReload() })
+        onProject.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { scheduleReload() })
         onProject.subscribe(TodoConfiguration.PROPERTY_CHANGE, PropertyChangeListener { scheduleReload() })
         onProject.subscribe(DumbService.DUMB_MODE, IndexWatch())
         if (scope == TaskScope.CURRENT_FILE) {
