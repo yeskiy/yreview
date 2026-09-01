@@ -184,7 +184,7 @@ tool window.
 
 ## Pull requests
 
-1. Fork the repository and branch from `master`.
+1. Fork the repository and branch from `main`.
 2. Name the branch after the work, for example `fix/gutter-icon-on-empty-file`.
 3. Keep one purpose per pull request.
 4. Run `./gradlew test :channel-server:test verifyPlugin` before you open it.

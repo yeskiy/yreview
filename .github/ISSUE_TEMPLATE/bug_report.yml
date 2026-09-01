@@ -12,7 +12,7 @@ body:
         numbers takes much longer to answer.
 
         Do not report a security weakness here. Read
-        [SECURITY.md](https://github.com/yeskiy/y-review/blob/master/SECURITY.md) instead.
+        [SECURITY.md](https://github.com/yeskiy/y-review/blob/main/SECURITY.md) instead.
 
   - type: checkboxes
     id: checks

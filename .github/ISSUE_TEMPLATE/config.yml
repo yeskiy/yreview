@@ -14,5 +14,5 @@ contact_links:
     about: The same private form carries a report about the behavior of a person.
 
   - name: How to build and contribute
-    url: https://github.com/yeskiy/y-review/blob/master/CONTRIBUTING.md
+    url: https://github.com/yeskiy/y-review/blob/main/CONTRIBUTING.md
     about: Read this before you open a pull request.
