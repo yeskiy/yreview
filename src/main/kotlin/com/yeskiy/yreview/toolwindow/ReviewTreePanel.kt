@@ -44,6 +44,8 @@ import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.util.Condition
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.ThrowableComputable
+import com.intellij.openapi.vcs.ProjectLevelVcsManager
+import com.intellij.openapi.vcs.VcsMappingListener
 import com.intellij.openapi.vcs.changes.Change
 import com.intellij.openapi.vcs.changes.ChangeList
 import com.intellij.openapi.vcs.changes.ChangeListListener
@@ -888,6 +890,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun subscribe() {
         val onProject = project.messageBus.connect(this)
         onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener { scheduleReload() })
+        onProject.subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { scheduleReload() })
         onProject.subscribe(TodoConfiguration.PROPERTY_CHANGE, PropertyChangeListener { scheduleReload() })
         onProject.subscribe(DumbService.DUMB_MODE, IndexWatch())
         if (scope == TaskScope.CURRENT_FILE) {
