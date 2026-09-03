@@ -1,6 +1,6 @@
-# Y-Review
+# Yreview
 
-Y-Review writes code review comments on any line of the editor and on any line of a diff,
+Yreview writes code review comments on any line of the editor and on any line of a diff,
 inside IntelliJ IDEA. It stores each comment as a git note in your own repository, in the
 git-appraise format, so a comment travels with the code and needs no server and no account.
 It also lists every open comment and every TODO item of the project in one tool window, and
@@ -39,7 +39,7 @@ resolved.
 
 ## Where the comments are stored
 
-This is the part to read before you install the plugin. Y-Review writes into your git
+This is the part to read before you install the plugin. Yreview writes into your git
 repository. It writes git notes, and it never writes a commit and never touches a file of
 your working tree.
 
@@ -55,6 +55,18 @@ your working tree.
 [git-appraise](https://github.com/google/git-appraise), so the `git appraise` tool reads
 the same notes. A local comment sits in a ref of this plugin, and no push command of this
 plugin ever names it.
+
+### A file outside a git repository
+
+A file that no git repository covers still takes a comment. The plugin then writes a
+`.y-review` folder in the project folder, or in the content root that holds the file. That
+folder holds one directory per note ref, and one line of a file holds one record, in the
+format below.
+
+The plugin moves those records into the git notes as soon as a git repository covers the
+folder. It then puts the old folder at `<git directory>/y-review/migrated-<milliseconds>`,
+and it says so in a balloon. A file that an inner repository covers always goes to the notes
+of that repository, and never to the folder.
 
 ### The record
 
@@ -110,6 +122,8 @@ git notes --ref refs/notes/devtools/discuss show <commit>
 |---|---|---|
 | `refs/notes/y-review/local` | A local comment | You write a local comment |
 | `refs/notes/devtools/discuss` | A shared comment | You write a shared comment |
+| `<folder root>/.y-review/notes/` | A comment of a file that no git repository covers | You write a comment outside a repository |
+| `<git directory>/y-review/migrated-<milliseconds>` | The folder store, after the records reach the git notes | A git repository starts to cover a folder store |
 | `remote.<name>.fetch` in the git configuration | The line `+refs/notes/devtools/*:refs/notes/devtools/*`, added once | The first time you share a comment |
 | A push to your git remote | The shared note ref only | You write a shared comment |
 | `<git directory>/y-review/AGENT.md` | The rules an agent reads | Every send |
@@ -169,7 +183,7 @@ The plugin depends on the bundled Git plugin. It needs no Node.js and no account
 ## Install
 
 **From the JetBrains Marketplace.** Open Settings, Plugins, Marketplace. Search for
-`Y-Review`. Press Install, then restart the IDE.
+`Yreview`. Press Install, then restart the IDE.
 
 **From an archive.** Download `y-review-<version>.zip` from the
 [releases page](https://github.com/yeskiy/y-review/releases). Open Settings, Plugins, press
@@ -185,7 +199,7 @@ The archive lands in `build/distributions/`.
 
 ## Settings
 
-Open Settings, Tools, Y-Review.
+Open Settings, Tools, Yreview.
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -205,7 +219,7 @@ Two more pages carry settings of this plugin.
 The tool window toolbar holds the per-tab view state: group by module, group by directory,
 flatten the directories, the preview pane, and the kind filter.
 
-<!-- SCREENSHOT: the settings page at Settings, Tools, Y-Review. -->
+<!-- SCREENSHOT: the settings page at Settings, Tools, Yreview. -->
 
 ## Privacy
 

@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to Y-Review are written in this file.
+All notable changes to Yreview are written in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -16,9 +16,14 @@ public version had.
   in the editor context menu, in the intention list, and on the shortcut Control Shift G.
 - Write a review comment on either side of a diff. The plugin resolves the revision of the
   side you clicked, so the comment holds the commit it belongs to.
+- Add the Add Review Comment action to the context menu of the Markdown preview. A comment
+  then starts from the rendered side of a split editor.
 - Store every comment as a git note. A shared comment goes to
   `refs/notes/devtools/discuss` in the git-appraise format. A local comment stays in
   `refs/notes/y-review/local` and never leaves the machine.
+- Store a comment in a `.y-review` folder when no git repository covers the file. The
+  plugin moves those comments into the git notes as soon as a repository appears. A file
+  that an inner repository covers always goes to the notes of that repository.
 - Choose the ref of one comment in the add-comment box, or set the default in the settings.
 - Push a shared note to a git remote, and add the notes fetch refspec to the git
   configuration once, so the notes of other people come back with the next fetch.
