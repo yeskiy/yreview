@@ -8,15 +8,15 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Disposer
+import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.openapi.wm.ToolWindow
-import com.intellij.terminal.JBTerminalWidget
-import com.intellij.terminal.ui.TerminalWidget
+import com.intellij.terminal.frontend.view.TerminalViewSessionState
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.settings.ReviewSettings
-import org.jetbrains.plugins.terminal.ShellTerminalWidget
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.nio.file.Path
 import javax.swing.JPanel
@@ -33,9 +33,10 @@ import javax.swing.JTextArea
  * state. A new start drops the dead terminal and mounts a new one. The empty state with
  * the bridge status shows before the first session of the project only.
  *
- * The state follows the process behind the terminal, not the terminal widget. Two signals
- * report the end, and each one alone is enough. The first signal is the exit of the
- * process. The second signal is the termination callback of the widget.
+ * The state follows the session behind the terminal, not the component on screen. Two
+ * paths report the end, and each one alone is enough. The first path is the state flow of
+ * the view, which turns to Terminated when the process exits. The second path is a press
+ * on Stop, which ends the session before that flow can report it.
  */
 class ClaudeSessionPanel(
     private val project: Project,
@@ -45,11 +46,11 @@ class ClaudeSessionPanel(
     private val status = statusArea()
     private val idle = JBPanelWithEmptyText(BorderLayout()).apply { add(status, BorderLayout.SOUTH) }
 
-    /** The widget on screen. It stays after the session ends, because the output stays. */
-    private var terminal: TerminalWidget? = null
+    /** The tab on screen. It stays after the session ends, because the output stays. */
+    private var terminal: ReviewSession? = null
 
-    /** The widget of the running session. It becomes null the moment the session ends. */
-    private var session: TerminalWidget? = null
+    /** The tab of the running session. It becomes null the moment the session ends. */
+    private var session: ReviewSession? = null
 
     /** True between the press on Start and the mount of the terminal. */
     private var starting = false
@@ -61,7 +62,10 @@ class ClaudeSessionPanel(
         showIdle(NO_SESSION, AUTO_START)
     }
 
-    override fun dispose() = dropConfig()
+    override fun dispose() {
+        dropConfig()
+        terminal?.close()
+    }
 
     val isRunning: Boolean
         get() = session != null
@@ -70,8 +74,8 @@ class ClaudeSessionPanel(
 
     /**
      * The tool window opens the first session through this method, because a fresh panel
-     * can hold no size yet. The terminal runner reads the size of its component, so a
-     * session that starts too early gets 80 columns by 24 rows.
+     * can hold no size yet. The terminal then mounts into a panel that already holds a
+     * size, so the first paint of the session shows the whole window.
      */
     fun startWhenSized() = SizeGate.run(this) { start() }
 
@@ -149,7 +153,7 @@ class ClaudeSessionPanel(
         val written = writeConfig(bridge, server, javaPath)
         configFile = written
         val plan = SessionPlan.of(basePath, bridge, settings().claudeCommand, server, javaPath, written?.toString())
-        val started = ReviewTerminal.open(project, plan, this)
+        val started = ReviewTerminal.open(project, plan)
         if (started == null) {
             dropConfig()
             return failed(NO_TERMINAL)
@@ -158,50 +162,42 @@ class ClaudeSessionPanel(
         remove(idle)
         terminal = started
         session = started
-        started.addTerminationCallback(Runnable { onTermination(started) }, jediTerm(started) ?: this)
         watch(started)
-        add(started.component, BorderLayout.CENTER)
+        add(started.view.component, BorderLayout.CENTER)
         toolWindow.setTitle(RUNNING_TITLE)
-        // The layout runs now, and not on the next pass of the event queue. The terminal
-        // runner waits two seconds for a real size, then it falls back to 80 by 24. A
-        // session that starts larger than the window pushes its first lines into the
-        // history buffer, and the scroll bar of the terminal appears.
-        validate()
+        revalidate()
         repaint()
-        started.requestFocus()
+        IdeFocusManager.getInstance(project).requestFocus(started.view.preferredFocusableComponent, true)
     }
 
     /**
-     * Follows the process behind the terminal. The terminal gets its connector after the
-     * session opens, so the accessor holds this call until the connector exists. The
-     * wrapper shell carries no flag that keeps it alive, so it exits with the agent. The
-     * exit callback runs on a pooled thread, and [onTermination] moves the work to the
-     * user interface thread.
+     * Follows the session behind the terminal. The view reports Terminated after the
+     * process exits. The wrapper shell carries no flag that keeps it alive, so it exits
+     * with the agent. The collector runs on the scope of the view, so a dispose of the tab
+     * ends it, and [onTermination] moves the work to the user interface thread.
      */
-    private fun watch(started: TerminalWidget) =
-        started.ttyConnectorAccessor.executeWithTtyConnector { connector ->
-            ShellTerminalWidget.getProcessTtyConnector(connector)?.process?.let { process ->
-                thisLogger().info("The review session runs under process ${process.pid()}.")
-                process.onExit().thenRun { onTermination(started) }
-            }
-        }
+    private fun watch(started: ReviewSession) = started.view.coroutineScope.launch {
+        started.view.sessionState.first { it == TerminalViewSessionState.Terminated }
+        onTermination(started)
+    }
 
     /**
-     * The connector close reaches the destroy call of the process. The widget stays alive,
-     * so the last output of the session stays on screen. A second press does nothing.
+     * The close of the session ends the process. The terminal keeps its editors while
+     * the component is on screen, so the last output stays readable. A second press does
+     * nothing.
      */
     fun stop() {
         val live = session ?: return
-        jediTerm(live)?.ttyConnector?.close()
+        live.close()
         endSession()
     }
 
     /**
-     * Both signals of the end arrive here, and neither one runs on the user interface
-     * thread. The first signal ends the session. A later signal finds no session of
-     * [ended], and it changes nothing. A new start can also outrun a late signal.
+     * The end of the process arrives here, and it does not run on the user interface
+     * thread. A report that finds no session of [ended] changes nothing, so a press on
+     * Stop can end the session first, and a new start can outrun a late report.
      */
-    private fun onTermination(ended: TerminalWidget) = ApplicationManager.getApplication().invokeLater {
+    private fun onTermination(ended: ReviewSession) = ApplicationManager.getApplication().invokeLater {
         if (session === ended) endSession()
     }
 
@@ -212,19 +208,13 @@ class ClaudeSessionPanel(
     }
 
     /**
-     * The widget close stops the emulator and the terminal panel. The connector close makes
-     * sure that the operating system process is gone.
+     * The component leaves the panel first. The close of the session then ends it, and
+     * the terminal releases its editors, because the component is off screen.
      */
-    private fun drop(widget: TerminalWidget) {
-        remove(widget.component)
-        val jedi = jediTerm(widget) ?: return
-        Disposer.dispose(jedi)
-        jedi.ttyConnector?.close()
+    private fun drop(ended: ReviewSession) {
+        remove(ended.view.component)
+        ended.close()
     }
-
-    /** The widget of the terminal, not the bridge in front of it. The bridge closes nothing. */
-    private fun jediTerm(widget: TerminalWidget): JBTerminalWidget? =
-        JBTerminalWidget.asJediTermWidget(widget)
 
     private fun failed(headline: String) {
         starting = false

@@ -32,6 +32,9 @@ dependencies {
         // intellij.platform.collaborationTools holds icons.CollaborationToolsIcons,
         // the speech bubble that the bundled pull request plugins paint in the gutter.
         bundledModule("intellij.platform.collaborationTools")
+        // intellij.terminal.frontend holds TerminalToolWindowTabsManager and TerminalView,
+        // the reworked terminal engine that the session window runs on.
+        bundledModule("intellij.terminal.frontend")
     }
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     testImplementation(kotlin("test"))
