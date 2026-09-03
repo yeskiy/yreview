@@ -224,6 +224,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private val preview = CommentPreviewPanel(project)
 
+    private val previewTicket = PreviewTicket()
+
     private val scopeChooser: ScopeChooserCombo? =
         if (scope == TaskScope.SCOPE_BASED) {
             ScopeChooserCombo(project, false, true, settings.tab(scope).scopeId)
@@ -837,9 +839,15 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         if (state) updatePreview()
     }
 
-    /** A folder row and the root row carry every task under them, so the pane fills up too. */
+    /**
+     * A folder row and the root row carry every task under them, so the pane fills up too.
+     *
+     * The read of the store runs on a pooled thread, so a later read can answer first. Each
+     * read takes a ticket, and only the answer of the newest ticket reaches the pane.
+     */
     private fun updatePreview() {
         if (!tab().showPreview) return
+        val ticket = previewTicket.start()
         val task = TaskChoice.previewTask(selectedTasks(), allTasks())
         if (task == null) {
             preview.showComment(null)
@@ -851,8 +859,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             val found = ReadAction.nonBlocking<List<UsageInfo>> { usages(task) }.executeSynchronously()
             val comment = CommentPreviewPanel.commentOf(project, task)
             ApplicationManager.getApplication().invokeLater({
-                preview.showComment(comment)
-                preview.updateLayout(project, found)
+                if (previewTicket.current(ticket)) {
+                    preview.showComment(comment)
+                    preview.updateLayout(project, found)
+                }
             }, project.disposed)
         }
     }
