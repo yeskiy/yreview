@@ -1,6 +1,7 @@
 package com.yeskiy.yreview.toolwindow
 
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.ComponentInlayAlignment
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.Inlay
@@ -15,6 +16,8 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.usages.impl.UsagePreviewPanel
 import com.yeskiy.yreview.gutter.CommentIndex
+import com.yeskiy.yreview.store.REVIEW_COMMENTS
+import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.tasks.ReviewTask
@@ -33,6 +36,10 @@ data class PreviewComment(val root: VirtualFile, val stored: StoredComment)
  *
  * The card of this pane takes no handler, so the card carries no button. The pane reads a
  * comment back, and the card of the file editor keeps the controls.
+ *
+ * The pane also follows every write to the store. It reads the record of its card again
+ * after a write, then it removes the card when the store no longer holds that record. A
+ * delete removes the record, and a resolve closes it.
  */
 class CommentPreviewPanel(private val project: Project) :
     UsagePreviewPanel(project, UsageViewPresentation()) {
@@ -42,6 +49,10 @@ class CommentPreviewPanel(private val project: Project) :
     private var card: Inlay<*>? = null
 
     private var wanted: PreviewComment? = null
+
+    init {
+        project.messageBus.connect(this).subscribe(REVIEW_COMMENTS, ReviewCommentListener { recheck() })
+    }
 
     /** Names the comment the pane shows. A null value clears the card. */
     fun showComment(comment: PreviewComment?) {
@@ -59,6 +70,37 @@ class CommentPreviewPanel(private val project: Project) :
         live = null
         wanted = null
         super.dispose()
+    }
+
+    /**
+     * Reads the record of the card again after a write to the store.
+     *
+     * The read runs git, so it runs on a pooled thread. A pane that holds no card reads
+     * nothing, so a write beside an empty pane costs one comparison.
+     */
+    private fun recheck() {
+        val asked = wanted ?: return
+        ApplicationManager.getApplication().executeOnPooledThread {
+            if (project.isDisposed || isDisposed) return@executeOnPooledThread
+            openOf(asked)?.let { open ->
+                ApplicationManager.getApplication().invokeLater({ settle(asked, open) }, project.disposed)
+            }
+        }
+    }
+
+    /** The open records of the note behind the card, or null when the read of the store failed. */
+    private fun openOf(comment: PreviewComment): List<StoredComment>? = try {
+        ReviewService.getInstance(project).bookForRoot(comment.root).open(comment.stored.commit)
+    } catch (failure: Exception) {
+        logger.warn("the review preview pane could not read the comments again", failure)
+        null
+    }
+
+    /** Draws the answer of [CardChoice]. An answer that belongs to an older card changes nothing. */
+    private fun settle(asked: PreviewComment, open: List<StoredComment>) {
+        if (isDisposed || wanted != asked) return
+        val move = CardChoice.after(asked.stored, open)
+        if (move.redraw) showComment(move.comment?.let { PreviewComment(asked.root, it) })
     }
 
     /** The pane finishes its own layout first, so the card waits for the next round of events. */
@@ -100,6 +142,8 @@ class CommentPreviewPanel(private val project: Project) :
         comment.stored.comment.location?.let { "${comment.root.path}/${it.path}" }
 
     companion object {
+
+        private val logger = logger<CommentPreviewPanel>()
 
         /** The record behind a comment row. The lookup runs git, so the caller stays off the user interface thread. */
         fun commentOf(project: Project, task: ReviewTask): PreviewComment? {
