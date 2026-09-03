@@ -68,7 +68,7 @@ body:
     id: plugin-version
     attributes:
       label: Plugin version
-      description: Read it in Settings, Plugins, Installed, Y-Review.
+      description: Read it in Settings, Plugins, Installed, Yreview.
       placeholder: 1.0.0
     validations:
       required: true

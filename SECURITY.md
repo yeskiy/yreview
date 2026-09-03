@@ -1,6 +1,6 @@
 # Security policy
 
-Y-Review reads a git repository, writes git notes into it, opens a port on the loopback
+Yreview reads a git repository, writes git notes into it, opens a port on the loopback
 interface, and starts an agent process. A weakness in this plugin therefore reaches the
 source code of a user. Please report one in private, and please report one even when you
 are not sure that it is real.

@@ -9,5 +9,5 @@ package com.yeskiy.yreview.settings
  */
 object ProductName {
 
-    const val TEXT = "Y-Review"
+    const val TEXT = "Yreview"
 }

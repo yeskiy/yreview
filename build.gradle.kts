@@ -47,10 +47,16 @@ kotlin {
 intellijPlatform {
     pluginConfiguration {
         id = "com.yeskiy.yreview"
-        name = "Y-Review"
+        name = "Yreview"
         version = project.version.toString()
         ideaVersion {
             sinceBuild = "262"
+        }
+    }
+
+    pluginVerification {
+        ides {
+            recommended()
         }
     }
 }
