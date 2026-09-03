@@ -29,7 +29,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val command = JBTextField()
 
-    override fun getDisplayName(): String = "Review Comments"
+    override fun getDisplayName(): String = ProductName.TEXT
 
     override fun createComponent(): JComponent {
         choice.renderer = textListCellRenderer<CommentSharing> { it.label }

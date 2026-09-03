@@ -1,6 +1,6 @@
 <idea-plugin>
   <id>com.yeskiy.yreview</id>
-  <name>Y Review</name>
+  <name>Y-Review</name>
   <vendor>yeskiy</vendor>
   <description><![CDATA[
     Write review comments on any line, in the editor and in the diff.
@@ -23,7 +23,7 @@
     <intentionAction>
       <language />
       <className>com.yeskiy.yreview.action.AddCommentIntention</className>
-      <category>Review comments</category>
+      <category>Y-Review</category>
       <skipBeforeAfter>true</skipBeforeAfter>
     </intentionAction>
 
@@ -34,14 +34,14 @@
     <postStartupActivity implementation="com.yeskiy.yreview.bridge.BridgeStartup" />
     <postStartupActivity implementation="com.yeskiy.yreview.settings.MaximizeStartup" />
 
-    <toolWindow id="Review Comments" anchor="bottom" icon="/icons/yReviewComments.svg"
+    <toolWindow id="Y-Review" anchor="bottom" icon="/icons/yReviewComments.svg"
                 factoryClass="com.yeskiy.yreview.toolwindow.ReviewToolWindowFactory" />
 
-    <notificationGroup id="Y Review" displayType="BALLOON" />
+    <notificationGroup id="Y-Review" displayType="BALLOON" />
 
     <projectConfigurable parentId="tools"
                          id="com.yeskiy.yreview.settings"
-                         displayName="Review Comments"
+                         displayName="Y-Review"
                          nonDefaultProject="true"
                          instance="com.yeskiy.yreview.settings.ReviewConfigurable" />
   </extensions>

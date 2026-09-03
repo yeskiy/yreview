@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import com.yeskiy.yreview.gutter.CommentGutter
+import com.yeskiy.yreview.settings.ProductName
 import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
@@ -14,7 +15,7 @@ class AddCommentIntention : IntentionAction {
 
     override fun getText(): String = "Add review comment"
 
-    override fun getFamilyName(): String = "Review comments"
+    override fun getFamilyName(): String = ProductName.TEXT
 
     override fun startInWriteAction(): Boolean = false
 

@@ -1,6 +1,8 @@
 package com.yeskiy.yreview
 
+import com.yeskiy.yreview.settings.ProductName
 import com.yeskiy.yreview.settings.SessionWindow
+import com.yeskiy.yreview.ui.ReviewNotice
 import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -92,5 +94,50 @@ class PluginDescriptorTest {
             "the settings page shows and hides the window by this identifier"
         )
         assertEquals("Claude Review", SessionWindow.ID)
+    }
+
+    @Test
+    fun `the plugin carries the product name`() {
+        assertTrue(
+            plugin.contains("<name>${ProductName.TEXT}</name>"),
+            "the plugin list of the IDE shows this name"
+        )
+    }
+
+    @Test
+    fun `the settings page carries the product name`() {
+        assertTrue(
+            plugin.contains("displayName=\"${ProductName.TEXT}\""),
+            "the settings tree and ReviewConfigurable must show one name"
+        )
+    }
+
+    @Test
+    fun `the review tool window carries the product name`() {
+        assertTrue(
+            plugin.contains("<toolWindow id=\"${ProductName.TEXT}\""),
+            "the stripe shows this identifier, because the window sets no stripe title"
+        )
+    }
+
+    @Test
+    fun `the intention group carries the product name`() {
+        assertTrue(
+            plugin.contains("<category>${ProductName.TEXT}</category>"),
+            "the intention list and AddCommentIntention must show one name"
+        )
+    }
+
+    /**
+     * The identifier of the notification group is a key, and no compiler compares the two
+     * places that hold it. A group that the descriptor does not register gives no balloon.
+     */
+    @Test
+    fun `the notification group identifier matches the code that asks for it`() {
+        assertTrue(
+            plugin.contains("<notificationGroup id=\"${ReviewNotice.GROUP}\""),
+            "the descriptor registers the group, and ReviewNotice asks for it by this identifier"
+        )
+        assertEquals(ProductName.TEXT, ReviewNotice.GROUP)
     }
 }

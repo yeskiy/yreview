@@ -12,7 +12,7 @@ import javax.swing.Icon
 /** The page under Settings, Editor, Color Scheme that holds the colors of the review marks. */
 class ReviewColorsPage : ColorSettingsPage {
 
-    override fun getDisplayName(): String = "Review Comments"
+    override fun getDisplayName(): String = ProductName.TEXT
 
     override fun getIcon(): Icon? = null
 

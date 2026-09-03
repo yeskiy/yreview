@@ -47,7 +47,7 @@ kotlin {
 intellijPlatform {
     pluginConfiguration {
         id = "com.yeskiy.yreview"
-        name = "Y Review"
+        name = "Y-Review"
         version = project.version.toString()
         ideaVersion {
             sinceBuild = "262"

@@ -6,7 +6,7 @@ import com.intellij.openapi.editor.colors.TextAttributesKey
 /**
  * The colors of the review marks. Every color comes from the color scheme of the IDE, so a new
  * theme repaints the marks. The user sets another color in Settings, Editor, Color Scheme,
- * Review Comments.
+ * Y-Review.
  */
 object ReviewColors {
 
