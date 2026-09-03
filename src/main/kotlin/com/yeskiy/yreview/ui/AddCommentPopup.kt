@@ -88,9 +88,12 @@ object AddCommentPopup {
 
         saveButton.addActionListener { commit() }
         closeButton.addActionListener { popup.cancel() }
-        area.document.addDocumentListener(object : DocumentListener {
-            override fun documentChanged(event: DocumentEvent) = popup.pack(false, true)
-        })
+        area.document.addDocumentListener(
+            object : DocumentListener {
+                override fun documentChanged(event: DocumentEvent) = popup.pack(false, true)
+            },
+            popup,
+        )
         DumbAwareAction.create { commit() }.registerCustomShortcutSet(CommonShortcuts.getCtrlEnter(), panel, popup)
         if (context != null) popup.showInBestPositionFor(context) else popup.showInBestPositionFor(editor)
     }
