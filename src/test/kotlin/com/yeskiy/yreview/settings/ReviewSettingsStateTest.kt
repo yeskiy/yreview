@@ -92,14 +92,14 @@ class ReviewSettingsStateTest {
         // A file of an earlier version still holds the key, and it must not stop the load.
         val old = "<State>" +
             "<option name=\"sharing\" value=\"SHARED\" />" +
-            "<option name=\"channelServer\" value=\"E:/work/demo/channel/dist/main.js\" />" +
-            "<option name=\"claudeCommand\" value=\"claude\" />" +
+            "<option name=\"channelServer\" value=\"E:/work/demo-repo/channel/dist/main.js\" />" +
+            "<option name=\"claudeCommand\" value=\"my-claude\" />" +
             "</State>"
 
         val read = XmlSerializer.deserialize(JDOMUtil.load(old), ReviewSettings.State::class.java)
 
         assertEquals(CommentSharing.SHARED, read.sharing)
-        assertEquals("claude", read.claudeCommand)
+        assertEquals("my-claude", read.claudeCommand)
         assertEquals(true, read.channel)
     }
 
@@ -124,8 +124,8 @@ class ReviewSettingsStateTest {
         settings.claudeCommand = "   "
         assertEquals("claude", settings.claudeCommand)
 
-        settings.claudeCommand = "  claude  "
-        assertEquals("claude", settings.claudeCommand)
+        settings.claudeCommand = "  my-claude  "
+        assertEquals("my-claude", settings.claudeCommand)
     }
 
     @Test

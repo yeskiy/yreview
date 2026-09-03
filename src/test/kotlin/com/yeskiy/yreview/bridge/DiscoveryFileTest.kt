@@ -22,13 +22,13 @@ class DiscoveryFileTest {
     private val entry = BridgeEntry(
         url = "http://127.0.0.1:52431",
         token = "9f2c000000000000",
-        projectPath = "E:/work/demo",
+        projectPath = "E:/work/demo-repo",
         pid = 1234,
     )
 
     @Test
     fun `replaces every character that is not a letter or a digit`() {
-        assertEquals("E--Projects-Opened-y-review.json", DiscoveryFile.fileName("E:/work/demo"))
+        assertEquals("E--work-demo-repo.json", DiscoveryFile.fileName("E:/work/demo-repo"))
     }
 
     @Test
@@ -53,7 +53,7 @@ class DiscoveryFileTest {
             file.write(entry)
             assertEquals(
                 """{"url":"http://127.0.0.1:52431","token":"9f2c000000000000",""" +
-                    """"projectPath":"E:/work/demo","pid":1234}""",
+                    """"projectPath":"E:/work/demo-repo","pid":1234}""",
                 file.path.readText(),
             )
         }

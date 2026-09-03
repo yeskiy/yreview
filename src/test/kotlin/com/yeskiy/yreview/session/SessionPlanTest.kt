@@ -7,7 +7,7 @@ import kotlin.test.assertTrue
 
 class SessionPlanTest {
 
-    private val project = "E:/work/demo"
+    private val project = "E:/work/demo-repo"
     private val token = "0123456789abcdef0123"
     private val ready = BridgeLookup.Available("http://127.0.0.1:52431", token)
     private val serverPath = "C:/Users/one/plugins/y-review/channel/y-review-channel.jar"
@@ -203,6 +203,6 @@ class SessionPlanTest {
 
     @Test
     fun `the plan converts a wsl project path`() {
-        assertEquals(project, SessionPlan.of("/mnt/e/Projects/Opened/y-review", ready).workingDirectory)
+        assertEquals(project, SessionPlan.of("/mnt/e/work/demo-repo", ready).workingDirectory)
     }
 }

@@ -23,14 +23,14 @@ class BridgeDiscoveryTest {
 
     @Test
     fun `the file name replaces every character that is not a letter or a digit`() {
-        assertEquals("E--Projects-Opened-y-review.json", BridgeDiscovery.fileName("E:/work/demo"))
+        assertEquals("E--work-demo-repo.json", BridgeDiscovery.fileName("E:/work/demo-repo"))
     }
 
     @Test
     fun `a backslash path gives the same file name as a slash path`() {
         assertEquals(
-            BridgeDiscovery.fileName("E:/work/demo"),
-            BridgeDiscovery.fileName("E:\\Projects\\Opened\\y-review")
+            BridgeDiscovery.fileName("E:/work/demo-repo"),
+            BridgeDiscovery.fileName("E:\\work\\demo-repo")
         )
     }
 

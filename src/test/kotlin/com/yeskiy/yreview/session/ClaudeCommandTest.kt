@@ -7,23 +7,23 @@ import kotlin.test.assertTrue
 
 class ClaudeCommandTest {
 
-    private val project = "E:/work/demo"
+    private val project = "E:/work/demo-repo"
 
     private val config = "C:\\Users\\dev\\AppData\\Local\\Temp\\claude-y-review-mcp-1.json"
 
     @Test
     fun `a windows path keeps its drive letter and loses its backslashes`() {
-        assertEquals(project, ClaudeCommand.windowsPath("E:\\Projects\\Opened\\y-review"))
+        assertEquals(project, ClaudeCommand.windowsPath("E:\\work\\demo-repo"))
     }
 
     @Test
     fun `a wsl path becomes a windows path`() {
-        assertEquals(project, ClaudeCommand.windowsPath("/mnt/e/Projects/Opened/y-review"))
+        assertEquals(project, ClaudeCommand.windowsPath("/mnt/e/work/demo-repo"))
     }
 
     @Test
     fun `a trailing separator is dropped`() {
-        assertEquals(project, ClaudeCommand.windowsPath("E:/work/demo/"))
+        assertEquals(project, ClaudeCommand.windowsPath("E:/work/demo-repo/"))
     }
 
     @Test
