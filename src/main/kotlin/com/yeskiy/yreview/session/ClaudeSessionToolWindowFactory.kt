@@ -4,7 +4,6 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.ui.content.ContentFactory
 import com.yeskiy.yreview.settings.ReviewSettings
 
 class ClaudeSessionToolWindowFactory : ToolWindowFactory {
@@ -32,21 +31,16 @@ class ClaudeSessionToolWindowFactory : ToolWindowFactory {
      * The platform builds the content once for the project, on the user interface thread.
      * It waits until the user first opens the window. If the saved layout of the user
      * holds this window open, the platform builds the content while the project opens.
-     * The first session then starts with the project, after the panel gets a size.
      *
-     * The first session of the project starts here, so the user presses no button for it.
-     * A stop ends that session, and this method never runs a second time. Only the title
-     * bar button opens a session after a stop.
-     *
-     * A user who clears the start switch gets an empty window, and the title bar button
-     * then opens the first session too.
+     * The first tab of the window opens here, so the user presses no button for it. Every
+     * later tab comes from the plus button in the title bar. The title bar holds the
+     * actions of the window, not of one tab, so they survive a close of every tab.
      */
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val panel = ClaudeSessionPanel(project, toolWindow)
-        Disposer.register(toolWindow.disposable, panel)
-        toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(panel, "", false))
-        toolWindow.setTitleActions(panel.titleActions())
-        if (ReviewSettings.getInstance(project).autoStartSession) panel.startWhenSized()
+        val tabs = SessionTabs(project, toolWindow)
+        Disposer.register(toolWindow.disposable, tabs)
+        toolWindow.setTitleActions(tabs.titleActions())
+        tabs.open(start = ReviewSettings.getInstance(project).autoStartSession)
     }
 
     private companion object {

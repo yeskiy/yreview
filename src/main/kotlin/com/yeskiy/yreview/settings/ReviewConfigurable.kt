@@ -85,7 +85,11 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             }
             row {
                 comment(
-                    "The Claude tool window runs one review session inside the IDE. " +
+                    "The Claude tool window runs the review sessions inside the IDE. " +
+                        "The plus button in the title bar opens one more session in a tab of its own. " +
+                        "A close of the tab ends the session and the process behind it. " +
+                        "The Send button of the review window names the session that gets the tasks. " +
+                        "It asks for one while two or more sessions read the comment channel. " +
                         "The switch starts off when this machine holds no Claude Code installation. " +
                         "The window appears and disappears at once, so no restart is needed."
                 )
@@ -111,9 +115,10 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             }
             row {
                 comment(
-                    "The session tool window starts one session as soon as it opens. " +
-                        "With the box clear the window opens empty, " +
-                        "and the button in the title bar starts the session."
+                    "The session tool window starts the session of its first tab as soon as it opens. " +
+                        "With the box clear that tab opens and waits, " +
+                        "and the Start button in the title bar starts the session. " +
+                        "The plus button always starts the session of the tab it opens."
                 )
             }
             row {

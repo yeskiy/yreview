@@ -97,6 +97,15 @@ class PluginDescriptorTest {
     }
 
     @Test
+    fun `the session tool window lets the user close a tab`() {
+        // Only a running IDE reads this attribute, and no compiler notices its loss.
+        assertTrue(
+            terminal.substringAfter("<toolWindow").substringBefore("/>").contains("canCloseContents=\"true\""),
+            "without this attribute the platform paints no close cross on a session tab"
+        )
+    }
+
+    @Test
     fun `the plugin carries the product name`() {
         assertTrue(
             plugin.contains("<name>${ProductName.TEXT}</name>"),

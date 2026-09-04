@@ -1,15 +1,10 @@
 package com.yeskiy.yreview.session
 
-import com.intellij.icons.AllIcons
 import com.intellij.openapi.Disposable
-import com.intellij.openapi.actionSystem.ActionUpdateThread
-import com.intellij.openapi.actionSystem.AnAction
-import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.IdeFocusManager
-import com.intellij.openapi.wm.ToolWindow
 import com.intellij.terminal.frontend.view.TerminalViewSessionState
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
@@ -26,15 +21,16 @@ import javax.swing.JPanel
 import javax.swing.JTextArea
 
 /**
- * The content of the Claude tool window. It holds a terminal that runs one review session.
- * The plugin owns the command line. It reads the command from the settings, and it appends
- * the channel flags itself, so no shell function of one machine has to carry them.
+ * The content of one tab of the Claude tool window. It holds a terminal that runs one
+ * review session. The plugin owns the command line. It reads the command from the
+ * settings, and it appends the channel flags itself, so no shell function of one machine
+ * has to carry them.
  *
- * One button in the tool window title bar carries both states. It starts a session while
- * none runs, and it ends the running one. A terminal stays on screen after the session
- * ends, and the last output stays readable. The title of the tool window carries the
- * state. A new start drops the dead terminal and mounts a new one. The empty state with
- * the bridge status shows before the first session of the project only.
+ * The panel reports every change of the session through [onState], and the tab that holds
+ * the panel writes that state into its own name. A terminal stays on screen after the
+ * session ends, and the last output stays readable. A new start drops the dead terminal
+ * and mounts a new one. The empty state with the bridge status shows before the first
+ * session of the tab only.
  *
  * The state follows the session behind the terminal, not the component on screen. Two
  * paths report the end, and each one alone is enough. The first path is the state flow of
@@ -43,8 +39,8 @@ import javax.swing.JTextArea
  */
 class ClaudeSessionPanel(
     private val project: Project,
-    private val toolWindow: ToolWindow,
-    private val sessionName: String = DEFAULT_NAME
+    private val sessionName: String,
+    private val onState: (SessionState) -> Unit
 ) : JPanel(BorderLayout()), Disposable {
 
     /**
@@ -83,8 +79,6 @@ class ClaudeSessionPanel(
     val isRunning: Boolean
         get() = session != null
 
-    fun titleActions(): List<AnAction> = listOf(SessionAction())
-
     /**
      * The tool window opens the first session through this method, because a fresh panel
      * can hold no size yet. The terminal then mounts into a panel that already holds a
@@ -93,9 +87,9 @@ class ClaudeSessionPanel(
     fun startWhenSized() = SizeGate.run(this) { start() }
 
     /**
-     * The window factory reaches this through [startWhenSized]. The title bar button calls
-     * it for every later session, and it calls it whatever the size is, because the user
-     * looks at a window that is on screen.
+     * A new tab reaches this through [startWhenSized]. The title bar button calls it for
+     * every later session of the tab, and it calls it whatever the size is, because the
+     * user looks at a window that is on screen.
      *
      * The bridge opens a port and writes a file, so the wait for it stays off this thread.
      * The terminal mounts on this thread again, after the bridge answers or after the wait
@@ -105,7 +99,7 @@ class ClaudeSessionPanel(
         if (isRunning || starting) return
         val basePath = project.basePath ?: return failed(NO_SESSION)
         starting = true
-        toolWindow.setTitle(STARTING_TITLE)
+        onState(SessionState.STARTING)
         if (terminal == null) status.text = BRIDGE_WAIT
         ApplicationManager.getApplication().executeOnPooledThread {
             val bridge = awaitBridge(basePath)
@@ -189,7 +183,7 @@ class ClaudeSessionPanel(
         session = started
         watch(started)
         add(started.view.component, BorderLayout.CENTER)
-        toolWindow.setTitle(RUNNING_TITLE)
+        onState(SessionState.RUNNING)
         status.text = plan.status
         record(plan, server, javaPath, written, terminalStarted = true)
         revalidate()
@@ -253,7 +247,7 @@ class ClaudeSessionPanel(
     private fun endSession() {
         session = null
         dropConfig()
-        toolWindow.setTitle(ENDED_TITLE)
+        onState(SessionState.ENDED)
     }
 
     /**
@@ -267,7 +261,7 @@ class ClaudeSessionPanel(
 
     private fun failed(headline: String) {
         starting = false
-        toolWindow.setTitle(NOT_STARTED_TITLE)
+        onState(SessionState.NOT_STARTED)
         if (terminal == null) showIdle(headline, PRESS_START)
     }
 
@@ -295,40 +289,13 @@ class ClaudeSessionPanel(
         border = JBUI.Borders.empty(4, 8)
     }
 
-    /**
-     * One button for both states. The update thread stays the user interface thread,
-     * because the state of the session lives there and no data call reads it.
-     */
-    private inner class SessionAction : AnAction() {
-
-        override fun getActionUpdateThread() = ActionUpdateThread.EDT
-
-        override fun update(event: AnActionEvent) {
-            val live = isRunning
-            event.presentation.text = if (live) STOP_TEXT else START_TEXT
-            event.presentation.description = if (live) STOP_HINT else START_HINT
-            event.presentation.icon = if (live) AllIcons.Actions.Suspend else AllIcons.Actions.Execute
-        }
-
-        override fun actionPerformed(event: AnActionEvent) = if (isRunning) stop() else start()
-    }
-
     private companion object {
-        const val DEFAULT_NAME = "Claude"
         const val CONFIG_WORK = "write the channel configuration file"
-        const val RUNNING_TITLE = "Running"
-        const val ENDED_TITLE = "Ended"
-        const val NOT_STARTED_TITLE = "Not started"
-        const val STARTING_TITLE = "Starting"
         const val NO_SESSION = "No review session runs."
         const val NO_TERMINAL = "The terminal did not start. The IDE log holds the reason."
         const val NO_DIRECTORY = "This project has no directory, so a session cannot start here."
         const val PRESS_START = "Press Start in the title bar to open a session with the comment channel."
         const val AUTO_START = "The session opens by itself with the comment channel."
         const val BRIDGE_WAIT = "The review bridge starts now. The session opens after the bridge answers."
-        const val START_TEXT = "Start Claude"
-        const val START_HINT = "Start a review session with the IDE server and the comment channel."
-        const val STOP_TEXT = "Stop Claude"
-        const val STOP_HINT = "End the review session and the process behind it."
     }
 }
