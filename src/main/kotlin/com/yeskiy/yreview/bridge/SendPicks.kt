@@ -1,5 +1,7 @@
 package com.yeskiy.yreview.bridge
 
+import com.yeskiy.yreview.session.SessionRules
+
 /**
  * One target of a send. A null [key] means the row for every session, and that row writes
  * to every open stream. A stream that the plugin did not start ignores the push, because
@@ -45,6 +47,9 @@ object SendPicks {
      * order of the tabs. The transport does not matter here, because the caller already
      * asked each session whether a send reaches it.
      *
+     * Two sessions can carry one name, so a name that repeats takes its place in the list.
+     * The row for every session takes a place too, because a user can type that name.
+     *
      * [pushPossible] is true only when the route of this send can carry a push at all. A
      * folder store, a closed channel switch, and an empty bridge each give false, and every
      * one of them sends the tasks to the clipboard. A target named for such a send would be
@@ -55,9 +60,13 @@ object SendPicks {
         return when (named.size) {
             0 -> SendPick.None
             1 -> SendPick.One(named.first())
-            else -> SendPick.Ask(named + SessionChoice(null, EVERY_NAME))
+            else -> SendPick.Ask(apart(named + SessionChoice(null, EVERY_NAME)))
         }
     }
+
+    /** Gives a place to every row of one name, the row for every session included. */
+    private fun apart(rows: List<SessionChoice>): List<SessionChoice> =
+        rows.zip(SessionRules.apart(rows.map { it.name })) { row, name -> row.copy(name = name) }
 
     /** The words of the Send button. [base] holds the words about the tasks. */
     fun buttonText(base: String, pick: SendPick, sendable: Boolean): String = when {

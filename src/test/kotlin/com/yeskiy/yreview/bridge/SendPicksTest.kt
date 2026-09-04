@@ -111,4 +111,50 @@ class SendPicksTest {
             SendPicks.buttonText("Send to the Agent", SendPick.One(first), sendable = false),
         )
     }
+
+    @Test
+    fun `two tabs of one name give two rows a user can tell apart`() {
+        // A user can type one name twice, and two agents can give one name to two
+        // sessions. Two rows that read the same word make the picker useless.
+        val pick = SendPicks.of(
+            listOf(first.copy(name = "fix the parser"), second.copy(name = "fix the parser")),
+            pushPossible = true,
+        )
+
+        assertIs<SendPick.Ask>(pick)
+        assertEquals(
+            listOf("fix the parser (1)", "fix the parser (2)", SendPicks.EVERY_NAME),
+            pick.choices.map { it.name },
+        )
+        assertEquals(listOf(first.key, second.key, null), pick.choices.map { it.key })
+    }
+
+    @Test
+    fun `a tab named after the row for every session still gives two rows apart`() {
+        // A user may type the words of the broadcast row. That row takes a place of its
+        // own, so the two never read the same.
+        val pick = SendPicks.of(
+            listOf(first.copy(name = SendPicks.EVERY_NAME), second.copy(name = "Claude 2")),
+            pushPossible = true,
+        )
+
+        assertIs<SendPick.Ask>(pick)
+        assertEquals(
+            listOf("${SendPicks.EVERY_NAME} (1)", "Claude 2", "${SendPicks.EVERY_NAME} (2)"),
+            pick.choices.map { it.name },
+        )
+    }
+
+    @Test
+    fun `the button keeps the plain name of a single session`() {
+        // A name takes a number only where it really repeats. One session never repeats.
+        assertEquals(
+            "Send Checked (3) to Claude 1",
+            SendPicks.buttonText(
+                "Send Checked (3)",
+                SendPicks.of(listOf(first), pushPossible = true),
+                sendable = true,
+            ),
+        )
+    }
 }

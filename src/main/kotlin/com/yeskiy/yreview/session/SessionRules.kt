@@ -73,6 +73,21 @@ object SessionRules {
     fun fit(text: String): String =
         if (text.length <= MAX_TAB) text else text.take(MAX_TAB - CUT.length).trimEnd() + CUT
 
+    /**
+     * Makes every row of a picker readable. A name that stands once is left alone, and a
+     * name that stands twice takes its place in the list. The order never changes.
+     */
+    fun apart(names: List<String>): List<String> {
+        val repeated = names.groupingBy { it }.eachCount().filterValues { it > 1 }.keys
+        val seen = mutableMapOf<String, Int>()
+        return names.map { name ->
+            if (name !in repeated) return@map name
+            val at = seen.getOrDefault(name, 0) + 1
+            seen[name] = at
+            "$name ($at)"
+        }
+    }
+
     /** A name of spaces is no name, so the tab falls back to the next one in the order. */
     private fun given(text: String?): String? = text?.trim()?.takeIf { it.isNotEmpty() }
 

@@ -130,4 +130,34 @@ class SessionRulesTest {
             assertTrue(SessionRules.label(facts).startsWith(SessionRules.fit(SessionRules.name(facts))), it.name)
         }
     }
+
+    @Test
+    fun `names that differ are left alone`() {
+        assertEquals(
+            listOf("Claude 1", "Codex 2"),
+            SessionRules.apart(listOf("Claude 1", "Codex 2")),
+        )
+    }
+
+    @Test
+    fun `a repeated name takes a number so the picker stays readable`() {
+        // Two agents can give one name to two sessions, and a user can type one name twice.
+        assertEquals(
+            listOf("fix the parser (1)", "fix the parser (2)"),
+            SessionRules.apart(listOf("fix the parser", "fix the parser")),
+        )
+    }
+
+    @Test
+    fun `only the repeated names take a number`() {
+        assertEquals(
+            listOf("a (1)", "b", "a (2)"),
+            SessionRules.apart(listOf("a", "b", "a")),
+        )
+    }
+
+    @Test
+    fun `an empty list stays empty`() {
+        assertEquals(emptyList(), SessionRules.apart(emptyList()))
+    }
 }
