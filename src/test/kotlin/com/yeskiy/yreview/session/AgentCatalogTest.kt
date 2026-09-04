@@ -129,4 +129,27 @@ class AgentCatalogTest {
         assertNull(AgentCatalog.parse("WINDSURF"))
         assertNull(AgentCatalog.parse("claude"))
     }
+
+    @Test
+    fun `every record carries a short name that fits a tab`() {
+        AgentCatalog.ALL.forEach {
+            assertTrue(it.short.isNotBlank(), "${it.id} has no short name")
+            assertTrue(it.short.length <= 12, "${it.id} has a short name of ${it.short.length} characters")
+        }
+    }
+
+    @Test
+    fun `the short name of every agent is the one the tab shows`() {
+        assertEquals("Claude", AgentCatalog.of(AgentId.CLAUDE).short)
+        assertEquals("OpenCode", AgentCatalog.of(AgentId.OPENCODE).short)
+        assertEquals("Codex", AgentCatalog.of(AgentId.CODEX).short)
+        assertEquals("Antigravity", AgentCatalog.of(AgentId.ANTIGRAVITY).short)
+        assertEquals("Gemini", AgentCatalog.of(AgentId.GEMINI).short)
+        assertEquals("Copilot", AgentCatalog.of(AgentId.COPILOT).short)
+        assertEquals("Cursor", AgentCatalog.of(AgentId.CURSOR).short)
+        assertEquals("Aider", AgentCatalog.of(AgentId.AIDER).short)
+        assertEquals("Amp", AgentCatalog.of(AgentId.AMP).short)
+        assertEquals("Agent", AgentCatalog.of(AgentId.CUSTOM).short)
+        assertEquals("Session", AgentCatalog.of(AgentId.NONE).short)
+    }
 }

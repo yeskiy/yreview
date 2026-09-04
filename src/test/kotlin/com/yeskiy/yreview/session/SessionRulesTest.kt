@@ -21,24 +21,6 @@ class SessionRulesTest {
     }
 
     @Test
-    fun `the stable name carries no state`() {
-        // The picker of the review window shows this name, and it must not change with the state.
-        assertEquals("Claude 2", SessionRules.name(2))
-    }
-
-    @Test
-    fun `a running session shows the number alone`() {
-        assertEquals("Claude 1", SessionRules.label(1, SessionState.RUNNING))
-    }
-
-    @Test
-    fun `every other state stands beside the number`() {
-        assertEquals("Claude 2 (not started)", SessionRules.label(2, SessionState.NOT_STARTED))
-        assertEquals("Claude 2 (starting)", SessionRules.label(2, SessionState.STARTING))
-        assertEquals("Claude 2 (ended)", SessionRules.label(2, SessionState.ENDED))
-    }
-
-    @Test
     fun `the window opens no tab over the stream limit of the bridge`() {
         assertEquals(BridgeServer.MAX_STREAMS, SessionRules.MAX_SESSIONS)
         assertTrue(SessionRules.canOpen(0))
@@ -56,9 +38,96 @@ class SessionRulesTest {
     }
 
     @Test
-    fun `every label starts with the stable name of the tab`() {
+    fun `the built name carries the short name of the agent`() {
+        assertEquals("Claude 2", SessionRules.name(TabFacts(2, "Claude", SessionState.RUNNING)))
+        assertEquals("Aider 1", SessionRules.name(TabFacts(1, "Aider", SessionState.RUNNING)))
+    }
+
+    @Test
+    fun `a tab with no agent reads the plain stem`() {
+        // The window opens a tab before anybody chose an agent, so the tab must still
+        // carry a name, and that name must not claim an agent.
+        assertEquals("Session 1", SessionRules.name(TabFacts(1, null, SessionState.NOT_STARTED)))
+    }
+
+    @Test
+    fun `the name of the agent stands alone`() {
+        // The number belongs to a name that the plugin built. A name that somebody gave
+        // this session carries no number.
+        assertEquals(
+            "fix the parser",
+            SessionRules.name(TabFacts(2, "Claude", SessionState.RUNNING, byAgent = "fix the parser")),
+        )
+    }
+
+    @Test
+    fun `the name of the agent beats the name of the user`() {
+        // The agent name describes the session that runs now. The user name was given to
+        // the tab before that session started.
+        assertEquals(
+            "fix the parser",
+            SessionRules.name(
+                TabFacts(2, "Claude", SessionState.RUNNING, byAgent = "fix the parser", byUser = "my notes"),
+            ),
+        )
+    }
+
+    @Test
+    fun `the name of the user beats the built name`() {
+        assertEquals(
+            "my notes",
+            SessionRules.name(TabFacts(2, "Codex", SessionState.RUNNING, byUser = "my notes")),
+        )
+    }
+
+    @Test
+    fun `a blank given name is no name`() {
+        // A cleared name must bring the built name back, and a name of spaces is cleared.
+        assertEquals("Codex 2", SessionRules.name(TabFacts(2, "Codex", SessionState.RUNNING, byUser = "   ")))
+        assertEquals("Codex 2", SessionRules.name(TabFacts(2, "Codex", SessionState.RUNNING, byAgent = "")))
+    }
+
+    @Test
+    fun `a running session shows the name alone`() {
+        assertEquals("Claude 1", SessionRules.label(TabFacts(1, "Claude", SessionState.RUNNING)))
+    }
+
+    @Test
+    fun `every other state stands beside the name`() {
+        assertEquals("Claude 2 (not started)", SessionRules.label(TabFacts(2, "Claude", SessionState.NOT_STARTED)))
+        assertEquals("Claude 2 (starting)", SessionRules.label(TabFacts(2, "Claude", SessionState.STARTING)))
+        assertEquals("Claude 2 (ended)", SessionRules.label(TabFacts(2, "Claude", SessionState.ENDED)))
+    }
+
+    @Test
+    fun `a long name is cut for the tab and kept for the tooltip`() {
+        val long = "rewrite the whole authentication layer of the server"
+        val facts = TabFacts(1, "Claude", SessionState.RUNNING, byAgent = long)
+
+        assertEquals(SessionRules.MAX_TAB, SessionRules.label(facts).length)
+        assertTrue(SessionRules.label(facts).endsWith("..."))
+        assertEquals(long, SessionRules.tooltip(facts))
+    }
+
+    @Test
+    fun `a short name is never cut`() {
+        assertEquals("Claude 1", SessionRules.fit("Claude 1"))
+        assertEquals("Claude 1", SessionRules.tooltip(TabFacts(1, "Claude", SessionState.RUNNING)))
+    }
+
+    @Test
+    fun `the tooltip carries the state as well`() {
+        assertEquals(
+            "Claude 2 (ended)",
+            SessionRules.tooltip(TabFacts(2, "Claude", SessionState.ENDED)),
+        )
+    }
+
+    @Test
+    fun `every label starts with the name of the tab, cut to the tab width`() {
         SessionState.entries.forEach {
-            assertTrue(SessionRules.label(3, it).startsWith(SessionRules.name(3)), it.name)
+            val facts = TabFacts(3, "Claude", it)
+            assertTrue(SessionRules.label(facts).startsWith(SessionRules.fit(SessionRules.name(facts))), it.name)
         }
     }
 }

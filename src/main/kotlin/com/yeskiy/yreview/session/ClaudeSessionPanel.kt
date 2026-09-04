@@ -43,7 +43,7 @@ import javax.swing.JTextArea
  */
 class ClaudeSessionPanel(
     private val project: Project,
-    private val sessionName: String,
+    private val number: Int,
     private val autoStart: Boolean,
     private val onState: (SessionState) -> Unit
 ) : JPanel(BorderLayout()), Disposable {
@@ -79,8 +79,24 @@ class ClaudeSessionPanel(
     var runningAgent: AgentSpec? = null
         private set
 
+    /**
+     * The agent of the last session of this tab. It is never cleared, so a tab that shows
+     * the output of a session that ended keeps the name of the agent that wrote it.
+     */
+    private var lastAgent: AgentSpec? = null
+
+    /**
+     * The agent that this tab names.
+     *
+     * A tab that ran a session names that agent. A tab that never ran names the agent of
+     * the settings, and it names none while nobody chose.
+     */
+    val tabAgent: AgentSpec?
+        get() = lastAgent
+            ?: settings().takeIf { it.agentChosen }?.let { AgentCatalog.of(it.agentOrDefault()) }
+
     init {
-        SessionRegistry.getInstance(project).add(sessionKey, sessionName, SessionReach.None)
+        SessionRegistry.getInstance(project).add(sessionKey, stableName(), SessionReach.None)
         add(status, BorderLayout.SOUTH)
         showState()
     }
@@ -147,6 +163,10 @@ class ClaudeSessionPanel(
 
     private fun settings(): ReviewSettings = ReviewSettings.getInstance(project)
 
+    /** The name of this tab with no state word. The tabs keep it current after every change. */
+    private fun stableName(): String =
+        SessionRules.name(TabFacts(number, tabAgent?.short, SessionState.NOT_STARTED))
+
     private fun channelServer(): ChannelServer.Answer = ChannelServer.locate()
 
     private fun javaPath(): String? = JavaRuntime.locate()
@@ -207,6 +227,7 @@ class ClaudeSessionPanel(
         terminal = started
         session = started
         runningAgent = agent
+        lastAgent = agent
         watch(started)
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)

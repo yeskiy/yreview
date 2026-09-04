@@ -64,6 +64,8 @@ data class DesktopApp(val label: String, val sharesConfig: Boolean, val note: St
 data class AgentSpec(
     val id: AgentId,
     val label: String,
+    /** The name a tab shows. The label is too long for a tab bar of six tabs. */
+    val short: String,
     val commands: List<String>,
     val push: PushKind,
     val mcp: McpRoute,
@@ -93,6 +95,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.CLAUDE,
             "Claude Code",
+            "Claude",
             listOf("claude"),
             PushKind.CHANNEL,
             McpRoute.Flag(AgentLaunch.CONFIG_FLAG),
@@ -107,6 +110,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.OPENCODE,
             "OpenCode",
+            "OpenCode",
             listOf("opencode"),
             PushKind.LOCAL_HTTP,
             McpRoute.Variable("OPENCODE_CONFIG"),
@@ -115,6 +119,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.CODEX,
             "OpenAI Codex CLI",
+            "Codex",
             listOf("codex"),
             PushKind.NONE,
             McpRoute.Keys,
@@ -129,6 +134,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.ANTIGRAVITY,
             "Antigravity CLI",
+            "Antigravity",
             listOf("agy"),
             PushKind.NONE,
             McpRoute.AddCommand,
@@ -143,6 +149,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.GEMINI,
             "Gemini CLI",
+            "Gemini",
             listOf("gemini"),
             PushKind.NONE,
             McpRoute.Variable("GEMINI_CLI_SYSTEM_DEFAULTS_PATH"),
@@ -151,6 +158,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.COPILOT,
             "GitHub Copilot CLI",
+            "Copilot",
             listOf("copilot"),
             PushKind.NONE,
             McpRoute.Flag("--additional-mcp-config", "@"),
@@ -159,6 +167,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.CURSOR,
             "Cursor CLI",
+            "Cursor",
             listOf("cursor-agent", "agent"),
             PushKind.NONE,
             McpRoute.UserFile(".cursor/mcp.json"),
@@ -173,6 +182,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.AIDER,
             "Aider",
+            "Aider",
             listOf("aider"),
             PushKind.NONE,
             McpRoute.None,
@@ -180,6 +190,7 @@ object AgentCatalog {
         ),
         AgentSpec(
             AgentId.AMP,
+            "Amp",
             "Amp",
             listOf("amp"),
             PushKind.NONE,
@@ -194,6 +205,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.CUSTOM,
             "Another agent",
+            "Agent",
             emptyList(),
             PushKind.NONE,
             McpRoute.None,
@@ -202,6 +214,7 @@ object AgentCatalog {
         AgentSpec(
             AgentId.NONE,
             "No agent",
+            "Session",
             emptyList(),
             PushKind.NONE,
             McpRoute.None,

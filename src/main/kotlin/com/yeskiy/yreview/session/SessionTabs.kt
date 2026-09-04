@@ -14,7 +14,14 @@ import com.intellij.ui.content.ContentManagerListener
 import com.yeskiy.yreview.settings.ReviewSettings
 
 /** One tab of the window. The number names it, and the panel runs the session behind it. */
-private class SessionTab(val number: Int, val panel: ClaudeSessionPanel, val content: Content)
+private class SessionTab(val number: Int, val panel: ClaudeSessionPanel, val content: Content) {
+
+    /** What the session behind this tab does now. The tab text carries it. */
+    var state: SessionState = SessionState.NOT_STARTED
+
+    /** The last stable name this tab wrote. A repeat write of one name changes nothing. */
+    var shown: String? = null
+}
 
 /**
  * Holds every review session of one project. One tab runs one session.
@@ -72,20 +79,42 @@ class SessionTabs(
     fun open(start: Boolean = true) {
         if (!SessionRules.canOpen(tabs.size)) return
         val number = SessionRules.freeNumber(tabs.map { it.number }.toSet())
-        val panel = ClaudeSessionPanel(project, SessionRules.name(number), start) { state -> rename(number, state) }
-        val content = ContentFactory.getInstance()
-            .createContent(panel, SessionRules.label(number, SessionState.NOT_STARTED), false)
+        val panel = ClaudeSessionPanel(project, number, start) { state -> onState(number, state) }
+        val content = ContentFactory.getInstance().createContent(panel, "", false)
         content.isCloseable = true
         content.setDisposer(panel)
-        tabs += SessionTab(number, panel, content)
+        val tab = SessionTab(number, panel, content)
+        tabs += tab
+        refresh(tab)
         toolWindow.contentManager.addContent(content)
         toolWindow.contentManager.setSelectedContent(content)
         if (start) panel.startWhenSized()
     }
 
     /** A report that finds no tab changes nothing, so a late report of a closed tab is safe. */
-    private fun rename(number: Int, state: SessionState) {
-        tabs.firstOrNull { it.number == number }?.content?.displayName = SessionRules.label(number, state)
+    private fun onState(number: Int, state: SessionState) {
+        val tab = tabs.firstOrNull { it.number == number } ?: return
+        tab.state = state
+        refresh(tab)
+    }
+
+    /** Everything that names one tab, read from the tab and from the panel behind it. */
+    private fun facts(tab: SessionTab): TabFacts =
+        TabFacts(tab.number, tab.panel.tabAgent?.short, tab.state)
+
+    /**
+     * Writes the name of one tab. The platform fires a change event on every write, so a
+     * write of the same name is skipped.
+     */
+    private fun refresh(tab: SessionTab) {
+        val facts = facts(tab)
+        val stable = SessionRules.name(facts)
+        val label = SessionRules.label(facts)
+        if (tab.content.displayName != label) tab.content.displayName = label
+        tab.content.description = SessionRules.tooltip(facts)
+        if (tab.shown == stable) return
+        tab.shown = stable
+        SessionRegistry.getInstance(project).rename(tab.panel.sessionKey, stable)
     }
 
     private fun selected(): ClaudeSessionPanel? {
