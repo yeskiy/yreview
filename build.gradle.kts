@@ -4,10 +4,11 @@ plugins {
     kotlin("jvm") version "2.4.10"
     kotlin("plugin.serialization") version "2.4.10"
     id("org.jetbrains.intellij.platform")
+    id("org.jetbrains.changelog") version "2.5.0"
 }
 
 group = "com.yeskiy"
-version = "0.1.0"
+version = providers.gradleProperty("pluginVersion").get()
 
 repositories {
     mavenCentral()

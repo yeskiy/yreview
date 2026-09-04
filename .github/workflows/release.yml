@@ -83,11 +83,12 @@ jobs:
         run: ./gradlew publishPlugin --console=plain
 
       # The GitHub CLI is on every hosted runner, so this needs no third-party action.
-      # The release body comes from CHANGELOG.md through the notes file below.
+      # The changelog plugin reads the newest released section of CHANGELOG.md, so an empty
+      # Unreleased heading above that section never reaches the release body. The tag names
+      # the release, therefore the body carries no header line and no link list.
       - name: Read the change notes of this version
         run: |
-          mkdir -p build/tmp
-          awk '/^## /{ n++ } n == 1 && !/^## /' CHANGELOG.md > build/tmp/release-notes.md
+          ./gradlew getChangelog --no-header --no-links --output-file build/tmp/release-notes.md --console=plain
           test -s build/tmp/release-notes.md
 
       - name: Create the GitHub release

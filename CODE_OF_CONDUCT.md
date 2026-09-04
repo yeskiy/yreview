@@ -37,7 +37,7 @@ This Code of Conduct applies within all community spaces, and also applies when 
 
 ## Enforcement
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at the private report form of the repository, at https://github.com/yeskiy/y-review/security/advisories/new. All complaints will be reviewed and investigated promptly and fairly.
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the community leaders responsible for enforcement at the private report form of the repository, at https://github.com/yeskiy/yreview/security/advisories/new. All complaints will be reviewed and investigated promptly and fairly.
 
 All community leaders are obligated to respect the privacy and security of the reporter of any incident.
 
@@ -75,7 +75,7 @@ This project publishes no email address. GitHub gives one private channel betwee
 and the maintainer of a repository, and this project uses that channel for a conduct
 report as well as for a weakness report.
 
-1. Open https://github.com/yeskiy/y-review/security/advisories/new .
+1. Open https://github.com/yeskiy/yreview/security/advisories/new .
 2. Write the report. Only the maintainer of the repository reads it.
 3. Wait for an answer. The maintainer answers in the same thread.
 

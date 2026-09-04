@@ -11,7 +11,7 @@ Nothing leaves your machine. The plugin has no server, and the author receives n
 
 - License: [Apache License 2.0](LICENSE)
 - Contribute: [CONTRIBUTING.md](CONTRIBUTING.md)
-- Report a problem: https://github.com/yeskiy/y-review/issues
+- Report a problem: https://github.com/yeskiy/yreview/issues
 - Report a security weakness in private: [SECURITY.md](SECURITY.md)
 
 <!-- SCREENSHOT: a comment card open inside the editor, over the lines it covers. -->
@@ -186,7 +186,7 @@ The plugin depends on the bundled Git plugin. It needs no Node.js and no account
 `Yreview`. Press Install, then restart the IDE.
 
 **From an archive.** Download `y-review-<version>.zip` from the
-[releases page](https://github.com/yeskiy/y-review/releases). Open Settings, Plugins, press
+[releases page](https://github.com/yeskiy/yreview/releases). Open Settings, Plugins, press
 the gear icon, then Install Plugin from Disk. Pick the archive, then restart the IDE.
 
 **From source.** Read [CONTRIBUTING.md](CONTRIBUTING.md). One command builds the archive.

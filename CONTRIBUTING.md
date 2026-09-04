@@ -2,7 +2,7 @@
 
 Thank you for reading this. This project takes bug reports, feature requests, and pull
 requests through the GitHub issue tracker at
-https://github.com/yeskiy/y-review/issues .
+https://github.com/yeskiy/yreview/issues .
 
 Read the [Code of Conduct](CODE_OF_CONDUCT.md) first. It applies to every space of this
 project.

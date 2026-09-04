@@ -9,7 +9,7 @@ are not sure that it is real.
 
 Do not open a public issue for a weakness. Use the private form instead.
 
-1. Open https://github.com/yeskiy/y-review/security/advisories/new .
+1. Open https://github.com/yeskiy/yreview/security/advisories/new .
 2. Describe what an attacker can do, and describe the steps that show it.
 3. Add the plugin version, the IDE build number, and the operating system.
 

@@ -7,6 +7,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-09-04
+
 The first public release. Every entry below describes a part of the plugin that no earlier
 public version had.
 
@@ -53,4 +55,5 @@ public version had.
   settings page.
 - Add an application switch that lets a maximized tool window cover the editor completely.
 
-[Unreleased]: https://github.com/yeskiy/y-review
+[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/yeskiy/yreview/releases/tag/v1.0.0

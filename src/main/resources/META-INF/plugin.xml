@@ -1,10 +1,49 @@
 <idea-plugin>
   <id>com.yeskiy.yreview</id>
   <name>Yreview</name>
-  <vendor>yeskiy</vendor>
+  <vendor url="https://github.com/yeskiy" email="eqwer24@gmail.com">yeskiy</vendor>
   <description><![CDATA[
-    Write review comments on any line, in the editor and in the diff.
-    Comments are stored as git notes in the git-appraise format.
+    <p>
+      Yreview writes a code review comment on any line of the editor and on any line of a
+      diff. The plugin stores each comment as a git note in the git-appraise format. A
+      comment therefore travels with the repository, and it needs no server and no account.
+    </p>
+    <ul>
+      <li>
+        Write a comment on one line or on a range of lines. The editor, the diff view, and
+        the Markdown preview all accept the action.
+      </li>
+      <li>
+        Keep a comment on your machine, or push it to your own git remote so that the team
+        reads it.
+      </li>
+      <li>
+        Write a comment on a file that no git repository covers. The plugin keeps the record
+        in a folder. It moves the record into the git notes as soon as a repository covers
+        the file.
+      </li>
+      <li>
+        Read every open comment and every TODO item of the project in one tool window. The
+        window holds four tabs and a preview pane.
+      </li>
+      <li>
+        Send the open tasks to a Claude Code session that runs in a tool window beside the
+        editor.
+      </li>
+      <li>
+        Copy the same tasks to the clipboard for any other agent. The plugin also writes the
+        tasks into the git directory as files.
+      </li>
+      <li>The plugin resolves a comment when the agent reports that the task is done.</li>
+    </ul>
+    <p>
+      The plugin sends no data to a server of the author. It opens one port on the loopback
+      interface, and it pushes a shared note only to your own git remote.
+    </p>
+    <p>
+      Source code and issue tracker:
+      <a href="https://github.com/yeskiy/yreview">https://github.com/yeskiy/yreview</a>
+    </p>
   ]]></description>
 
   <depends>com.intellij.modules.platform</depends>

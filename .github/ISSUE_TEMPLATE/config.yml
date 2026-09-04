@@ -2,17 +2,17 @@ blank_issues_enabled: false
 contact_links:
 
   - name: Question about how to use the plugin
-    url: https://github.com/yeskiy/y-review/discussions
+    url: https://github.com/yeskiy/yreview/discussions
     about: Ask here when the plugin does nothing wrong and you need help to use it.
 
   - name: Security weakness
-    url: https://github.com/yeskiy/y-review/security/advisories/new
+    url: https://github.com/yeskiy/yreview/security/advisories/new
     about: Report a weakness in private. Never write one in a public issue.
 
   - name: Code of Conduct report
-    url: https://github.com/yeskiy/y-review/security/advisories/new
+    url: https://github.com/yeskiy/yreview/security/advisories/new
     about: The same private form carries a report about the behavior of a person.
 
   - name: How to build and contribute
-    url: https://github.com/yeskiy/y-review/blob/main/CONTRIBUTING.md
+    url: https://github.com/yeskiy/yreview/blob/main/CONTRIBUTING.md
     about: Read this before you open a pull request.
