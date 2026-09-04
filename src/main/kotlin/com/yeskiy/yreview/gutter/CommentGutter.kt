@@ -12,11 +12,15 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.yeskiy.yreview.diff.DiffAnchor
+import com.yeskiy.yreview.diff.REVIEW_ANCHOR
+import com.yeskiy.yreview.diff.REVIEW_ROOT
 import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewAnchor
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.ui.CommentDelete
 import com.yeskiy.yreview.ui.CommentResolve
@@ -136,15 +140,41 @@ class CommentGutter(private val project: Project) : Disposable {
 
     private fun repaintAll() = painted.keys.forEach { repaint(it) }
 
-    /** Reads the store off the user interface thread, then draws the marks on it. */
+    /**
+     * Reads the store off the user interface thread, then draws the marks on it.
+     *
+     * A diff side carries its own revision in the user data of its editor, and the diff
+     * extension writes that data before it attaches the gutter. The left side of a diff
+     * often has no file in the working tree, so the store read follows the side alone.
+     */
     private fun repaint(editor: Editor) {
-        val file = FileDocumentManager.getInstance().getFile(editor.document) ?: return
+        val side = editor.getUserData(REVIEW_ANCHOR)
+        val sideRoot = editor.getUserData(REVIEW_ROOT)
+        val file = FileDocumentManager.getInstance().getFile(editor.document)
+        if (side == null && file == null) return
         ApplicationManager.getApplication().executeOnPooledThread {
-            val found = ReviewService.getInstance(project).anchorOf(file)
-            val anchor = (found as? AnchorResult.Found)?.anchor
+            val anchor = anchorOf(side, sideRoot, if (side == null) fileAnchor(file) else null)
             val marks = marksOf(anchor)
             ApplicationManager.getApplication().invokeLater({ draw(editor, anchor?.root, marks) }, project.disposed)
         }
+    }
+
+    private fun fileAnchor(file: VirtualFile?): ReviewAnchor? {
+        if (file == null) return null
+        return (ReviewService.getInstance(project).anchorOf(file) as? AnchorResult.Found)?.anchor
+    }
+
+    /**
+     * The store one editor draws from.
+     *
+     * A diff side always names a git revision, because the diff extension attaches only
+     * where a git repository holds the file.
+     */
+    private fun anchorOf(side: DiffAnchor?, sideRoot: VirtualFile?, file: ReviewAnchor?): ReviewAnchor? {
+        val place = GutterPlaces.of(side, file?.let { GutterPlace(it.key, it.path) }) ?: return null
+        val root = (if (side == null) file?.root else sideRoot) ?: return null
+        val kind = if (side == null) file?.kind ?: StoreKind.GIT else StoreKind.GIT
+        return ReviewAnchor(kind, root, place.key, place.path)
     }
 
     private fun marksOf(anchor: ReviewAnchor?): CommentMarks {
