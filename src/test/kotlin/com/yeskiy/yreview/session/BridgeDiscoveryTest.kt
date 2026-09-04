@@ -1,7 +1,8 @@
 package com.yeskiy.yreview.session
 
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.io.path.createDirectories
-import kotlin.io.path.createTempDirectory
 import kotlin.io.path.writeText
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,12 +14,20 @@ class BridgeDiscoveryTest {
 
     private val token = "0123456789abcdef0123"
 
-    private fun file(text: String): BridgeLookup {
-        val home = createTempDirectory("y-review-home")
+    private fun <T> withHome(body: (Path) -> T): T {
+        val home = Files.createTempDirectory("y-review-home")
+        try {
+            return body(home)
+        } finally {
+            home.toFile().deleteRecursively()
+        }
+    }
+
+    private fun file(text: String): BridgeLookup = withHome { home ->
         val directory = home.resolve(".y-review").resolve("bridge")
         directory.createDirectories()
         directory.resolve(BridgeDiscovery.fileName("E:/Project")).writeText(text)
-        return BridgeDiscovery.find(home, "E:/Project")
+        BridgeDiscovery.find(home, "E:/Project")
     }
 
     @Test
@@ -36,11 +45,12 @@ class BridgeDiscoveryTest {
 
     @Test
     fun `the file sits under the bridge directory of the home directory`() {
-        val home = createTempDirectory("y-review-home")
-        assertEquals(
-            home.resolve(".y-review").resolve("bridge").resolve("E--Project.json"),
-            BridgeDiscovery.fileFor(home, "E:/Project")
-        )
+        withHome { home ->
+            assertEquals(
+                home.resolve(".y-review").resolve("bridge").resolve("E--Project.json"),
+                BridgeDiscovery.fileFor(home, "E:/Project")
+            )
+        }
     }
 
     @Test
@@ -51,8 +61,9 @@ class BridgeDiscoveryTest {
 
     @Test
     fun `a missing file is not an error`() {
-        val home = createTempDirectory("y-review-home")
-        assertIs<BridgeLookup.Unavailable>(BridgeDiscovery.find(home, "E:/Project"))
+        withHome { home ->
+            assertIs<BridgeLookup.Unavailable>(BridgeDiscovery.find(home, "E:/Project"))
+        }
     }
 
     @Test
