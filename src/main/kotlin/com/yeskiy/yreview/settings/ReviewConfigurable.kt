@@ -11,9 +11,11 @@ import com.intellij.ui.dsl.builder.panel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
+import com.yeskiy.yreview.gutter.CommentGutter
 import com.yeskiy.yreview.session.ClaudeCommand
 import com.yeskiy.yreview.session.ClaudeDetection
 import com.yeskiy.yreview.session.JavaRuntime
+import com.yeskiy.yreview.store.NotesSharing
 import java.awt.Font
 import javax.swing.JComponent
 
@@ -29,6 +31,14 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val command = JBTextField()
 
+    private val remote = JBTextField()
+
+    private val refspec = JBCheckBox("Add the notes refspec to the git configuration")
+
+    private val editorMarks = JBCheckBox("Show comment marks in the editor")
+
+    private val autoStart = JBCheckBox("Start a session when the session tool window opens")
+
     override fun getDisplayName(): String = ProductName.TEXT
 
     override fun createComponent(): JComponent {
@@ -41,7 +51,27 @@ class ReviewConfigurable(private val project: Project) : Configurable {
                 comment(
                     "A local comment stays in refs/notes/y-review/local, and the plugin never pushes it. " +
                         "A shared comment goes to refs/notes/devtools/discuss, and the plugin pushes that ref " +
-                        "to origin. The add-comment dialog can change the choice for one comment."
+                        "to the remote below. The add-comment dialog can change the choice for one comment."
+                )
+            }
+            row("Remote for shared comments:") {
+                cell(remote).align(AlignX.FILL)
+            }
+            row {
+                comment(
+                    "The plugin pushes a shared note to this remote. " +
+                        "A blank field falls back to " + ReviewSettings.DEFAULT_REMOTE + "."
+                )
+            }
+            row {
+                cell(refspec)
+            }
+            row {
+                comment(
+                    "The plugin adds " + NotesSharing.FETCH_REFSPEC + " to the fetch list of that remote " +
+                        "once, so the notes other people write come back with the next fetch. " +
+                        "With the box clear the plugin writes no git configuration, " +
+                        "and you add that line by hand."
                 )
             }
             row {
@@ -77,6 +107,27 @@ class ReviewConfigurable(private val project: Project) : Configurable {
                 )
             }
             row {
+                cell(autoStart)
+            }
+            row {
+                comment(
+                    "The session tool window starts one session as soon as it opens. " +
+                        "With the box clear the window opens empty, " +
+                        "and the button in the title bar starts the session."
+                )
+            }
+            row {
+                cell(editorMarks)
+            }
+            row {
+                comment(
+                    "An open editor shows one icon for each comment range, and a quiet background " +
+                        "over the lines of that range. " +
+                        "With the box clear the editor stays plain, and the tool window still lists " +
+                        "every comment."
+                )
+            }
+            row {
                 cell(maximize)
             }
             row {
@@ -98,17 +149,27 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             channel.isSelected != settings().channel ||
             sessionWindow.isSelected != shown() ||
             maximize.isSelected != MaximizeSettings.getInstance().full ||
-            command.text.trim() != settings().claudeCommand
+            command.text.trim() != settings().claudeCommand ||
+            remote.text.trim() != settings().remote ||
+            refspec.isSelected != settings().writeRefspec ||
+            editorMarks.isSelected != settings().editorMarks ||
+            autoStart.isSelected != settings().autoStartSession
 
     override fun apply() {
         settings().sharing = selected()
         settings().channel = channel.isSelected
         settings().sessionWindow = sessionWindow.isSelected
         settings().claudeCommand = command.text
+        settings().remote = remote.text
+        settings().writeRefspec = refspec.isSelected
+        settings().editorMarks = editorMarks.isSelected
+        settings().autoStartSession = autoStart.isSelected
         command.text = settings().claudeCommand
+        remote.text = settings().remote
         BridgeService.getInstance(project).applySwitch(channel.isSelected)
         SessionWindow.show(project, sessionWindow.isSelected)
         MaximizeSettings.getInstance().switch(maximize.isSelected)
+        CommentGutter.getInstance(project).applyMarkSwitch(editorMarks.isSelected)
     }
 
     override fun reset() {
@@ -117,6 +178,10 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         sessionWindow.isSelected = shown()
         maximize.isSelected = MaximizeSettings.getInstance().full
         command.text = settings().claudeCommand
+        remote.text = settings().remote
+        refspec.isSelected = settings().writeRefspec
+        editorMarks.isSelected = settings().editorMarks
+        autoStart.isSelected = settings().autoStartSession
     }
 
     /** The real strings, so a user reads what the session runs and not a description of it. */

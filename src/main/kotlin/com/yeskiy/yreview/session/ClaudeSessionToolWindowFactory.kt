@@ -37,13 +37,16 @@ class ClaudeSessionToolWindowFactory : ToolWindowFactory {
      * The first session of the project starts here, so the user presses no button for it.
      * A stop ends that session, and this method never runs a second time. Only the title
      * bar button opens a session after a stop.
+     *
+     * A user who clears the start switch gets an empty window, and the title bar button
+     * then opens the first session too.
      */
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
         val panel = ClaudeSessionPanel(project, toolWindow)
         Disposer.register(toolWindow.disposable, panel)
         toolWindow.contentManager.addContent(ContentFactory.getInstance().createContent(panel, "", false))
         toolWindow.setTitleActions(panel.titleActions())
-        panel.startWhenSized()
+        if (ReviewSettings.getInstance(project).autoStartSession) panel.startWhenSized()
     }
 
     private companion object {

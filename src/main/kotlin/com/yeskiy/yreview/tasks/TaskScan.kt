@@ -15,12 +15,12 @@ import com.intellij.psi.search.PsiTodoSearchHelper
 import com.intellij.psi.search.TodoItem
 import com.intellij.util.Processor
 import com.yeskiy.yreview.settings.ShareLog
+import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoreRoot
-import com.yeskiy.yreview.store.StoredComment
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 
@@ -41,11 +41,16 @@ data class RepositoryTasks(val root: VirtualFile, val commit: String, val tasks:
  */
 object TaskScan {
 
-    /** The tasks of every store of the project, one entry per git repository and per folder. */
-    fun read(project: Project, onlyFile: VirtualFile?): List<RepositoryTasks> =
+    /**
+     * The tasks of every store of the project, one entry per git repository and per folder.
+     *
+     * [showResolved] comes from the toolbar switch of the tab that asks. The switch reaches
+     * the scan, so the tab counts the rows it shows.
+     */
+    fun read(project: Project, onlyFile: VirtualFile?, showResolved: Boolean = false): List<RepositoryTasks> =
         GitRepositoryManager.getInstance(project).repositories.mapNotNull { repository ->
-            repositoryTasks(project, repository, onlyFile)
-        } + folderTasks(project, onlyFile)
+            repositoryTasks(project, repository, onlyFile, showResolved)
+        } + folderTasks(project, onlyFile, showResolved)
 
     /** The identifiers of the TODO lines that are still in the source. */
     fun openTodoIds(project: Project): Set<String> =
@@ -58,6 +63,7 @@ object TaskScan {
         project: Project,
         repository: GitRepository,
         onlyFile: VirtualFile?,
+        showResolved: Boolean,
     ): RepositoryTasks? {
         val commit = repository.currentRevision ?: return null
         if (onlyFile != null && !VfsUtilCore.isAncestor(repository.root, onlyFile, false)) return null
@@ -66,7 +72,8 @@ object TaskScan {
             commit,
             withModules(
                 project,
-                comments(project, repository.root, onlyFile) + todos(project, repository.root, commit, onlyFile),
+                comments(project, repository.root, onlyFile, showResolved) +
+                    todos(project, repository.root, commit, onlyFile),
             ),
         )
     }
@@ -78,7 +85,11 @@ object TaskScan {
      * and the TODO reader keeps every file under its root, so a TODO of a nested repository
      * would appear twice. A comment reaches exactly one store, so a comment cannot repeat.
      */
-    private fun folderTasks(project: Project, onlyFile: VirtualFile?): List<RepositoryTasks> =
+    private fun folderTasks(
+        project: Project,
+        onlyFile: VirtualFile?,
+        showResolved: Boolean,
+    ): List<RepositoryTasks> =
         ReviewService.getInstance(project).storeRoots()
             .filter { it.kind == StoreKind.FOLDER }
             .filter { onlyFile == null || VfsUtilCore.isAncestor(it.root, onlyFile, false) }
@@ -86,20 +97,33 @@ object TaskScan {
                 RepositoryTasks(
                     store.root,
                     FolderStore.WORKTREE,
-                    withModules(project, folderComments(project, store, onlyFile)),
+                    withModules(project, folderComments(project, store, onlyFile, showResolved)),
                 )
             }
             .filter { it.tasks.isNotEmpty() }
 
-    private fun folderComments(project: Project, store: StoreRoot, onlyFile: VirtualFile?): List<ReviewTask> {
-        val book = ReviewService.getInstance(project).bookFor(store)
+    private fun folderComments(
+        project: Project,
+        store: StoreRoot,
+        onlyFile: VirtualFile?,
+        showResolved: Boolean,
+    ): List<ReviewTask> {
         val log = ShareLog.getInstance(project)
         val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, store.root, '/') }
-        return book.commits(NoteRefs.ALL)
-            .flatMap { book.open(it, NoteRefs.ALL) }
-            .mapNotNull { stored -> taskOf(stored, store.root, log.isUnshared(stored.id)) }
+        return records(ReviewService.getInstance(project).bookFor(store), showResolved)
+            .mapNotNull { record -> taskOf(record, store.root, log.isUnshared(record.stored.id)) }
             .filter { wanted == null || it.path == wanted }
     }
+
+    /** The records of one store, as the switch of the tab asks for them. */
+    private fun records(book: CommentBook, showResolved: Boolean): List<ScanRecord> =
+        book.commits(NoteRefs.ALL).flatMap { commit ->
+            CommentPick.of(
+                book.open(commit, NoteRefs.ALL),
+                if (showResolved) book.closed(commit, NoteRefs.ALL) else emptyList(),
+                showResolved,
+            )
+        }
 
     /** The module of every task, so the tree can put a module row above the files. */
     private fun withModules(project: Project, tasks: List<ReviewTask>): List<ReviewTask> {
@@ -116,17 +140,21 @@ object TaskScan {
         return index.getModuleForFile(file)?.name.orEmpty()
     }
 
-    private fun comments(project: Project, root: VirtualFile, onlyFile: VirtualFile?): List<ReviewTask> {
-        val book = ReviewService.getInstance(project).bookForRoot(root)
+    private fun comments(
+        project: Project,
+        root: VirtualFile,
+        onlyFile: VirtualFile?,
+        showResolved: Boolean,
+    ): List<ReviewTask> {
         val log = ShareLog.getInstance(project)
         val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, root, '/') }
-        return book.commits(NoteRefs.ALL)
-            .flatMap { book.open(it, NoteRefs.ALL) }
-            .mapNotNull { stored -> taskOf(stored, root, log.isUnshared(stored.id)) }
+        return records(ReviewService.getInstance(project).bookForRoot(root), showResolved)
+            .mapNotNull { record -> taskOf(record, root, log.isUnshared(record.stored.id)) }
             .filter { wanted == null || it.path == wanted }
     }
 
-    private fun taskOf(stored: StoredComment, root: VirtualFile, unshared: Boolean): ReviewTask? {
+    private fun taskOf(record: ScanRecord, root: VirtualFile, unshared: Boolean): ReviewTask? {
+        val stored = record.stored
         val location = stored.comment.location ?: return null
         val text = stored.comment.description?.trim().orEmpty()
         if (text.isEmpty()) return null
@@ -141,16 +169,13 @@ object TaskScan {
             filePath = "${root.path}/${location.path}",
             rootPath = root.path,
             revision = location.commit,
-            state = state(stored, unshared),
+            state = CommentWord.of(
+                shared = NoteRefs.isShared(stored.ref),
+                worktree = stored.commit == FolderStore.WORKTREE,
+                unshared = unshared,
+                resolved = record.resolved,
+            ),
         )
-    }
-
-    /** A comment of the local ref is never shared, and a folder store never reaches a remote. */
-    private fun state(stored: StoredComment, unshared: Boolean): String = when {
-        !NoteRefs.isShared(stored.ref) -> "local"
-        stored.commit == FolderStore.WORKTREE -> "not shared"
-        unshared -> "not shared"
-        else -> "shared"
     }
 
     private fun todos(

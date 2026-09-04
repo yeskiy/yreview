@@ -227,7 +227,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private val state = ScanState()
 
-    private val preview = CommentPreviewPanel(project)
+    private val preview = CommentPreviewPanel(project) { tab().showResolved }
 
     private val previewTicket = PreviewTicket()
 
@@ -405,7 +405,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun scan(onlyFile: VirtualFile?, chosen: SearchScope?): TreeContent? {
         if (project.isDisposed) return null
         val changes = readChangeList()
-        val found = TaskScan.read(project, onlyFile)
+        val found = TaskScan.read(project, onlyFile, tab().showResolved)
         return TreeContent(found, layoutOf(found, chosen, changes), changes)
     }
 
@@ -993,6 +993,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             PreviousOccurenceToolbarAction(this),
             NextOccurenceToolbarAction(this),
             FilterGroup(),
+            ResolvedAction(),
             GroupByGroup(),
             common.createExpandAllAction(expander, tree),
             common.createCollapseAllAction(expander, tree),
@@ -1168,6 +1169,29 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         override fun setSelected(event: AnActionEvent, state: Boolean) {
             tab().kindFilter = if (state) kind else TaskKindFilter.BOTH
             redraw()
+        }
+    }
+
+    /**
+     * The resolved switch of one tab.
+     *
+     * A resolved comment stays in the git notes, and the tree hides it. This switch brings
+     * it back for a second pass over the review. The switch changes the scan, so the tab
+     * reads the notes again and its count follows the switch.
+     */
+    private inner class ResolvedAction : ToggleAction(
+        "Show Resolved Comments",
+        "List the review comments that somebody already resolved.",
+        AllIcons.Actions.Show,
+    ) {
+
+        override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
+
+        override fun isSelected(event: AnActionEvent): Boolean = tab().showResolved
+
+        override fun setSelected(event: AnActionEvent, state: Boolean) {
+            tab().showResolved = state
+            scheduleReload()
         }
     }
 

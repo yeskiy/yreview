@@ -14,6 +14,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.handoff.GitDir
+import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.settings.ShareLog
 import com.yeskiy.yreview.ui.ReviewNotice
 import git4idea.repo.GitRepositoryManager
@@ -277,8 +278,9 @@ class ReviewService(private val project: Project) {
     }
 
     private fun runShare(root: VirtualFile, ref: String): ShareResult {
+        val settings = ReviewSettings.getInstance(project)
         val task = ThrowableComputable<ShareResult, RuntimeException> {
-            NotesSharing(ideGitRunner(project, root)).share(ref)
+            NotesSharing(ideGitRunner(project, root), settings.remote, settings.writeRefspec).share(ref)
         }
         if (!ApplicationManager.getApplication().isDispatchThread) return task.compute()
         return ProgressManager.getInstance()

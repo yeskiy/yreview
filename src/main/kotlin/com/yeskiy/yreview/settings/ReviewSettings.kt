@@ -7,6 +7,7 @@ import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
 import com.yeskiy.yreview.session.ClaudeCommand
+import com.yeskiy.yreview.store.NotesSharing
 import com.yeskiy.yreview.tasks.TaskGrouping
 import com.yeskiy.yreview.tasks.TaskKindFilter
 import com.yeskiy.yreview.tasks.TaskScope
@@ -52,6 +53,15 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         /** The identifier of the scope the Scope Based tab shows. The other tabs leave it empty. */
         @JvmField
         var scopeId: String = ""
+
+        /**
+         * True while the tree also lists the comments that somebody already resolved.
+         *
+         * A second pass over a review needs the answered comments, and a first pass does
+         * not. The switch therefore belongs to one tab, as the kind filter does.
+         */
+        @JvmField
+        var showResolved: Boolean = false
     }
 
     class State {
@@ -75,6 +85,22 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
          */
         @JvmField
         var claudeCommand: String = ClaudeCommand.DEFAULT_COMMAND
+
+        /** The git remote that a shared note goes to. Not every repository names it origin. */
+        @JvmField
+        var remote: String = DEFAULT_REMOTE
+
+        /** True while the plugin may add the notes refspec to the git configuration of the user. */
+        @JvmField
+        var writeRefspec: Boolean = true
+
+        /** True while an open editor shows the comment icon and the comment background. */
+        @JvmField
+        var editorMarks: Boolean = true
+
+        /** True while the session tool window starts a session as soon as it opens. */
+        @JvmField
+        var autoStartSession: Boolean = true
 
         @JvmField
         var projectTab: TabState = TabState()
@@ -123,6 +149,31 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
             current.claudeCommand = value.trim().ifEmpty { ClaudeCommand.DEFAULT_COMMAND }
         }
 
+    /** The git remote of a shared note. A blank field falls back to the default. */
+    var remote: String
+        get() = current.remote.trim().ifEmpty { DEFAULT_REMOTE }
+        set(value) {
+            current.remote = value.trim().ifEmpty { DEFAULT_REMOTE }
+        }
+
+    var writeRefspec: Boolean
+        get() = current.writeRefspec
+        set(value) {
+            current.writeRefspec = value
+        }
+
+    var editorMarks: Boolean
+        get() = current.editorMarks
+        set(value) {
+            current.editorMarks = value
+        }
+
+    var autoStartSession: Boolean
+        get() = current.autoStartSession
+        set(value) {
+            current.autoStartSession = value
+        }
+
     /** True when the Claude tool window may appear. An unset choice follows the search. */
     fun sessionWindowShown(claudeFound: Boolean): Boolean = current.sessionWindow ?: claudeFound
 
@@ -135,6 +186,10 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
     }
 
     companion object {
+
+        /** The remote of a fresh clone. A blank field on the settings page falls back to it. */
+        const val DEFAULT_REMOTE = NotesSharing.DEFAULT_REMOTE
+
         fun getInstance(project: Project): ReviewSettings = project.service()
     }
 }

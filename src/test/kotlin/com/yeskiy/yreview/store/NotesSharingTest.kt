@@ -8,6 +8,8 @@ import kotlin.test.assertTrue
 
 class NotesSharingTest {
 
+    private val note = """{"timestamp":"1787194427","author":"a@b.c"}"""
+
     private fun fetchRefspecs(repo: TempRepo): List<String> =
         repo.git.run("config", "--get-all", "remote.origin.fetch")
             .stdout.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()
@@ -67,6 +69,37 @@ class NotesSharingTest {
             assertFalse(result.ok)
             assertTrue(result.message.isNotBlank())
             assertEquals(line, NotesGateway(repo.git).readLines(NoteRefs.DISCUSS, head).single())
+        }
+    }
+
+    @Test
+    fun `pushes to the remote that the settings name`() {
+        TempRepo().use { repo ->
+            val remote = repo.addRemote("upstream")
+            val head = repo.commit("a.kt", "one")
+            NotesGateway(repo.git).append(NoteRefs.DISCUSS, head, note)
+
+            val result = NotesSharing(repo.git, remote = "upstream").share(NoteRefs.DISCUSS)
+
+            assertTrue(result.ok, result.message)
+            assertTrue(ProcessGitRunner(remote).run("rev-parse", NoteRefs.DISCUSS).ok, "not every remote is origin")
+        }
+    }
+
+    @Test
+    fun `a closed refspec switch writes no git configuration`() {
+        TempRepo().use { repo ->
+            repo.addRemote()
+            val head = repo.commit("a.kt", "one")
+            NotesGateway(repo.git).append(NoteRefs.DISCUSS, head, note)
+
+            val result = NotesSharing(repo.git, writeRefspec = false).share(NoteRefs.DISCUSS)
+
+            assertTrue(result.ok, result.message)
+            assertTrue(
+                fetchRefspecs(repo).none { it == NotesSharing.FETCH_REFSPEC },
+                "the user owns the git configuration file"
+            )
         }
     }
 

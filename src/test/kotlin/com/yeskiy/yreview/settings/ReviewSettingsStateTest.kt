@@ -141,6 +141,56 @@ class ReviewSettingsStateTest {
     }
 
     @Test
+    fun `the four page values carry their defaults`() {
+        val state = ReviewSettings.State()
+
+        assertEquals("origin", state.remote)
+        assertTrue(state.writeRefspec)
+        assertTrue(state.editorMarks)
+        assertTrue(state.autoStartSession)
+    }
+
+    @Test
+    fun `the four page values survive a write and a read`() {
+        val state = ReviewSettings.State()
+        state.remote = "upstream"
+        state.writeRefspec = false
+        state.editorMarks = false
+        state.autoStartSession = false
+
+        val second = read(state)
+
+        assertEquals("upstream", second.remote)
+        assertFalse(second.writeRefspec)
+        assertFalse(second.editorMarks)
+        assertFalse(second.autoStartSession)
+    }
+
+    @Test
+    fun `a blank remote falls back to origin`() {
+        val settings = ReviewSettings()
+        settings.loadState(ReviewSettings.State())
+
+        settings.remote = "   "
+        assertEquals("origin", settings.remote)
+
+        settings.remote = "  upstream  "
+        assertEquals("upstream", settings.remote)
+    }
+
+    @Test
+    fun `an old file without the four page values still loads`() {
+        val old = "<State><option name=\"sharing\" value=\"SHARED\" /></State>"
+
+        val read = XmlSerializer.deserialize(JDOMUtil.load(old), ReviewSettings.State::class.java)
+
+        assertEquals("origin", read.remote)
+        assertTrue(read.writeRefspec)
+        assertTrue(read.editorMarks)
+        assertTrue(read.autoStartSession)
+    }
+
+    @Test
     fun `both values carry a label a person can read`() {
         assertEquals("Local only", CommentSharing.LOCAL_ONLY.label)
         assertEquals("Shared", CommentSharing.SHARED.label)

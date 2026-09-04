@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ex.util.EditorUtil
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
@@ -15,6 +16,7 @@ import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.diff.DiffAnchor
 import com.yeskiy.yreview.diff.REVIEW_ANCHOR
 import com.yeskiy.yreview.diff.REVIEW_ROOT
+import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewAnchor
@@ -61,8 +63,25 @@ class CommentGutter(private val project: Project) : Disposable {
     }
 
     fun attach(editor: Editor) {
+        if (!ReviewSettings.getInstance(project).editorMarks) return
         painted[editor] = emptyList()
         repaint(editor)
+    }
+
+    /**
+     * Applies the mark switch now, so the marks appear and disappear without a reopen.
+     *
+     * An open switch reads every editor of this project, because [attach] skipped the
+     * editors the platform opened while the switch stood closed. A closed switch clears
+     * every mark it drew and closes every card.
+     */
+    fun applyMarkSwitch(shown: Boolean) {
+        if (shown) return editorsOfProject().forEach { attach(it) }
+        painted.keys.toList().forEach { editor ->
+            val old = painted.remove(editor).orEmpty()
+            if (!editor.isDisposed) old.forEach { editor.markupModel.removeHighlighter(it) }
+            boxes[editor]?.closeKind(InlayKind.CARD)
+        }
     }
 
     fun detach(editor: Editor) {
@@ -137,6 +156,15 @@ class CommentGutter(private val project: Project) : Disposable {
         EditorUtil.disposeWithEditor(editor) { boxes.remove(editor) }
         return made
     }
+
+    /**
+     * The open editors of this project.
+     *
+     * The list holds the file editors and the diff editors, because both draw the marks.
+     * An editor that carries no comment paints nothing, and it leaves the map on release.
+     */
+    private fun editorsOfProject(): List<Editor> =
+        EditorFactory.getInstance().allEditors.filter { it.project == project }
 
     private fun repaintAll() = painted.keys.forEach { repaint(it) }
 

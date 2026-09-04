@@ -23,7 +23,7 @@ object CommentText {
      */
     fun shareTooltip(canPush: Boolean): String =
         if (canPush) {
-            "The plugin pushes a shared comment to origin. " +
+            "The plugin pushes a shared comment to the remote that the settings name. " +
                 "A comment that you do not share stays in this repository."
         } else {
             "No git repository covers this file, so the plugin cannot push yet. " +

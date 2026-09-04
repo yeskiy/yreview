@@ -33,6 +33,34 @@ class ReviewViewStateTest {
     }
 
     @Test
+    fun `a fresh tab hides the resolved comments`() {
+        assertFalse(ReviewSettings.TabState().showResolved)
+        assertFalse(ReviewSettings.State().projectTab.showResolved)
+        assertFalse(ReviewSettings().tab(TaskScope.PROJECT).showResolved)
+    }
+
+    @Test
+    fun `the resolved switch of one tab leaves the other tabs alone`() {
+        val settings = ReviewSettings()
+        settings.loadState(ReviewSettings.State())
+
+        settings.tab(TaskScope.PROJECT).showResolved = true
+
+        assertTrue(settings.tab(TaskScope.PROJECT).showResolved)
+        assertFalse(settings.tab(TaskScope.CURRENT_FILE).showResolved)
+        assertFalse(settings.tab(TaskScope.CHANGE_LIST).showResolved)
+    }
+
+    @Test
+    fun `the store writes the resolved switch only after the user opens it`() {
+        val open = ReviewSettings.State()
+        open.projectTab.showResolved = true
+
+        assertFalse(store(ReviewSettings.State()).contains("showResolved"))
+        assertTrue(store(open).contains("<option name=\"showResolved\" value=\"true\" />"))
+    }
+
+    @Test
     fun `a fresh state opens the preview pane`() {
         assertTrue(ReviewSettings.TabState().showPreview)
         assertTrue(ReviewSettings.State().projectTab.showPreview)

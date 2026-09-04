@@ -204,9 +204,13 @@ Open Settings, Tools, Yreview.
 | Setting | Default | What it does |
 |---|---|---|
 | New comments | Local only | Where a new comment goes. `Local only` writes `refs/notes/y-review/local`. `Shared` writes `refs/notes/devtools/discuss` and pushes that ref. The add-comment box can change the choice for one comment. |
+| Remote for shared comments | `origin` | The remote that a shared note goes to. Not every repository names its remote `origin`. A blank field falls back to `origin`. |
+| Add the notes refspec to the git configuration | On | The plugin adds `+refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch` once, so the notes other people write come back with the next fetch. With the box clear the plugin writes no git configuration, and you add that line by hand. |
 | Send the review tasks through the channel | On | With the box clear, the plugin opens no port and starts no channel server. Every send then writes `AGENT.md` and `tasks.json` in the git directory, and it copies the prompt to the clipboard. |
 | Show the Claude tool window | Follows the search for a Claude Code installation | Whether the review session window appears. The window appears and disappears at once, so you need no restart. |
 | Claude command | `claude` | The one command a shell runs to start the session. Paste a full path when the command is not on the PATH. |
+| Start a session when the session tool window opens | On | Opening the window starts one session with no press. With the box clear the window opens empty, and the button in the title bar starts the session. |
+| Show comment marks in the editor | On | An open editor shows one icon for each comment range, and a quiet background over the lines of that range. With the box clear the editor stays plain, and the tool window still lists every comment. |
 | Hide the editor beside a maximized tool window | Off | A maximized tool window always leaves a strip of editor. This box writes the IDE registry key `ide.mainSplitter.min.size`, which belongs to the whole IDE and not to this plugin alone. The plugin writes the earlier value again when you clear the box. |
 
 Two more pages carry settings of this plugin.
@@ -217,7 +221,9 @@ Two more pages carry settings of this plugin.
 | Settings, Keymap | The keystroke of Add Review Comment, Control Shift G by default |
 
 The tool window toolbar holds the per-tab view state: group by module, group by directory,
-flatten the directories, the preview pane, and the kind filter.
+flatten the directories, the preview pane, the kind filter, and the resolved switch. The
+resolved switch lists the comments that somebody already resolved. It starts off, and each
+tab keeps its own answer.
 
 <!-- SCREENSHOT: the settings page at Settings, Tools, Yreview. -->
 

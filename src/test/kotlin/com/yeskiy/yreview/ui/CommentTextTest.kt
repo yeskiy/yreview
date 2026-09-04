@@ -63,7 +63,7 @@ class CommentTextTest {
     @Test
     fun `the share tooltip of a git repository names the push`() {
         assertEquals(
-            "The plugin pushes a shared comment to origin. " +
+            "The plugin pushes a shared comment to the remote that the settings name. " +
                 "A comment that you do not share stays in this repository.",
             CommentText.shareTooltip(canPush = true),
         )

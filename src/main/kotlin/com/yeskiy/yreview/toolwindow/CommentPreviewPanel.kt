@@ -20,6 +20,7 @@ import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.tasks.CommentPick
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskKind
 import com.yeskiy.yreview.ui.ReadBox
@@ -40,9 +41,14 @@ data class PreviewComment(val root: VirtualFile, val stored: StoredComment)
  * The pane also follows every write to the store. It reads the record of its card again
  * after a write, then it removes the card when the store no longer holds that record. A
  * delete removes the record, and a resolve closes it.
+ *
+ * [resolvedShown] is the resolved switch of the tab that holds this pane. While the switch
+ * stands on, a resolved record keeps its card, because the tree keeps its row.
  */
-class CommentPreviewPanel(private val project: Project) :
-    UsagePreviewPanel(project, UsageViewPresentation()) {
+class CommentPreviewPanel(
+    private val project: Project,
+    private val resolvedShown: () -> Boolean,
+) : UsagePreviewPanel(project, UsageViewPresentation()) {
 
     private var live: Editor? = null
 
@@ -82,24 +88,30 @@ class CommentPreviewPanel(private val project: Project) :
         val asked = wanted ?: return
         ApplicationManager.getApplication().executeOnPooledThread {
             if (project.isDisposed || isDisposed) return@executeOnPooledThread
-            openOf(asked)?.let { open ->
-                ApplicationManager.getApplication().invokeLater({ settle(asked, open) }, project.disposed)
+            liveRecords(asked)?.let { live ->
+                ApplicationManager.getApplication().invokeLater({ settle(asked, live) }, project.disposed)
             }
         }
     }
 
-    /** The open records of the note behind the card, or null when the read of the store failed. */
-    private fun openOf(comment: PreviewComment): List<StoredComment>? = try {
-        ReviewService.getInstance(project).bookForRoot(comment.root).open(comment.stored.commit)
+    /** The records the card may still match, or null when the read of the store failed. */
+    private fun liveRecords(comment: PreviewComment): List<StoredComment>? = try {
+        val book = ReviewService.getInstance(project).bookForRoot(comment.root)
+        val shown = resolvedShown()
+        CommentPick.of(
+            book.open(comment.stored.commit),
+            if (shown) book.closed(comment.stored.commit) else emptyList(),
+            shown,
+        ).map { it.stored }
     } catch (failure: Exception) {
         logger.warn("the review preview pane could not read the comments again", failure)
         null
     }
 
     /** Draws the answer of [CardChoice]. An answer that belongs to an older card changes nothing. */
-    private fun settle(asked: PreviewComment, open: List<StoredComment>) {
+    private fun settle(asked: PreviewComment, live: List<StoredComment>) {
         if (isDisposed || wanted != asked) return
-        val move = CardChoice.after(asked.stored, open)
+        val move = CardChoice.after(asked.stored, live)
         if (move.redraw) showComment(move.comment?.let { PreviewComment(asked.root, it) })
     }
 
