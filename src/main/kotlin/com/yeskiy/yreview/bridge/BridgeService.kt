@@ -140,8 +140,16 @@ class BridgeService(private val project: Project) : Disposable {
     /**
      * Closes every identifier the session reports. [ResolveRequest] checks each one first,
      * so an identifier that arrives here is a comment id or a todo id and nothing else.
+     * The log names the session, because several sessions can close a comment of one
+     * project and the user must be able to read who did it.
      */
-    private fun resolveIds(ids: List<String>): String? = TaskCompletion.getInstance(project).close(ids).problem
+    private fun resolveIds(ids: List<String>, session: String?): String? {
+        val report = TaskCompletion.getInstance(project).close(ids)
+        if (report.closed > 0) {
+            logger.info("the review bridge closed ${report.closed} tasks for ${session ?: "a session with no key"}")
+        }
+        return report.problem
+    }
 
     companion object {
         private val logger = logger<BridgeService>()

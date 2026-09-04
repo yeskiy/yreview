@@ -14,6 +14,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -34,7 +35,7 @@ class ChannelContractTest {
 
     private val reported = mutableListOf<List<String>>()
 
-    private val server = BridgeServer { ids ->
+    private val server = BridgeServer { ids, _ ->
         reported.add(ids)
         null
     }
@@ -43,11 +44,11 @@ class ChannelContractTest {
 
     private val lines = LinkedBlockingQueue<String>()
 
-    private var channel: Process? = null
+    private val channels = mutableListOf<Process>()
 
     @AfterTest
     fun tearDown() {
-        channel?.destroyForcibly()
+        channels.forEach { it.destroyForcibly() }
         server.stop()
     }
 
@@ -67,7 +68,7 @@ class ChannelContractTest {
         ),
     )
 
-    private fun startChannel(): Process {
+    private fun startChannel(key: String? = null, sink: LinkedBlockingQueue<String> = lines): Process {
         val jar = File(System.getProperty("y.review.channel.jar").orEmpty())
         Assumptions.assumeTrue(jar.isFile, "the channel jar is missing at ${jar.absolutePath}")
         val java = JavaRuntime.locate()
@@ -75,16 +76,17 @@ class ChannelContractTest {
         val builder = ProcessBuilder(java, "-cp", jar.absolutePath, ChannelServer.MAIN_CLASS)
         builder.environment()["Y_REVIEW_BRIDGE_URL"] = address.url
         builder.environment()["Y_REVIEW_BRIDGE_TOKEN"] = address.token
+        key?.let { builder.environment()[SessionKey.VARIABLE] = it }
         val process = builder.start()
-        channel = process
-        read(process.inputStream.bufferedReader())
-        read(process.errorStream.bufferedReader())
+        channels.add(process)
+        read(process.inputStream.bufferedReader(), sink)
+        read(process.errorStream.bufferedReader(), sink)
         return process
     }
 
-    private fun read(reader: BufferedReader) {
+    private fun read(reader: BufferedReader, sink: LinkedBlockingQueue<String>) {
         Thread {
-            reader.useLines { all -> all.forEach { lines.put(it) } }
+            reader.useLines { all -> all.forEach { sink.put(it) } }
         }.apply { isDaemon = true }.start()
     }
 
@@ -94,40 +96,54 @@ class ChannelContractTest {
     }
 
     /** Reads the standard output until a message holds the text, or the wait runs out. */
-    private fun awaitLine(holds: String): JsonObject {
+    private fun awaitLine(holds: String, sink: LinkedBlockingQueue<String> = lines): JsonObject {
         val deadline = System.currentTimeMillis() + 20_000
         while (System.currentTimeMillis() < deadline) {
-            val line = lines.poll(1, TimeUnit.SECONDS) ?: continue
+            val line = sink.poll(1, TimeUnit.SECONDS) ?: continue
             if (!line.startsWith("{") || !line.contains(holds)) continue
             return Json.parseToJsonElement(line).jsonObject
         }
         error("no message held $holds")
     }
 
-    private fun awaitStream() {
+    /**
+     * Reads every message of the session for the wait, and fails when one holds the text.
+     *
+     * This is the proof that a targeted send skipped a session. A single poll cannot prove
+     * it, because the process writes other lines and the message can arrive after them.
+     */
+    private fun awaitSilence(holds: String, sink: LinkedBlockingQueue<String>) {
+        val deadline = System.currentTimeMillis() + SILENCE_MS
+        while (System.currentTimeMillis() < deadline) {
+            val line = sink.poll(200, TimeUnit.MILLISECONDS) ?: continue
+            assertFalse(line.contains(holds), "the other session received a message: $line")
+        }
+    }
+
+    private fun awaitStreams(count: Int) {
         val deadline = System.currentTimeMillis() + 20_000
-        while (server.streamCount() == 0) {
+        while (server.streamCount() < count) {
             check(System.currentTimeMillis() < deadline) { "the channel never opened the event stream" }
             Thread.sleep(20)
         }
     }
 
-    private fun handshake(): Process {
-        val process = startChannel()
+    private fun handshake(key: String? = null, sink: LinkedBlockingQueue<String> = lines): Process {
+        val process = startChannel(key, sink)
         send(
             process,
             """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05",""" +
                 """"capabilities":{},"clientInfo":{"name":"contract-test","version":"0.0.0"}}}""",
         )
-        awaitLine(""""id":1""")
+        awaitLine(""""id":1""", sink)
         send(process, """{"jsonrpc":"2.0","method":"notifications/initialized"}""")
-        awaitStream()
         return process
     }
 
     @Test
     fun `the channel turns a batch of the bridge into one channel notification`() {
         handshake()
+        awaitStreams(1)
         assertEquals(1, server.send(batch))
 
         val notification = awaitLine("notifications/claude/channel")
@@ -147,6 +163,7 @@ class ChannelContractTest {
     @Test
     fun `the channel reports the full id to the bridge when the model resolves the short id`() {
         val process = handshake()
+        awaitStreams(1)
         server.send(batch)
         awaitLine("notifications/claude/channel")
 
@@ -158,5 +175,42 @@ class ChannelContractTest {
         val answer = awaitLine(""""id":2""")
         assertTrue(answer["result"]!!.jsonObject["isError"] == null, answer.toString())
         assertEquals(listOf(listOf(fullId)), reported)
+    }
+
+    @Test
+    fun `a targeted batch reaches one real session and not the other`() {
+        val second = LinkedBlockingQueue<String>()
+        handshake(FIRST_KEY)
+        handshake(SECOND_KEY, second)
+        awaitStreams(2)
+
+        assertEquals(listOf(FIRST_KEY, SECOND_KEY).sorted(), server.openKeys().sorted())
+        assertEquals(1, server.send(batch, target = FIRST_KEY))
+
+        val notification = awaitLine(CHANNEL_NOTIFICATION)
+        assertTrue(
+            notification["params"]!!.jsonObject["content"]!!.jsonPrimitive.content.contains("c3f9a12"),
+            notification.toString(),
+        )
+        awaitSilence(CHANNEL_NOTIFICATION, second)
+    }
+
+    @Test
+    fun `a session without a key still reads a broadcast`() {
+        // A session that started before the key existed reaches no chooser, and a send to
+        // every session still has to arrive.
+        handshake()
+        awaitStreams(1)
+
+        assertEquals(emptyList(), server.openKeys())
+        assertEquals(1, server.send(batch))
+        awaitLine(CHANNEL_NOTIFICATION)
+    }
+
+    private companion object {
+        const val FIRST_KEY = "aaaaaaaaaaaaaaaa"
+        const val SECOND_KEY = "bbbbbbbbbbbbbbbb"
+        const val CHANNEL_NOTIFICATION = "notifications/claude/channel"
+        const val SILENCE_MS = 3000L
     }
 }

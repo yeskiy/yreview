@@ -2,14 +2,19 @@ package com.yeskiy.yreview.channel
 
 import java.net.URI
 
-/** The bridge address and the secret that reaches it. Both come from the environment. */
-data class BridgeConfig(val bridgeUrl: String, val token: String)
+/**
+ * The bridge address, the secret that reaches it, and the address of this session.
+ *
+ * The first two are required. The session key is optional, because a session that started
+ * before the key existed must still read the bridge.
+ */
+data class BridgeConfig(val bridgeUrl: String, val token: String, val sessionKey: String? = null)
 
 /** A configuration value that the server refuses. The text reaches the standard error. */
 class ConfigError(message: String) : Exception(message)
 
 /**
- * Reads the two variables of one review session.
+ * Reads the variables of one review session.
  *
  * The address must point at the loopback interface over plain http. The bridge listens
  * there and nowhere else, so any other address is a mistake or an attack.
@@ -19,6 +24,9 @@ object Config {
     const val URL_VARIABLE = "Y_REVIEW_BRIDGE_URL"
 
     const val TOKEN_VARIABLE = "Y_REVIEW_BRIDGE_TOKEN"
+
+    /** The address of this session. The plugin writes it, and an older session has none. */
+    const val KEY_VARIABLE = "Y_REVIEW_SESSION_KEY"
 
     const val MIN_TOKEN_LENGTH = 16
 
@@ -31,6 +39,7 @@ object Config {
     fun parse(environment: Map<String, String?>): BridgeConfig = BridgeConfig(
         bridgeUrl = checkUrl(environment[URL_VARIABLE].orEmpty()),
         token = checkToken(environment[TOKEN_VARIABLE]),
+        sessionKey = environment[KEY_VARIABLE]?.takeIf { it.isNotBlank() },
     )
 
     private fun isLoopback(hostname: String): Boolean =

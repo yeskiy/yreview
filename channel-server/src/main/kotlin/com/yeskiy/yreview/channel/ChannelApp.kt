@@ -21,6 +21,7 @@ class ChannelApp(
     private val bridge = BridgeClient(
         bridgeUrl = config.bridgeUrl,
         token = config.token,
+        sessionKey = config.sessionKey,
         onError = onError,
         retryDelayMs = retryDelayMs,
     )

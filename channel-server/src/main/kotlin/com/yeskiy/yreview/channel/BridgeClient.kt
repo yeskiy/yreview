@@ -37,6 +37,7 @@ data class Drained(val events: List<String>, val rest: String)
 class BridgeClient(
     private val bridgeUrl: String,
     private val token: String,
+    private val sessionKey: String? = null,
     private val onError: (Throwable) -> Unit,
     private val retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
 ) {
@@ -72,6 +73,7 @@ class BridgeClient(
         val request = HttpRequest.newBuilder(URI.create("$bridgeUrl$RESOLVE_PATH"))
             .header("content-type", "application/json")
             .header(TOKEN_HEADER, token)
+            .apply { sessionKey?.let { header(SESSION_HEADER, it) } }
             .POST(HttpRequest.BodyPublishers.ofString(Json.encodeToString(ResolveBody(ids))))
             .build()
         val status = withContext(Dispatchers.IO) {
@@ -107,6 +109,7 @@ class BridgeClient(
         val request = HttpRequest.newBuilder(URI.create("$bridgeUrl$EVENTS_PATH"))
             .header("accept", "text/event-stream")
             .header(TOKEN_HEADER, token)
+            .apply { sessionKey?.let { header(SESSION_HEADER, it) } }
             .GET()
             .build()
         val response = withContext(Dispatchers.IO) {
@@ -178,6 +181,9 @@ class BridgeClient(
     companion object {
 
         const val TOKEN_HEADER = "x-y-review-token"
+
+        /** The address of this session. The bridge sends a batch to one session by it. */
+        const val SESSION_HEADER = "X-Y-Review-Session"
 
         const val EVENTS_PATH = "/events"
 

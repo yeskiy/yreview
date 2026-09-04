@@ -30,6 +30,10 @@ class FakeBridge(fixedToken: String? = null) {
 
     val resolveTokens: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
+    val streamKeys: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    val resolveKeys: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
     private val pool = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "fake-bridge").apply { isDaemon = true }
     }
@@ -75,6 +79,7 @@ class FakeBridge(fixedToken: String? = null) {
 
     private fun events(exchange: HttpExchange) {
         streamTokens.add(exchange.requestHeaders.getFirst(BridgeClient.TOKEN_HEADER).orEmpty())
+        streamKeys.add(exchange.requestHeaders.getFirst(BridgeClient.SESSION_HEADER).orEmpty())
         if (exchange.requestHeaders.getFirst(BridgeClient.TOKEN_HEADER) != token) {
             return answer(exchange, 401, "the token does not match")
         }
@@ -88,6 +93,7 @@ class FakeBridge(fixedToken: String? = null) {
     private fun resolve(exchange: HttpExchange) {
         exchange.use {
             resolveTokens.add(exchange.requestHeaders.getFirst(BridgeClient.TOKEN_HEADER).orEmpty())
+            resolveKeys.add(exchange.requestHeaders.getFirst(BridgeClient.SESSION_HEADER).orEmpty())
             if (exchange.requestHeaders.getFirst(BridgeClient.TOKEN_HEADER) != token) {
                 return answer(exchange, 401, "the token does not match")
             }

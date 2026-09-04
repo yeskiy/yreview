@@ -3,11 +3,14 @@ package com.yeskiy.yreview.channel
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ConfigTest {
 
     private val token = "a-token-of-32-characters-000000000"
+
+    private val sessionKey = "aaaaaaaaaaaaaaaa"
 
     private fun envWith(url: String): Map<String, String?> =
         mapOf(Config.URL_VARIABLE to url, Config.TOKEN_VARIABLE to token)
@@ -91,5 +94,28 @@ class ConfigTest {
             mapOf(Config.URL_VARIABLE to "http://127.0.0.1:64343", Config.TOKEN_VARIABLE to "short"),
             Config.TOKEN_VARIABLE,
         )
+    }
+
+    @Test
+    fun `reads the session key when the environment carries one`() {
+        val parsed = Config.parse(envWith("http://127.0.0.1:64343") + (Config.KEY_VARIABLE to sessionKey))
+
+        assertEquals(sessionKey, parsed.sessionKey)
+    }
+
+    @Test
+    fun `starts without a session key`() {
+        // A session that started before the key existed still has to work.
+        assertNull(Config.parse(envWith("http://127.0.0.1:64343")).sessionKey)
+    }
+
+    @Test
+    fun `drops a session key that is blank`() {
+        assertNull(Config.parse(envWith("http://127.0.0.1:64343") + (Config.KEY_VARIABLE to "   ")).sessionKey)
+    }
+
+    @Test
+    fun `carries the same variable name as the plugin`() {
+        assertEquals("Y_REVIEW_SESSION_KEY", Config.KEY_VARIABLE)
     }
 }

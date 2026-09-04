@@ -23,11 +23,17 @@ data class BridgeAddress(val url: String, val token: String, val port: Int)
  *
  * The server holds no IDE class, so a test starts it on an ephemeral port and talks to it
  * with a plain HTTP client. The plugin passes the resolve work in through [onResolve],
- * which returns null after a good report, or the text of the problem.
+ * which reads the identifiers and the key of the session that sent them. It returns null
+ * after a good report, or the text of the problem.
  */
-class BridgeServer(private val onResolve: (List<String>) -> String?) {
+class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
 
-    private val streams = CopyOnWriteArrayList<LinkedBlockingQueue<String>>()
+    /** One open event stream. [key] names the session, and null means a session with no key. */
+    private class Reader(val key: String?) {
+        val queue = LinkedBlockingQueue<String>()
+    }
+
+    private val streams = CopyOnWriteArrayList<Reader>()
 
     private val running = AtomicBoolean(false)
 
@@ -56,7 +62,7 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
 
     fun stop() {
         running.set(false)
-        streams.forEach { it.offer(STOP) }
+        streams.forEach { it.queue.offer(STOP) }
         streams.clear()
         http?.stop(0)
         http = null
@@ -65,15 +71,29 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
         token = ""
     }
 
-    /** Writes the batch to every open stream and returns the number of streams it reached. */
-    fun send(batch: ReviewBatch): Int {
+    /**
+     * Writes the batch to the stream of [target], or to every open stream when [target] is
+     * null. Returns the number of streams it reached, so a target that already left the
+     * bridge gives zero and the caller can say so.
+     */
+    fun send(batch: ReviewBatch, target: String? = null): Int {
         val data = BatchJson.encode(batch)
-        val open = streams.toList()
-        open.forEach { it.offer(data) }
+        val open = streams.toList().filter { target == null || it.key == target }
+        open.forEach { it.queue.offer(data) }
         return open.size
     }
 
     fun streamCount(): Int = streams.size
+
+    /**
+     * The keys of the sessions whose tool server reads the bridge right now. A stream with
+     * no key is not here.
+     *
+     * An open stream proves that the tool server of the session is registered. It does not
+     * prove that the session takes a send, because an agent can register the tool server
+     * and still drop a pushed message. The caller answers that second question.
+     */
+    fun openKeys(): List<String> = streams.toList().mapNotNull { it.key }.distinct()
 
     // --- The endpoints ---
 
@@ -110,17 +130,18 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
 
         when (val parsed = ResolveRequest.parse(String(body, StandardCharsets.UTF_8))) {
             is ResolveParse.Bad -> answer(exchange, 400, parsed.reason)
-            is ResolveParse.Ids -> report(exchange, parsed.ids)
+            is ResolveParse.Ids -> report(exchange, parsed.ids, sessionOf(exchange))
         }
     }
 
     /**
-     * Hands the ids to the plugin. A failure keeps the comments open on the channel side,
-     * so the model reads the reason and can try again.
+     * Hands the ids to the plugin, together with the session that reported them. A failure
+     * keeps the comments open on the channel side, so the model reads the reason and can
+     * try again.
      */
-    private fun report(exchange: HttpExchange, ids: List<String>) {
+    private fun report(exchange: HttpExchange, ids: List<String>, session: String?) {
         val failure = try {
-            onResolve(ids)
+            onResolve(ids, session)
         } catch (refused: RuntimeException) {
             return answer(exchange, 500, refused.message ?: "The plugin could not write the resolution.")
         }
@@ -132,8 +153,8 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
      * batch reaches the session at once, and the keep-alive line finds a dead connection.
      */
     private fun stream(exchange: HttpExchange) {
-        val queue = LinkedBlockingQueue<String>()
-        streams.add(queue)
+        val reader = Reader(sessionOf(exchange))
+        streams.add(reader)
         try {
             exchange.responseHeaders.set("Content-Type", "text/event-stream")
             exchange.responseHeaders.set("Cache-Control", "no-store")
@@ -141,7 +162,7 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
             val body = exchange.responseBody
             write(body, ": open\n\n")
             while (running.get()) {
-                val next = queue.poll(KEEPALIVE_SECONDS, TimeUnit.SECONDS)
+                val next = reader.queue.poll(KEEPALIVE_SECONDS, TimeUnit.SECONDS)
                 when {
                     next == null -> write(body, ": keep-alive\n\n")
                     next == STOP -> return
@@ -153,7 +174,7 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
         } catch (stopped: InterruptedException) {
             Thread.currentThread().interrupt()
         } finally {
-            streams.remove(queue)
+            streams.remove(reader)
         }
     }
 
@@ -161,6 +182,10 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
 
     private fun authorized(exchange: HttpExchange): Boolean =
         BridgeToken.matches(token, exchange.requestHeaders.getFirst(TOKEN_HEADER))
+
+    /** A header that the plugin did not write names no session, so the reader stays unkeyed. */
+    private fun sessionOf(exchange: HttpExchange): String? =
+        exchange.requestHeaders.getFirst(SessionKey.HEADER).takeIf { SessionKey.isValid(it) }
 
     private fun answer(exchange: HttpExchange, status: Int, text: String) {
         val bytes = text.toByteArray(StandardCharsets.UTF_8)
@@ -184,10 +209,12 @@ class BridgeServer(private val onResolve: (List<String>) -> String?) {
         const val RESOLVE_PATH = "/resolve"
         const val MAX_BODY_BYTES = 1_000_000
 
+        /** The number of event streams the bridge serves at once. The window reads it too. */
+        const val MAX_STREAMS = 16
+
         private const val LOOPBACK = "127.0.0.1"
         private const val EPHEMERAL_PORT = 0
         private const val BACKLOG = 16
-        private const val MAX_STREAMS = 16
         private const val KEEPALIVE_SECONDS = 20L
         private const val STOP = ""
     }

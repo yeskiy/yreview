@@ -43,9 +43,10 @@ class BridgeClientTest {
 
     private var client: BridgeClient? = null
 
-    private fun connect(token: String = bridge.token): BridgeClient = BridgeClient(
+    private fun connect(token: String = bridge.token, sessionKey: String? = null): BridgeClient = BridgeClient(
         bridgeUrl = bridge.url,
         token = token,
+        sessionKey = sessionKey,
         onError = { errors.add(it) },
         retryDelayMs = 20,
     ).also {
@@ -153,5 +154,30 @@ class BridgeClientTest {
         val failure = assertFailsWith<Exception> { runBlocking { client.resolve(listOf(fullId)) } }
 
         assertTrue(failure.message.orEmpty().isNotEmpty(), "the reason must reach the caller")
+    }
+
+    @Test
+    fun `sends the session key on the event stream and on the resolve call`() {
+        val client = connect(sessionKey = SESSION_KEY)
+        bridge.waitForStream()
+        runBlocking { client.resolve(listOf(fullId)) }
+
+        assertEquals(listOf(SESSION_KEY), bridge.streamKeys.toList())
+        assertEquals(listOf(SESSION_KEY), bridge.resolveKeys.toList())
+    }
+
+    @Test
+    fun `sends no session header when it has no key`() {
+        // A session that started before the key existed must still reach the bridge.
+        val client = connect()
+        bridge.waitForStream()
+        runBlocking { client.resolve(listOf(fullId)) }
+
+        assertEquals(listOf(""), bridge.streamKeys.toList())
+        assertEquals(listOf(""), bridge.resolveKeys.toList())
+    }
+
+    private companion object {
+        const val SESSION_KEY = "aaaaaaaaaaaaaaaa"
     }
 }
