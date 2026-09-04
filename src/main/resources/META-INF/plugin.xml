@@ -1,7 +1,7 @@
 <idea-plugin>
   <id>com.yeskiy.yreview</id>
   <name>Yreview</name>
-  <vendor url="https://github.com/yeskiy" email="eqwer24@gmail.com">yeskiy</vendor>
+  <vendor url="https://github.com/yeskiy" email="39830788+yeskiy@users.noreply.github.com">yeskiy</vendor>
   <description><![CDATA[
     <p>
       Yreview writes a code review comment on any line of the editor and on any line of a
