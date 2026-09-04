@@ -1,8 +1,9 @@
 package com.yeskiy.yreview.bridge
 
 /**
- * One target of a send. A null [key] means every open stream, which is what the bridge did
- * before it knew the sessions apart.
+ * One target of a send. A null [key] means the row for every session, and that row writes
+ * to every open stream. A stream that the plugin did not start ignores the push, because
+ * such a session holds no channel.
  */
 data class SessionChoice(val key: String?, val name: String)
 
@@ -22,6 +23,10 @@ sealed interface SendPick {
 /**
  * Decides the target of a send, and the words the Send button carries.
  *
+ * A session of this window is the only receiver. The plugin starts such a session with the
+ * flag that opens a channel. A session that the plugin did not start takes no push, so it
+ * is no target and it gets no name.
+ *
  * A user with one session must never answer a question, because there is only one answer.
  * A user with two or more must always answer, because a send to the wrong agent costs more
  * than one click.
@@ -30,33 +35,26 @@ object SendPicks {
 
     /**
      * The row that sends with no target. The bridge then writes to every open event
-     * stream, so the name says the channel and never promises more than that.
+     * stream, and a stream that the plugin did not start drops the push. The name
+     * therefore says the channel and never promises more than that.
      */
     const val EVERY_NAME = "Every session that reads the channel"
-
-    /** A session that this window did not start. It carries no key, so it has no name. */
-    const val OUTSIDE_NAME = "the session outside this window"
 
     /**
      * [named] holds every session of this window that a send can reach right now, in the
      * order of the tabs. The transport does not matter here, because the caller already
      * asked each session whether a send reaches it.
      *
-     * [outside] counts the sessions that read the channel and that this window did not
-     * start. It cannot name them, so they reach the user only through the row that holds
-     * every session.
-     *
      * [pushPossible] is true only when the route of this send can carry a push at all. A
      * folder store, a closed channel switch, and an empty bridge each give false, and every
      * one of them sends the tasks to the clipboard. A target named for such a send would be
      * thrown away, so this method names none.
      */
-    fun of(named: List<SessionChoice>, outside: Int, pushPossible: Boolean): SendPick {
+    fun of(named: List<SessionChoice>, pushPossible: Boolean): SendPick {
         if (!pushPossible) return SendPick.None
-        val total = named.size + outside
-        return when {
-            total == 0 -> SendPick.None
-            total == 1 -> SendPick.One(named.singleOrNull() ?: SessionChoice(null, OUTSIDE_NAME))
+        return when (named.size) {
+            0 -> SendPick.None
+            1 -> SendPick.One(named.first())
             else -> SendPick.Ask(named + SessionChoice(null, EVERY_NAME))
         }
     }

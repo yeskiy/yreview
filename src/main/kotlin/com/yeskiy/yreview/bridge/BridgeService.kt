@@ -157,27 +157,14 @@ class BridgeService(private val project: Project) : Disposable {
     fun reachableCount(): Int = liveChoices().size
 
     /**
-     * How many open event streams no tab of this window can name.
-     *
-     * A session that started before the session key existed opens a stream with no key. A
-     * session of another project window can also read this bridge. Neither reaches the
-     * chooser by name, and the row that holds every session is the only way to them.
-     */
-    fun outsideCount(): Int {
-        val server = startedServer() ?: return 0
-        val known = SessionRegistry.getInstance(project).entries().map { it.key }.toSet()
-        return server.streamCount() - server.openKeys().count { it in known }
-    }
-
-    /**
      * How many sessions can take a send right now, over any transport.
      *
-     * The named sessions come from the reach of each tab. The others are open event
-     * streams that no tab can name, and the row for every session reaches exactly those.
-     * [readerCount] must never feed the route, because it counts streams and a session
-     * that answers a loopback port of its own opens none.
+     * A session of this window is the only receiver. The plugin starts such a session with
+     * the flag that opens a channel, and a session that the plugin did not start drops a
+     * push in silence. [readerCount] must never feed the route, because it counts streams
+     * and a session that answers a loopback port of its own opens none.
      */
-    fun receiverCount(): Int = reachableCount() + outsideCount()
+    fun receiverCount(): Int = reachableCount()
 
     /** How a send gets to one session. Nothing reaches a null key or an unknown one. */
     fun reachOf(key: String?): SessionReach =

@@ -639,8 +639,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      * words on the button and the work of the send can never disagree.
      *
      * The list of names comes from the reach of each session, and never from the open
-     * stream set alone. The count of sessions outside this window comes from the streams,
-     * because the row that holds every session reaches exactly those.
+     * stream set alone. A stream that the plugin did not start reaches no name here,
+     * because only a session of this window can take a push.
      */
     private fun pick(store: StoreRoot?): SendPick {
         val bridge = BridgeService.getInstance(project)
@@ -649,7 +649,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             bridge.receiverCount(),
             store?.kind == StoreKind.GIT,
         )
-        return SendPicks.of(bridge.liveChoices(), bridge.outsideCount(), route == SendRoute.CHANNEL)
+        return SendPicks.of(bridge.liveChoices(), route == SendRoute.CHANNEL)
     }
 
     /**

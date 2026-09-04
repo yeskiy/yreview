@@ -34,36 +34,23 @@ class SendRoutesTest {
         // Without this case the push into an OpenCode session never runs, and no other
         // test would show it.
         val reachable = 1
-        val outside = 0
 
         assertEquals(
             SendRoute.CHANNEL,
-            SendRoutes.of(channel = true, receivers = reachable + outside, gitRepository = true),
+            SendRoutes.of(channel = true, receivers = reachable, gitRepository = true),
         )
     }
 
     @Test
-    fun `one codex session with an open stream falls to the clipboard`() {
+    fun `a stream that takes no push counts as no receiver`() {
         // Codex can hold a channel server for the review tools and still ignore a push.
-        // Its stream must never make the route look ready.
+        // A session that the plugin did not start holds no channel at all. Neither one
+        // reaches the count, so the send falls to the clipboard.
         val reachable = 0
-        val outside = 0
 
         assertEquals(
             SendRoute.NO_SESSION,
-            SendRoutes.of(channel = true, receivers = reachable + outside, gitRepository = true),
-        )
-    }
-
-    @Test
-    fun `a stream that no tab can name still counts as a receiver`() {
-        // A session of another window, or one that started before the session key existed.
-        val reachable = 0
-        val outside = 1
-
-        assertEquals(
-            SendRoute.CHANNEL,
-            SendRoutes.of(channel = true, receivers = reachable + outside, gitRepository = true),
+            SendRoutes.of(channel = true, receivers = reachable, gitRepository = true),
         )
     }
 

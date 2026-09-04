@@ -11,12 +11,12 @@ class SendPicksTest {
 
     @Test
     fun `nothing to reach means no session to pick`() {
-        assertEquals(SendPick.None, SendPicks.of(emptyList(), outside = 0, pushPossible = true))
+        assertEquals(SendPick.None, SendPicks.of(emptyList(), pushPossible = true))
     }
 
     @Test
     fun `a send that no route can push names no session`() {
-        assertEquals(SendPick.None, SendPicks.of(listOf(first, second), outside = 1, pushPossible = false))
+        assertEquals(SendPick.None, SendPicks.of(listOf(first, second), pushPossible = false))
     }
 
     @Test
@@ -26,40 +26,47 @@ class SendPicksTest {
         val route = SendRoutes.of(channel = true, receivers = 2, gitRepository = false)
 
         assertEquals(SendRoute.NO_REPOSITORY, route)
-        assertEquals(
-            SendPick.None,
-            SendPicks.of(listOf(first, second), outside = 0, pushPossible = route == SendRoute.CHANNEL),
-        )
+        assertEquals(SendPick.None, SendPicks.of(listOf(first, second), pushPossible = route == SendRoute.CHANNEL))
     }
 
     @Test
     fun `one named session needs no question`() {
-        assertEquals(SendPick.One(first), SendPicks.of(listOf(first), outside = 0, pushPossible = true))
+        assertEquals(SendPick.One(first), SendPicks.of(listOf(first), pushPossible = true))
     }
 
     @Test
-    fun `one session that this window does not know still gets the batch`() {
-        // A session that started before the key existed carries no key, so it has no name.
-        val pick = SendPicks.of(emptyList(), outside = 1, pushPossible = true)
+    fun `a second stream on the key of one tab still leaves one target`() {
+        // BridgeService counts the tabs and no stream, and a unit test cannot build it,
+        // because it is a project service and the test set holds no platform fixture.
+        // A background job of the tab opens a second stream on the key of that tab.
+        // The count of receivers therefore stays at one, and this test states that one.
+        val route = SendRoutes.of(channel = true, receivers = 1, gitRepository = true)
 
-        assertEquals(SendPick.One(SessionChoice(null, SendPicks.OUTSIDE_NAME)), pick)
+        assertEquals(SendRoute.CHANNEL, route)
+        assertEquals(SendPick.One(first), SendPicks.of(listOf(first), pushPossible = route == SendRoute.CHANNEL))
     }
 
     @Test
-    fun `two sessions raise a question and offer the channel row as well`() {
-        val pick = SendPicks.of(listOf(first, second), outside = 0, pushPossible = true)
+    fun `a stream with no key sends the tasks to the clipboard`() {
+        // BridgeService counts the tabs and no stream, and a unit test cannot build it,
+        // because it is a project service and the test set holds no platform fixture.
+        // A stream that no tab owns belongs to a session that the plugin did not start.
+        // Such a session takes no push, so the count of receivers is zero.
+        val route = SendRoutes.of(channel = true, receivers = 0, gitRepository = true)
+
+        assertEquals(SendRoute.NO_SESSION, route)
+        assertEquals(SendPick.None, SendPicks.of(emptyList(), pushPossible = route == SendRoute.CHANNEL))
+    }
+
+    @Test
+    fun `two tabs raise a question that ends with the row for every session`() {
+        val route = SendRoutes.of(channel = true, receivers = 2, gitRepository = true)
+        val pick = SendPicks.of(listOf(first, second), pushPossible = route == SendRoute.CHANNEL)
 
         assertIs<SendPick.Ask>(pick)
         assertEquals(listOf("Claude 1", "Claude 2", SendPicks.EVERY_NAME), pick.choices.map { it.name })
         assertEquals(listOf("aaaaaaaaaaaaaaaa", "bbbbbbbbbbbbbbbb", null), pick.choices.map { it.key })
-    }
-
-    @Test
-    fun `a session outside this window raises the question too`() {
-        val pick = SendPicks.of(listOf(first), outside = 2, pushPossible = true)
-
-        assertIs<SendPick.Ask>(pick)
-        assertEquals(listOf("Claude 1", SendPicks.EVERY_NAME), pick.choices.map { it.name })
+        assertEquals(SendPicks.EVERY_NAME, pick.choices.last().name)
     }
 
     @Test
@@ -83,7 +90,7 @@ class SendPicksTest {
             "Send Checked (3) to a Session...",
             SendPicks.buttonText(
                 "Send Checked (3)",
-                SendPicks.of(listOf(first, second), outside = 0, pushPossible = true),
+                SendPicks.of(listOf(first, second), pushPossible = true),
                 sendable = true,
             ),
         )
@@ -91,9 +98,9 @@ class SendPicksTest {
 
     @Test
     fun `the button keeps its plain words when nothing can take a send`() {
-        // An agent that takes no send never reaches the named list, and an agent with no
-        // channel adds nothing to the outside count. The send then copies the prompt.
-        assertEquals(SendPick.None, SendPicks.of(emptyList(), outside = 0, pushPossible = true))
+        // An agent that takes no send never reaches the named list, and a stream that no
+        // tab owns adds nothing. The send then copies the prompt.
+        assertEquals(SendPick.None, SendPicks.of(emptyList(), pushPossible = true))
         assertEquals("Send All (2)", SendPicks.buttonText("Send All (2)", SendPick.None, sendable = true))
     }
 
