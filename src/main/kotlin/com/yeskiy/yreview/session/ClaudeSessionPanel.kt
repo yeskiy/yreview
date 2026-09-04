@@ -14,6 +14,7 @@ import com.intellij.terminal.frontend.view.TerminalViewSessionState
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
+import com.yeskiy.yreview.bridge.SessionKey
 import com.yeskiy.yreview.diagnostic.SessionLog
 import com.yeskiy.yreview.diagnostic.SessionRecord
 import com.yeskiy.yreview.settings.ReviewSettings
@@ -42,8 +43,15 @@ import javax.swing.JTextArea
  */
 class ClaudeSessionPanel(
     private val project: Project,
-    private val toolWindow: ToolWindow
+    private val toolWindow: ToolWindow,
+    private val sessionName: String = DEFAULT_NAME
 ) : JPanel(BorderLayout()), Disposable {
+
+    /**
+     * The address of this session on the bridge. It lives as long as the panel, so a stop
+     * and a new start keep one address and the picker keeps one row.
+     */
+    val sessionKey: String = SessionKey.newKey()
 
     private val status = statusArea()
     private val idle = JBPanelWithEmptyText(BorderLayout())
@@ -61,11 +69,13 @@ class ClaudeSessionPanel(
     private var configFile: Path? = null
 
     init {
+        SessionRegistry.getInstance(project).add(sessionKey, sessionName)
         add(status, BorderLayout.SOUTH)
         showIdle(NO_SESSION, AUTO_START)
     }
 
     override fun dispose() {
+        SessionRegistry.getInstance(project).remove(sessionKey)
         dropConfig()
         terminal?.close()
     }
@@ -158,7 +168,15 @@ class ClaudeSessionPanel(
         val javaPath = javaPath()
         val written = writeConfig(bridge, server, javaPath)
         configFile = written
-        val plan = SessionPlan.of(basePath, bridge, settings().claudeCommand, server, javaPath, written?.toString())
+        val plan = SessionPlan.of(
+            basePath,
+            bridge,
+            settings().claudeCommand,
+            server,
+            javaPath,
+            written?.toString(),
+            sessionKey,
+        )
         val started = ReviewTerminal.open(project, plan)
         if (started == null) {
             dropConfig()
@@ -296,6 +314,7 @@ class ClaudeSessionPanel(
     }
 
     private companion object {
+        const val DEFAULT_NAME = "Claude"
         const val CONFIG_WORK = "write the channel configuration file"
         const val RUNNING_TITLE = "Running"
         const val ENDED_TITLE = "Ended"

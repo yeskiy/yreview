@@ -42,6 +42,8 @@ data class SendReport(
     val dropReason: String? = null,
     val route: SendRoute = SendRoute.CHANNEL,
     val folder: String? = null,
+    /** The name of the one session the user chose, or null when the send reached every one. */
+    val targetName: String? = null,
 )
 
 /** One line for the user, and whether it reports a problem. */
@@ -64,10 +66,18 @@ object SendMessages {
                 "to ${report.folder} and copied the prompt to the clipboard." + lost(report),
             warning = false,
         )
+        report.streams == 0 && report.targetName != null -> Notice(
+            "${report.targetName} no longer reads this project, so the IDE sent nothing.",
+            warning = true,
+        )
         report.streams == 0 -> Notice(
             "No Claude Code session reads this project. " +
                 "Start a session with the review channel, then send the tasks again." + lost(report),
             warning = true,
+        )
+        report.targetName != null -> Notice(
+            "The IDE sent ${TaskLabels.count(report.tasks, "task")} to ${report.targetName}." + lost(report),
+            warning = report.dropped > 0,
         )
         else -> Notice(
             "The IDE sent ${TaskLabels.count(report.tasks, "task")} to " +

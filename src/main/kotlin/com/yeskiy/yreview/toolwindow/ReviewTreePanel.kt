@@ -3,6 +3,7 @@ package com.yeskiy.yreview.toolwindow
 import com.intellij.icons.AllIcons
 import com.intellij.ide.CommonActionsManager
 import com.intellij.ide.CopyProvider
+import com.intellij.ide.DataManager
 import com.intellij.ide.DefaultTreeExpander
 import com.intellij.ide.OccurenceNavigator
 import com.intellij.ide.actions.NextOccurenceToolbarAction
@@ -42,6 +43,7 @@ import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
+import com.intellij.openapi.ui.popup.JBPopupFactory
 import com.intellij.openapi.util.Condition
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.ThrowableComputable
@@ -73,6 +75,7 @@ import com.intellij.ui.TreeUIHelper
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBLoadingPanel
 import com.intellij.ui.content.Content
+import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.ui.tree.AsyncTreeModel
 import com.intellij.ui.tree.StructureTreeModel
 import com.intellij.ui.tree.TreeVisitor
@@ -86,9 +89,12 @@ import com.intellij.util.ui.update.MergingUpdateQueue
 import com.intellij.util.ui.update.Update
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.bridge.SendMessages
+import com.yeskiy.yreview.bridge.SendPick
+import com.yeskiy.yreview.bridge.SendPicks
 import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
 import com.yeskiy.yreview.bridge.SendRoutes
+import com.yeskiy.yreview.bridge.SessionChoice
 import com.yeskiy.yreview.diagnostic.SessionLog
 import com.yeskiy.yreview.diagnostic.SessionRecord
 import com.yeskiy.yreview.handoff.CopyPrompt
@@ -612,9 +618,70 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             ReviewNotice.warn(project, "Read the tasks again, because the folder of the selection is gone.")
             return
         }
+        val store = ReviewService.getInstance(project).storeAt(repository.root)
+        when (val pick = pick(store)) {
+            SendPick.None -> deliverTo(store, repository, chosen, null)
+            is SendPick.One -> deliverTo(store, repository, chosen, pick.choice.key)
+            is SendPick.Ask -> ask(pick) { deliverTo(store, repository, chosen, it.key) }
+        }
+    }
+
+    /**
+     * Which session this send can reach.
+     *
+     * The route decides first. A folder store, a closed channel switch, and an empty
+     * bridge each send the tasks to the clipboard, and none of them can name a session.
+     * This method therefore asks [SendRoutes] the same question the delivery asks, so the
+     * words on the button and the work of the send can never disagree.
+     *
+     * The list of names comes from the reach of each session, and never from the open
+     * stream set alone. The count of sessions outside this window comes from the streams,
+     * because the row that holds every session reaches exactly those.
+     */
+    private fun pick(store: StoreRoot?): SendPick {
+        val bridge = BridgeService.getInstance(project)
+        val route = SendRoutes.of(
+            ReviewSettings.getInstance(project).channel,
+            bridge.readerCount(),
+            store?.kind == StoreKind.GIT,
+        )
+        return SendPicks.of(bridge.liveChoices(), bridge.outsideCount(), route == SendRoute.CHANNEL)
+    }
+
+    /**
+     * The store of one selection, or null when the rows span two folders or name none.
+     * A selection of two folders cannot go out in one send, so it names no store.
+     */
+    private fun storeOf(tasks: List<ReviewTask>): StoreRoot? {
+        val root = tasks.map { it.rootPath }.distinct().singleOrNull() ?: return null
+        val repository = repositories.firstOrNull { it.root.path == root } ?: return null
+        return ReviewService.getInstance(project).storeAt(repository.root)
+    }
+
+    /**
+     * Opens the list of sessions. The list stands where the user pressed, so the popup
+     * follows the toolbar button and the context menu entry alike.
+     */
+    private fun ask(pick: SendPick.Ask, chosen: (SessionChoice) -> Unit) {
+        JBPopupFactory.getInstance()
+            .createPopupChooserBuilder(pick.choices)
+            .setTitle("Send the Review Tasks To")
+            .setRenderer(textListCellRenderer<SessionChoice> { it.name })
+            .setItemChosenCallback { chosen(it) }
+            .createPopup()
+            .showInBestPositionFor(DataManager.getInstance().getDataContext(tree))
+    }
+
+    /** The progress window runs the send, because the send reads git and writes files. */
+    private fun deliverTo(
+        store: StoreRoot,
+        repository: RepositoryTasks,
+        tasks: List<ReviewTask>,
+        target: String?,
+    ) {
         finish(
             ProgressManager.getInstance().runProcessWithProgressSynchronously(
-                ThrowableComputable<SendOutcome, RuntimeException> { deliver(repository, chosen) },
+                ThrowableComputable<SendOutcome, RuntimeException> { deliver(store, repository, tasks, target) },
                 "Sending the Review Tasks",
                 true,
                 project,
@@ -628,8 +695,16 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         if (notice.warning) ReviewNotice.warn(project, notice.text) else ReviewNotice.say(project, notice.text)
     }
 
-    private fun deliver(repository: RepositoryTasks, tasks: List<ReviewTask>): SendOutcome {
-        val store = ReviewService.getInstance(project).storeAt(repository.root)
+    /**
+     * The caller reads the store, because the button reads it too. One store and one
+     * route serve the words on the button and the work of the send.
+     */
+    private fun deliver(
+        store: StoreRoot,
+        repository: RepositoryTasks,
+        tasks: List<ReviewTask>,
+        target: String?,
+    ): SendOutcome {
         val files = writeFiles(store, repository, tasks)
         val bridge = BridgeService.getInstance(project)
         val readers = bridge.readerCount()
@@ -639,7 +714,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             store.kind == StoreKind.GIT,
         )
         val outcome = when {
-            route == SendRoute.CHANNEL -> SendOutcome(bridge.sendTasks(repository.root, tasks), null)
+            route == SendRoute.CHANNEL -> SendOutcome(bridge.sendTasks(repository.root, tasks, target), null)
             files == null -> SendOutcome(
                 SendReport(0, 0, 0, "The plugin did not write the review files of ${repository.root.name}."),
                 null,
@@ -1357,9 +1432,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
         override fun update(event: AnActionEvent) {
             val target = factsOf(event).send
-            event.presentation.text = target.text
+            val sendable = target.scope != SendScope.NONE
+            event.presentation.text = SendPicks.buttonText(target.text, pick(storeOf(target.tasks)), sendable)
             event.presentation.description = target.description
-            event.presentation.isEnabled = target.scope != SendScope.NONE
+            event.presentation.isEnabled = sendable
         }
 
         override fun actionPerformed(event: AnActionEvent) = send()

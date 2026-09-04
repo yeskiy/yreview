@@ -1,5 +1,7 @@
 package com.yeskiy.yreview.session
 
+import com.yeskiy.yreview.bridge.SessionKey
+
 /**
  * Everything the terminal needs to start one review session. The bridge token travels in
  * the environment only. A command line is readable by every process on the machine.
@@ -26,6 +28,10 @@ data class SessionPlan(
          * channel server, and the IDE must name a Java runtime. The plugin appends the two
          * flags only then, and [configFile] holds the configuration file the caller wrote
          * for this session.
+         *
+         * [sessionKey] is the address of this session on the bridge. The channel server
+         * reads it from the environment and sends it back in a header, so the IDE can send
+         * a batch to this session alone.
          */
         fun of(
             projectPath: String,
@@ -34,6 +40,7 @@ data class SessionPlan(
             server: ChannelServer.Answer = ChannelServer.Answer.Unknown,
             javaPath: String? = null,
             configFile: String? = null,
+            sessionKey: String? = null,
         ): SessionPlan {
             val ready = bridge is BridgeLookup.Available &&
                 server is ChannelServer.Answer.Found &&
@@ -45,7 +52,7 @@ data class SessionPlan(
                     is BridgeLookup.Available -> mapOf(
                         BridgeDiscovery.URL_VARIABLE to bridge.url,
                         BridgeDiscovery.TOKEN_VARIABLE to bridge.token
-                    )
+                    ) + sessionKey?.let { mapOf(SessionKey.VARIABLE to it) }.orEmpty()
                     is BridgeLookup.Unavailable, BridgeLookup.ChannelOff -> emptyMap()
                 },
                 status = status(bridge, server, javaPath),

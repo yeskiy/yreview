@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.session
 
+import com.yeskiy.yreview.bridge.SessionKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -20,7 +21,8 @@ class SessionPlanTest {
         server: ChannelServer.Answer = found,
         javaPath: String? = this.javaPath,
         configFile: String? = config,
-    ) = SessionPlan.of(project, bridge, "claude", server, javaPath, configFile)
+        sessionKey: String? = null,
+    ) = SessionPlan.of(project, bridge, "claude", server, javaPath, configFile, sessionKey)
 
     @Test
     fun `the plan runs the command in the project directory`() {
@@ -204,5 +206,18 @@ class SessionPlanTest {
     @Test
     fun `the plan converts a wsl project path`() {
         assertEquals(project, SessionPlan.of("/mnt/e/work/demo-repo", ready).workingDirectory)
+    }
+
+    @Test
+    fun `the plan hands the session key to the session`() {
+        assertEquals(
+            "aaaaaaaaaaaaaaaa",
+            plan(sessionKey = "aaaaaaaaaaaaaaaa").environment[SessionKey.VARIABLE],
+        )
+    }
+
+    @Test
+    fun `a plan without a key carries no key variable`() {
+        assertFalse(plan().environment.containsKey(SessionKey.VARIABLE))
     }
 }

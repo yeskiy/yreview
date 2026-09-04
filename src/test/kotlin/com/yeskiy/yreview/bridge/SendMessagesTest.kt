@@ -140,4 +140,28 @@ class SendMessagesTest {
         assertTrue(notice.text.contains("3 tasks were dropped"), notice.text)
         assertTrue(notice.warning)
     }
+
+    @Test
+    fun `names the one session that took the tasks`() {
+        val notice = SendMessages.of(SendReport(tasks = 3, batches = 1, streams = 1, targetName = "Claude 2"))
+
+        assertEquals("The IDE sent 3 tasks to Claude 2.", notice.text)
+        assertFalse(notice.warning)
+    }
+
+    @Test
+    fun `warns when the chosen session left before the send`() {
+        val notice = SendMessages.of(SendReport(tasks = 3, batches = 1, streams = 0, targetName = "Claude 2"))
+
+        assertTrue(notice.warning)
+        assertEquals("Claude 2 no longer reads this project, so the IDE sent nothing.", notice.text)
+    }
+
+    @Test
+    fun `keeps the plural sentence when the send names no target`() {
+        assertEquals(
+            "The IDE sent 3 tasks to 2 sessions.",
+            SendMessages.of(SendReport(tasks = 3, batches = 1, streams = 2)).text,
+        )
+    }
 }
