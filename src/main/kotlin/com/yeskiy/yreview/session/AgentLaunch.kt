@@ -84,5 +84,5 @@ object AgentLaunch {
 
     const val SERVER_PLACE = "<the server of the plugin>"
 
-    const val FILE_PLACE = "<the configuration file of the session>"
+    const val FILE_PLACE = "<the configuration file of the agent>"
 }

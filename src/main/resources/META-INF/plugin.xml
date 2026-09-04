@@ -27,7 +27,7 @@
         window holds four tabs and a preview pane.
       </li>
       <li>
-        Send the open tasks to a Claude Code session that runs in a tool window beside the
+        Send the open tasks to a command line agent that runs in a tool window beside the
         editor.
       </li>
       <li>
