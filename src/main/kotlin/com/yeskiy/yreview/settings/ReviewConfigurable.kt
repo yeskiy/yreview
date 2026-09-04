@@ -24,6 +24,7 @@ import com.yeskiy.yreview.session.AgentSpec
 import com.yeskiy.yreview.session.ChannelServer
 import com.yeskiy.yreview.session.JavaRuntime
 import com.yeskiy.yreview.session.McpRoute
+import com.yeskiy.yreview.session.SESSION_NAMES
 import com.yeskiy.yreview.store.NotesSharing
 import java.awt.Font
 import java.nio.file.Files
@@ -240,6 +241,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         SessionWindow.show(project, sessionWindow.isSelected)
         MaximizeSettings.getInstance().switch(maximize.isSelected)
         CommentGutter.getInstance(project).applyMarkSwitch(editorMarks.isSelected)
+        project.messageBus.syncPublisher(SESSION_NAMES).namesChanged()
     }
 
     override fun reset() {

@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
@@ -21,6 +22,9 @@ private class SessionTab(val number: Int, val panel: ClaudeSessionPanel, val con
 
     /** The last stable name this tab wrote. A repeat write of one name changes nothing. */
     var shown: String? = null
+
+    /** The name that the user typed for this tab, or null while the user typed none. */
+    var byUser: String? = null
 }
 
 /**
@@ -51,6 +55,7 @@ class SessionTabs(
                 tabs.removeAll { it.content === event.content }
             }
         })
+        project.messageBus.connect(this).subscribe(SESSION_NAMES, SessionNameListener { refreshAll() })
     }
 
     /**
@@ -63,7 +68,7 @@ class SessionTabs(
         tabs.clear()
     }
 
-    fun titleActions(): List<AnAction> = listOf(NewSessionAction(), StateAction())
+    fun titleActions(): List<AnAction> = listOf(NewSessionAction(), RenameAction(), StateAction())
 
     /**
      * Opens one tab, and starts the session in it while [start] is true.
@@ -100,7 +105,7 @@ class SessionTabs(
 
     /** Everything that names one tab, read from the tab and from the panel behind it. */
     private fun facts(tab: SessionTab): TabFacts =
-        TabFacts(tab.number, tab.panel.tabAgent?.short, tab.state)
+        TabFacts(tab.number, tab.panel.tabAgent?.short, tab.state, byUser = tab.byUser)
 
     /**
      * Writes the name of one tab. The platform fires a change event on every write, so a
@@ -117,10 +122,15 @@ class SessionTabs(
         SessionRegistry.getInstance(project).rename(tab.panel.sessionKey, stable)
     }
 
-    private fun selected(): ClaudeSessionPanel? {
+    /** Every tab reads its name again. A tab whose name did not change writes nothing. */
+    private fun refreshAll() = tabs.toList().forEach { refresh(it) }
+
+    private fun selectedTab(): SessionTab? {
         val chosen = toolWindow.contentManager.selectedContent ?: return null
-        return tabs.firstOrNull { it.content === chosen }?.panel
+        return tabs.firstOrNull { it.content === chosen }
     }
+
+    private fun selected(): ClaudeSessionPanel? = selectedTab()?.panel
 
     /**
      * Opens one more session. The bridge serves a fixed number of event streams, and a
@@ -139,6 +149,42 @@ class SessionTabs(
         }
 
         override fun actionPerformed(event: AnActionEvent) = open()
+    }
+
+    /**
+     * Names the tab that the user looks at.
+     *
+     * The action stands in the title bar and never in a tab menu, because the platform
+     * builds the menu of a content tab itself. It is off for an agent that names its own
+     * sessions, and the reason then stands in the hint of the button.
+     */
+    private inner class RenameAction : AnAction() {
+
+        override fun getActionUpdateThread() = ActionUpdateThread.EDT
+
+        override fun update(event: AnActionEvent) {
+            val tab = selectedTab()
+            val blocked = SessionNaming.blocked(tab?.panel?.tabAgent)
+            event.presentation.text = SessionNaming.ACTION_TEXT
+            event.presentation.description = blocked ?: SessionNaming.HINT
+            event.presentation.icon = AllIcons.Actions.Edit
+            event.presentation.isEnabled = tab != null && blocked == null
+        }
+
+        override fun actionPerformed(event: AnActionEvent) {
+            val tab = selectedTab() ?: return
+            if (SessionNaming.blocked(tab.panel.tabAgent) != null) return
+            val answer = Messages.showInputDialog(
+                project,
+                SessionNaming.PROMPT,
+                SessionNaming.TITLE,
+                Messages.getQuestionIcon(),
+                tab.byUser.orEmpty(),
+                null,
+            ) ?: return
+            tab.byUser = SessionNaming.clean(answer)
+            refresh(tab)
+        }
     }
 
     /**
