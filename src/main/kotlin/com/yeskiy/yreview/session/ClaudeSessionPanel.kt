@@ -9,9 +9,12 @@ import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.terminal.frontend.view.TerminalViewSessionState
 import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBPanelWithEmptyText
+import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.bridge.BridgeToken
+import com.yeskiy.yreview.bridge.OpenCodeClient
+import com.yeskiy.yreview.bridge.OpenCodeTitle
 import com.yeskiy.yreview.bridge.SessionKey
 import com.yeskiy.yreview.diagnostic.SessionLog
 import com.yeskiy.yreview.diagnostic.SessionRecord
@@ -21,6 +24,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.awt.BorderLayout
 import java.nio.file.Path
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import javax.swing.JPanel
 import javax.swing.JTextArea
 
@@ -72,6 +77,9 @@ class ClaudeSessionPanel(
     /** The password of that server. It travels in the environment only. */
     private var httpPassword: String? = null
 
+    /** The poll that reads the name of an OpenCode session. Null while none runs. */
+    private var namePoll: ScheduledFuture<*>? = null
+
     /**
      * The agent the running session started with. A change of the setting never moves a
      * running session, so the buttons of that tab keep naming this agent.
@@ -111,6 +119,8 @@ class ClaudeSessionPanel(
     }
 
     override fun dispose() {
+        namePoll?.cancel(false)
+        namePoll = null
         SessionRegistry.getInstance(project).remove(sessionKey)
         terminal?.close()
     }
@@ -247,6 +257,7 @@ class ClaudeSessionPanel(
         onState(SessionState.RUNNING)
         status.text = plan.status
         record(plan, server, javaPath, written, terminalStarted = true)
+        watchName(agent, plan.workingDirectory)
         revalidate()
         repaint()
         IdeFocusManager.getInstance(project).requestFocus(started.view.preferredFocusableComponent, true)
@@ -307,6 +318,41 @@ class ClaudeSessionPanel(
     }
 
     /**
+     * Reads the name of a session that answers a port of its own.
+     *
+     * Only OpenCode needs this, because it writes no terminal title. The poll runs on a
+     * pooled thread and it stops with the session. A failed read changes nothing, so a
+     * server that is not up yet costs one quiet call.
+     */
+    private fun watchName(agent: AgentSpec, directory: String) {
+        namePoll?.cancel(false)
+        namePoll = null
+        val port = httpPort ?: return
+        val password = httpPassword ?: return
+        if (agent.id != AgentId.OPENCODE) return
+        namePoll = AppExecutorUtil.getAppScheduledExecutorService().scheduleWithFixedDelay(
+            { readName(port, password, directory) },
+            NAME_DELAY_SECONDS,
+            NAME_DELAY_SECONDS,
+            TimeUnit.SECONDS,
+        )
+    }
+
+    /**
+     * Runs on a pooled thread. The report of the name moves to the user interface thread.
+     *
+     * A read that comes back after its own session ended names nothing, because the panel
+     * then holds another port or none.
+     */
+    private fun readName(port: Int, password: String, directory: String) {
+        if (project.isDisposed) return
+        val rows = OpenCodeClient.sessions(port, password) ?: return
+        val found = OpenCodeTitle.pick(rows, directory)
+        ApplicationManager.getApplication()
+            .invokeLater({ if (httpPort == port) nameFromAgent(found) }, project.disposed)
+    }
+
+    /**
      * The end of the process arrives here, and it does not run on the user interface
      * thread. A report that finds no session of [ended] changes nothing, so a press on
      * Stop can end the session first, and a new start can outrun a late report.
@@ -326,6 +372,8 @@ class ClaudeSessionPanel(
      * so the registry hears that this tab takes no send until the next start.
      */
     private fun forget() {
+        namePoll?.cancel(false)
+        namePoll = null
         httpPort = null
         httpPassword = null
         runningAgent = null
@@ -447,6 +495,7 @@ class ClaudeSessionPanel(
     }
 
     private companion object {
+        const val NAME_DELAY_SECONDS = 3L
         const val CONFIG_WORK = "write the server configuration file"
         const val NO_SESSION = "No review session runs."
         const val NO_TERMINAL = "The terminal did not start. The IDE log holds the reason."

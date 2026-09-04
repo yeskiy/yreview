@@ -19,7 +19,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /** The HTTP server of one OpenCode session, small enough for a test. */
-private class FakeOpenCode(private val status: Int = 200) {
+private class FakeOpenCode(private val status: Int = 200, private val sessions: String = "[]") {
 
     val paths: MutableList<String> = Collections.synchronizedList(mutableListOf())
     val bodies: MutableList<String> = Collections.synchronizedList(mutableListOf())
@@ -29,20 +29,21 @@ private class FakeOpenCode(private val status: Int = 200) {
 
     private val http: HttpServer =
         HttpServer.create(InetSocketAddress(InetAddress.getByName("127.0.0.1"), 0), 0).apply {
-            createContext("/tui/") { record(it) }
+            createContext("/tui/") { record(it, "true") }
+            createContext("/session") { record(it, sessions) }
             executor = pool
             start()
         }
 
     val port: Int get() = http.address.port
 
-    private fun record(exchange: HttpExchange) {
+    private fun record(exchange: HttpExchange, answer: String) {
         paths += exchange.requestURI.toString()
         authorizations += exchange.requestHeaders.getFirst("Authorization").orEmpty()
         bodies += exchange.requestBody.readBytes().toString(StandardCharsets.UTF_8)
-        val answer = "true".toByteArray(StandardCharsets.UTF_8)
-        exchange.sendResponseHeaders(status, answer.size.toLong())
-        exchange.responseBody.use { it.write(answer) }
+        val bytes = answer.toByteArray(StandardCharsets.UTF_8)
+        exchange.sendResponseHeaders(status, bytes.size.toLong())
+        exchange.responseBody.use { it.write(bytes) }
     }
 
     fun stop() {
@@ -61,7 +62,8 @@ class OpenCodeClientTest {
         fake = null
     }
 
-    private fun start(status: Int = 200): FakeOpenCode = FakeOpenCode(status).also { fake = it }
+    private fun start(status: Int = 200, sessions: String = "[]"): FakeOpenCode =
+        FakeOpenCode(status, sessions).also { fake = it }
 
     /** The port of a server that stopped, so nothing listens on it any more. */
     private fun deadPort(): Int {
@@ -167,5 +169,46 @@ class OpenCodeClientTest {
         val problem = assertNotNull(OpenCodeClient.push(deadPort(), "the-secret-value", "do the work"))
 
         assertTrue(!problem.contains("the-secret-value"), problem)
+    }
+
+    @Test
+    fun `the session list comes back parsed`() {
+        val body = """[{"id":"ses_a","title":"the live talk","directory":"C:/work/app",
+                       "time":{"created":1,"updated":2}}]"""
+        val server = start(sessions = body)
+
+        val rows = assertNotNull(OpenCodeClient.sessions(server.port, "s3cret"))
+
+        assertEquals(listOf("the live talk"), rows.map { it.title })
+        assertEquals(OpenCodeTitle.LIST_PATH, server.paths.single())
+    }
+
+    @Test
+    fun `the session list carries the credentials`() {
+        val server = start()
+
+        OpenCodeClient.sessions(server.port, "s3cret")
+
+        assertEquals(OpenCodeClient.authorization("s3cret"), server.authorizations.single())
+    }
+
+    @Test
+    fun `an answer of a shape this build does not know holds no session`() {
+        // A later release can answer another shape, and the tab must then keep its name.
+        val server = start(sessions = """{"sessions":[{"title":"a talk"}]}""")
+
+        assertEquals(emptyList(), OpenCodeClient.sessions(server.port, "s3cret"))
+    }
+
+    @Test
+    fun `a refused session list answers null`() {
+        val server = start(status = 401)
+
+        assertNull(OpenCodeClient.sessions(server.port, "wrong"))
+    }
+
+    @Test
+    fun `a port that nothing listens on answers null and throws nothing`() {
+        assertNull(OpenCodeClient.sessions(deadPort(), "s3cret"))
     }
 }

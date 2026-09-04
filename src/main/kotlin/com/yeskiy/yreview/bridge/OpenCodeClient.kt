@@ -64,6 +64,24 @@ object OpenCodeClient {
         return null
     }
 
+    /**
+     * The sessions that this server holds, or null after any failure.
+     *
+     * The plugin reads this list only to name a tab. A failure is therefore quiet. The tab
+     * keeps the name it has, and the next poll tries again.
+     */
+    fun sessions(port: Int, password: String): List<OpenCodeSession>? = runCatching {
+        val answer = client.send(
+            HttpRequest.newBuilder(URI("http://$LOOPBACK:$port${OpenCodeTitle.LIST_PATH}"))
+                .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
+                .header("Authorization", authorization(password))
+                .GET()
+                .build(),
+            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8),
+        )
+        if (answer.statusCode() == OK) OpenCodeTitle.parse(answer.body()) else null
+    }.getOrNull()
+
     /** The status of the answer, or null when the call itself failed. */
     private fun post(port: Int, password: String, path: String, body: String): Int? = runCatching {
         client.send(
