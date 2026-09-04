@@ -15,7 +15,7 @@ class ReviewTaskTest {
         startLine = 53,
         endLine = 69,
         text = "This reload reads git on the user interface thread.",
-        author = "39830788+yeskiy@users.noreply.github.com",
+        author = "reviewer@example.com",
         filePath = "E:/repo/src/main/kotlin/Parser.kt",
         rootPath = "E:/repo",
         revision = "0f1e2d3c4b5a69788796a5b4c3d2e1f009182736",
@@ -84,7 +84,7 @@ class ReviewTaskTest {
     fun `writes the fields of a comment task`() {
         val text = TaskJson.encode(document(listOf(comment)))
         assertTrue(text.contains(""""kind": "comment""""), text)
-        assertTrue(text.contains(""""author": "39830788+yeskiy@users.noreply.github.com""""), text)
+        assertTrue(text.contains(""""author": "reviewer@example.com""""), text)
         assertTrue(text.contains(""""startLine": 53"""), text)
     }
 

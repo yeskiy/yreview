@@ -9,7 +9,7 @@ import kotlin.test.assertTrue
 class CommentStoreLogicTest {
 
     private fun book(repo: TempRepo, now: Long = 1787194427L) =
-        CommentBook(NotesGateway(repo.git), author = "39830788+yeskiy@users.noreply.github.com", clock = { now })
+        CommentBook(NotesGateway(repo.git), author = "reviewer@example.com", clock = { now })
 
     @Test
     fun `writes a comment that reads back with its anchor`() {
@@ -41,7 +41,7 @@ class CommentStoreLogicTest {
             val stored = book(repo).add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
             assertEquals("1787194427", stored.comment.timestamp)
             assertEquals(10, stored.comment.timestamp.length)
-            assertEquals("39830788+yeskiy@users.noreply.github.com", stored.comment.author)
+            assertEquals("reviewer@example.com", stored.comment.author)
         }
     }
 

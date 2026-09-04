@@ -14,7 +14,7 @@ import kotlin.test.assertTrue
 class CommentRemovalTest {
 
     private fun book(repo: TempRepo, now: Long = 1787194427L) =
-        CommentBook(NotesGateway(repo.git), author = "39830788+yeskiy@users.noreply.github.com", clock = { now })
+        CommentBook(NotesGateway(repo.git), author = "reviewer@example.com", clock = { now })
 
     private fun lines(repo: TempRepo, ref: String = NoteRefs.LOCAL, commit: String) =
         NotesGateway(repo.git).readLines(ref, commit)

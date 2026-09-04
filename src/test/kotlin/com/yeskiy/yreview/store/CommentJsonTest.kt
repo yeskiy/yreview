@@ -8,7 +8,7 @@ class CommentJsonTest {
 
     private val sample = Comment(
         timestamp = "1787194427",
-        author = "39830788+yeskiy@users.noreply.github.com",
+        author = "reviewer@example.com",
         description = "This branch never runs when the input is empty.",
         location = Location(
             commit = "4f2c8b1",
