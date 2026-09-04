@@ -11,6 +11,7 @@ import com.intellij.ui.content.Content
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManagerEvent
 import com.intellij.ui.content.ContentManagerListener
+import com.yeskiy.yreview.settings.ReviewSettings
 
 /** One tab of the window. The number names it, and the panel runs the session behind it. */
 private class SessionTab(val number: Int, val panel: ClaudeSessionPanel, val content: Content)
@@ -123,11 +124,19 @@ class SessionTabs(
         override fun update(event: AnActionEvent) {
             val panel = selected()
             val live = panel?.isRunning == true
-            event.presentation.text = if (live) STOP_TEXT else START_TEXT
+            event.presentation.text = if (live) "Stop ${agentLabel(panel)}" else "Start ${agentLabel(panel)}"
             event.presentation.description = if (live) STOP_HINT else START_HINT
             event.presentation.icon = if (live) AllIcons.Actions.Suspend else AllIcons.Actions.Execute
-            event.presentation.isEnabled = panel != null
+            event.presentation.isEnabled = panel != null && (live || panel.startable)
+            event.presentation.isVisible = live || panel?.startable == true
         }
+
+        /**
+         * A running session keeps the agent it started with, so the button of that tab
+         * names that agent and not the newer choice of the settings page.
+         */
+        private fun agentLabel(panel: ClaudeSessionPanel?): String =
+            (panel?.runningAgent ?: AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())).label
 
         override fun actionPerformed(event: AnActionEvent) {
             val panel = selected() ?: return
@@ -136,12 +145,10 @@ class SessionTabs(
     }
 
     private companion object {
-        const val NEW_TEXT = "New Claude Session"
+        const val NEW_TEXT = "New Review Session"
         const val NEW_HINT = "Open one more review session in a tab of its own."
         const val FULL_HINT = "The review bridge serves ${SessionRules.MAX_SESSIONS} sessions at once."
-        const val START_TEXT = "Start Claude"
         const val START_HINT = "Start a review session with the IDE server and the comment channel."
-        const val STOP_TEXT = "Stop Claude"
         const val STOP_HINT = "End the review session and the process behind it."
     }
 }

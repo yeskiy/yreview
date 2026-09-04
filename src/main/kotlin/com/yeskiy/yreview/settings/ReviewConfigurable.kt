@@ -1,9 +1,11 @@
 package com.yeskiy.yreview.settings
 
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.options.Configurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.ComboBox
 import com.intellij.ui.components.JBCheckBox
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.components.JBTextField
 import com.intellij.ui.dsl.builder.AlignX
@@ -12,12 +14,22 @@ import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.gutter.CommentGutter
+import com.yeskiy.yreview.session.AgentCatalog
 import com.yeskiy.yreview.session.AgentId
 import com.yeskiy.yreview.session.AgentLaunch
+import com.yeskiy.yreview.session.AgentMcp
+import com.yeskiy.yreview.session.AgentRows
 import com.yeskiy.yreview.session.AgentScan
+import com.yeskiy.yreview.session.AgentSpec
+import com.yeskiy.yreview.session.ChannelServer
 import com.yeskiy.yreview.session.JavaRuntime
+import com.yeskiy.yreview.session.McpRoute
 import com.yeskiy.yreview.store.NotesSharing
 import java.awt.Font
+import java.nio.file.Files
+import java.nio.file.Path
+import javax.swing.DefaultComboBoxModel
+import javax.swing.JButton
 import javax.swing.JComponent
 
 class ReviewConfigurable(private val project: Project) : Configurable {
@@ -26,11 +38,25 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val channel = JBCheckBox("Send the review tasks through the channel")
 
-    private val sessionWindow = JBCheckBox("Show the Claude tool window")
+    private val sessionWindow = JBCheckBox("Show the session tool window")
 
     private val maximize = JBCheckBox("Hide the editor beside a maximized tool window")
 
+    private val agents = ComboBox(AgentCatalog.ALL.toTypedArray())
+
+    private val agentHelp = helpArea()
+
     private val command = JBTextField()
+
+    private val commandHelp = helpArea()
+
+    private val appended = argumentArea()
+
+    private val tools = helpArea()
+
+    private val addServer = JButton("Add")
+
+    private val addState = JBLabel()
 
     private val remote = JBTextField()
 
@@ -40,10 +66,22 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val autoStart = JBCheckBox("Start a session when the session tool window opens")
 
+    /** The command of every agent while the page is open. Apply writes them all. */
+    private val typed = linkedMapOf<AgentId, String>()
+
+    /** The agent the box showed last, so a switch keeps what the user typed for it. */
+    private var shown: AgentId = AgentCatalog.DEFAULT
+
+    /** True while the page fills the box itself. A new model fires the listener of the box. */
+    private var filling = false
+
     override fun getDisplayName(): String = ProductName.TEXT
 
     override fun createComponent(): JComponent {
         choice.renderer = textListCellRenderer<CommentSharing> { it.label }
+        agents.renderer = textListCellRenderer<AgentSpec> { it.label }
+        agents.addActionListener { if (!filling) switchAgent() }
+        addServer.addActionListener { runAdd() }
         return panel {
             row("New comments:") {
                 cell(choice)
@@ -86,30 +124,51 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             }
             row {
                 comment(
-                    "The Claude tool window runs the review sessions inside the IDE. " +
+                    "The session tool window runs the review sessions inside the IDE. " +
                         "The plus button in the title bar opens one more session in a tab of its own. " +
                         "A close of the tab ends the session and the process behind it. " +
                         "The Send button of the review window names the session that gets the tasks. " +
-                        "It asks for one while two or more sessions read the comment channel. " +
+                        "It asks for one while two or more sessions can take the tasks. " +
                         "The window shows by default, and a clear box hides it. " +
                         "The window appears and disappears at once, so no restart is needed."
                 )
             }
-            row("Claude command:") {
-                cell(command).align(AlignX.FILL)
-            }
-            row {
-                comment(commandHelp())
-            }
-            row {
-                cell(appendedArguments()).align(AlignX.FILL)
+            row("Command line agent:") {
+                cell(agents).align(AlignX.FILL)
             }
             row {
                 comment(
-                    "The plugin appends these arguments to the command above. " +
-                        "It appends them only when the bridge answers and the channel can run. " +
+                    "The session window runs this agent. " +
+                        "A running session keeps the agent it started with. " +
+                        "The next session uses the new choice."
+                )
+            }
+            row {
+                cell(agentHelp).align(AlignX.FILL)
+            }
+            row("Command:") {
+                cell(command).align(AlignX.FILL)
+            }
+            row {
+                cell(commandHelp).align(AlignX.FILL)
+            }
+            row {
+                cell(appended).align(AlignX.FILL)
+            }
+            row {
+                comment(
+                    "The box above holds the real strings of this agent. " +
+                        "The plugin appends the arguments of a session only when the bridge answers " +
+                        "and the review server can run. " +
                         "An entry in a configuration file alone never registers a channel."
                 )
+            }
+            row {
+                cell(tools).align(AlignX.FILL)
+            }
+            row {
+                cell(addServer)
+                cell(addState)
             }
             row {
                 cell(autoStart)
@@ -155,7 +214,9 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             channel.isSelected != settings().channel ||
             sessionWindow.isSelected != shown() ||
             maximize.isSelected != MaximizeSettings.getInstance().full ||
-            command.text.trim() != settings().command(agent()) ||
+            selectedAgent().id != settings().agentOrDefault() ||
+            !settings().agentChosen ||
+            commandsChanged() ||
             remote.text.trim() != settings().remote ||
             refspec.isSelected != settings().writeRefspec ||
             editorMarks.isSelected != settings().editorMarks ||
@@ -165,12 +226,15 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         settings().sharing = selected()
         settings().channel = channel.isSelected
         settings().sessionWindow = sessionWindow.isSelected
-        settings().setCommand(agent(), command.text)
+        typed[selectedAgent().id] = command.text
+        typed.forEach { (id, text) -> settings().setCommand(id, text) }
+        AgentCatalog.ALL.forEach { typed[it.id] = settings().command(it.id) }
+        settings().agent = selectedAgent().id
         settings().remote = remote.text
         settings().writeRefspec = refspec.isSelected
         settings().editorMarks = editorMarks.isSelected
         settings().autoStartSession = autoStart.isSelected
-        command.text = settings().command(agent())
+        showAgent()
         remote.text = settings().remote
         BridgeService.getInstance(project).applySwitch(channel.isSelected)
         SessionWindow.show(project, sessionWindow.isSelected)
@@ -183,19 +247,178 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         channel.isSelected = settings().channel
         sessionWindow.isSelected = shown()
         maximize.isSelected = MaximizeSettings.getInstance().full
-        command.text = settings().command(agent())
+        typed.clear()
+        AgentCatalog.ALL.forEach { typed[it.id] = settings().command(it.id) }
+        shown = settings().agentOrDefault()
+        fillAgents()
+        showAgent()
         remote.text = settings().remote
         refspec.isSelected = settings().writeRefspec
         editorMarks.isSelected = settings().editorMarks
         autoStart.isSelected = settings().autoStartSession
+        startScan()
     }
 
+    /**
+     * The platform builds and resets this page on the user interface thread, so nothing
+     * here waits for a search. The search runs on a pooled thread, and the answer fills
+     * the two help lines when it lands.
+     */
+    private fun startScan() {
+        if (AgentScan.getInstance().latest().scanned) return
+        AgentScan.getInstance().refresh {
+            ApplicationManager.getApplication().invokeLater(
+                {
+                    fillAgents()
+                    refreshHelp()
+                },
+                project.disposed,
+            )
+        }
+    }
+
+    /** The box lists the found agents first. A fresh scan fills it again, and [shown] stays. */
+    private fun fillAgents() {
+        filling = true
+        try {
+            agents.model = DefaultComboBoxModel(
+                AgentCatalog.ordered(AgentScan.getInstance().latest().installs.filterValues { it.found }.keys)
+                    .toTypedArray()
+            )
+            agents.selectedItem = AgentCatalog.of(shown)
+        } finally {
+            filling = false
+        }
+    }
+
+    /** Every switch of the box keeps what the user typed for the agent it leaves. */
+    private fun switchAgent() {
+        typed[shown] = command.text
+        showAgent()
+    }
+
+    private fun showAgent() {
+        val spec = selectedAgent()
+        shown = spec.id
+        command.text = typed.getOrPut(spec.id) { settings().command(spec.id) }
+        refreshHelp()
+        appended.text = AgentLaunch.appendedText(
+            spec.id,
+            javaPath() ?: AgentLaunch.JAVA_PLACE,
+            serverPath() ?: AgentLaunch.SERVER_PLACE,
+        )
+        tools.text = AgentMcp.help(spec)
+        showAdd(spec)
+    }
+
+    /**
+     * The two lines that read this machine. A late answer of the search lands here as
+     * well, and the command field keeps what the user typed.
+     */
+    private fun refreshHelp() {
+        val spec = selectedAgent()
+        agentHelp.text = AgentRows.row(spec, AgentScan.getInstance().latest().of(spec.id).found)
+        commandHelp.text = commandHelp(spec)
+    }
+
+    private fun selectedAgent(): AgentSpec = agents.selectedItem as? AgentSpec ?: AgentCatalog.of(AgentCatalog.DEFAULT)
+
+    private fun commandsChanged(): Boolean {
+        typed[selectedAgent().id] = command.text
+        return typed.any { (id, text) -> text.trim() != settings().command(id) }
+    }
+
+    /** One line about this machine, and it never says that an agent is not installed. */
+    private fun commandHelp(spec: AgentSpec): String {
+        val answer = AgentScan.getInstance().latest()
+        val place = when {
+            !answer.scanned -> AgentRows.SEARCHING
+            answer.of(spec.id).found -> "This machine holds ${spec.label} at ${answer.of(spec.id).path}."
+            else -> "The plugin did not find ${spec.label} on this machine. ${spec.hint}"
+        }
+        return "A shell runs this one command, and the shell loads the profile of the user. " +
+            "Paste a full path when the command is not on the PATH. A shell function works too. $place"
+    }
+
+    /** The button shows only for a route that writes a file the user owns. */
+    private fun showAdd(spec: AgentSpec) {
+        val stored = spec.mcp == McpRoute.AddCommand || spec.mcp is McpRoute.UserFile
+        addServer.isVisible = stored
+        addState.isVisible = stored
+        addServer.isEnabled = stored && javaPath() != null && serverPath() != null
+        addState.text = when {
+            !stored -> ""
+            settings().mcpAdded(spec.id) -> "The plugin already registered the review server for ${spec.label}."
+            addServer.isEnabled -> "Nothing is written until you press Add."
+            else -> "The plugin holds no channel server or no Java runtime, so it can write nothing."
+        }
+    }
+
+    /**
+     * Runs the command of the agent, or writes the file of the project.
+     *
+     * A command runs with no shell, so nothing of the text reaches a shell as code. The
+     * page records the write only after it really succeeded.
+     */
+    private fun runAdd() {
+        val spec = selectedAgent()
+        val java = javaPath() ?: return
+        val server = serverPath() ?: return
+        val problem = when (val route = spec.mcp) {
+            McpRoute.AddCommand -> runCommand(AgentMcp.addCommand(spec, java, server).orEmpty())
+            is McpRoute.UserFile -> writeFile(route.path, AgentMcp.userFile(spec, java, server).orEmpty())
+            else -> "This agent needs no write."
+        }
+        if (problem == null) {
+            settings().markMcpAdded(spec.id)
+            addState.text = "The plugin registered the review server for ${spec.label}."
+        } else {
+            addState.text = problem
+        }
+    }
+
+    /** Null after a good run, or the text of the problem. */
+    private fun runCommand(parts: List<String>): String? {
+        if (parts.isEmpty()) return "The plugin holds no command for this agent."
+        return runCatching {
+            val process = ProcessBuilder(parts).redirectErrorStream(true).start()
+            val output = process.inputStream.readBytes().toString(Charsets.UTF_8).trim()
+            if (process.waitFor() == 0) null else "The command answered: $output"
+        }.getOrElse { "The command did not run. ${it.message.orEmpty()}" }
+    }
+
+    /** Null after a good write, or the text of the problem. */
+    private fun writeFile(relative: String, text: String): String? {
+        val base = project.basePath ?: return "This project has no directory."
+        return runCatching {
+            val file = Path.of(base).resolve(relative)
+            Files.createDirectories(file.parent)
+            Files.writeString(file, text)
+            null
+        }.getOrElse { "The file was not written. ${it.message.orEmpty()}" }
+    }
+
+    private fun javaPath(): String? = JavaRuntime.locate()
+
+    private fun serverPath(): String? = (ChannelServer.locate() as? ChannelServer.Answer.Found)?.path
+
     /** The real strings, so a user reads what the session runs and not a description of it. */
-    private fun appendedArguments() = JBTextArea(ARGUMENTS).apply {
+    private fun argumentArea() = JBTextArea().apply {
         isEditable = false
         isOpaque = false
         lineWrap = false
         font = JBUI.Fonts.create(Font.MONOSPACED, JBUI.Fonts.label().size)
+        border = JBUI.Borders.empty(4, 8)
+    }
+
+    /** A text area, not a label. The help text wraps, and it never renders markup. */
+    private fun helpArea() = JBTextArea().apply {
+        isEditable = false
+        isOpaque = false
+        isFocusable = false
+        lineWrap = true
+        wrapStyleWord = true
+        font = JBUI.Fonts.label()
         border = JBUI.Borders.empty(4, 8)
     }
 
@@ -204,38 +427,16 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         val found = JavaRuntime.locate()
             ?.let { "This IDE runs the server with the Java at $it." }
             ?: "This IDE names no Java runtime, so a session starts without the channel."
-        return "The channel pushes a task to a running Claude Code session at once. " +
+        return "The channel pushes a task to a running session at once. " +
             "With the channel off, the plugin opens no port. " +
             "Every send then writes AGENT.md and tasks.json in .git/y-review, " +
             "and it copies the prompt to the clipboard. " +
             "The plugin ships the channel server, and the Java runtime of the IDE runs it. $found"
     }
 
-    /**
-     * The platform builds this page on the user interface thread, so the text reads the
-     * answer the scan already holds and it waits for nothing.
-     */
-    private fun commandHelp(): String {
-        val answer = AgentScan.getInstance().latest()
-        val install = answer.of(AgentId.CLAUDE)
-        val found = when {
-            !answer.scanned -> "The plugin is looking for the installed agents."
-            install.found -> "This machine holds Claude Code at ${install.path}, so that path also works here."
-            else -> "The plugin did not find Claude Code on this machine."
-        }
-        return "A shell runs this one command, and the shell loads the profile of the user. " +
-            "Paste a full path when the command is not on the PATH. $found"
-    }
-
     private fun selected(): CommentSharing = choice.selectedItem as? CommentSharing ?: CommentSharing.LOCAL_ONLY
 
     private fun shown(): Boolean = settings().sessionWindowShown()
 
-    private fun agent(): AgentId = settings().agentOrDefault()
-
     private fun settings(): ReviewSettings = ReviewSettings.getInstance(project)
-
-    private companion object {
-        val ARGUMENTS = AgentLaunch.appendedText(AgentId.CLAUDE)
-    }
 }

@@ -60,6 +60,21 @@ intellijPlatform {
             recommended()
         }
     }
+
+    // The signer and the verifier both read the certificate chain from this file.
+    //
+    // A chain that stands in the CERTIFICATE_CHAIN variable reaches verifyPluginSignature
+    // twice. The task writes it to a temporary file, passes that path after -cert, and then
+    // passes the chain itself as one more argument. That argument starts with a hyphen, so
+    // the argument parser of the signer reads it as a flag and answers "Invalid argument".
+    // A chain in a file reaches the task once, and the verify step then runs.
+    //
+    // With the variable unset the file stays absent, the plugin falls back to
+    // CERTIFICATE_CHAIN, and a build with no secret skips the signing tasks as before.
+    signing {
+        certificateChainFile =
+            layout.projectDirectory.file(providers.environmentVariable("CERTIFICATE_CHAIN_FILE"))
+    }
 }
 
 // --- The channel server ---

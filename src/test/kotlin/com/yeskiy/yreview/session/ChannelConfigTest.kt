@@ -20,7 +20,7 @@ class ChannelConfigTest {
 
     private val serverPath = "C:\\Users\\one\\plugins\\y-review\\channel\\y-review-channel.jar"
 
-    private fun text() = ChannelConfig.text(javaPath, serverPath)
+    private fun text() = ChannelConfig.text(AgentId.CLAUDE, javaPath, serverPath)
 
     private fun entry(text: String) =
         Json.parseToJsonElement(text).jsonObject["mcpServers"]!!.jsonObject["y-review"]!!.jsonObject
@@ -71,7 +71,7 @@ class ChannelConfigTest {
 
     @Test
     fun `a written file holds the same text and a delete removes it`() {
-        val file = ChannelConfig.write(javaPath, serverPath)
+        val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath)
         try {
             assertTrue(file.isRegularFile())
             assertEquals(text(), file.readText())
@@ -80,7 +80,7 @@ class ChannelConfigTest {
             file.deleteIfExists()
         }
 
-        val second = ChannelConfig.write(javaPath, serverPath)
+        val second = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath)
         ChannelConfig.delete(second)
         assertFalse(second.isRegularFile())
     }
@@ -88,5 +88,28 @@ class ChannelConfigTest {
     @Test
     fun `a delete of nothing changes nothing`() {
         ChannelConfig.delete(null)
+    }
+
+    @Test
+    fun `opencode reads one array that holds the program and its arguments`() {
+        val text = ChannelConfig.text(AgentId.OPENCODE, javaPath, serverPath)
+        val entry = Json.parseToJsonElement(text).jsonObject["mcp"]!!.jsonObject["y-review"]!!.jsonObject
+
+        assertEquals("local", entry["type"]!!.jsonPrimitive.content)
+        assertEquals(
+            listOf(javaPath, "-cp", serverPath, ChannelServer.MAIN_CLASS),
+            entry["command"]!!.jsonArray.map { it.jsonPrimitive.content },
+        )
+        assertEquals(true, entry["enabled"]!!.jsonPrimitive.content.toBoolean())
+    }
+
+    @Test
+    fun `every other agent reads the mcpServers shape`() {
+        listOf(AgentId.CLAUDE, AgentId.GEMINI, AgentId.COPILOT, AgentId.CURSOR).forEach { id ->
+            val text = ChannelConfig.text(id, javaPath, serverPath)
+
+            assertTrue(text.contains("mcpServers"), id.name)
+            assertFalse(text.contains("\"mcp\""), id.name)
+        }
     }
 }

@@ -28,6 +28,9 @@ object ChannelServer {
     /** The class that the Java launcher runs. The jar names it in the manifest as well. */
     const val MAIN_CLASS = "com.yeskiy.yreview.channel.MainKt"
 
+    /** The flag that puts the jar of the server on the class path of the Java launcher. */
+    const val CLASS_PATH_FLAG = "-cp"
+
     /** Where the server is right now. */
     sealed interface Answer {
 

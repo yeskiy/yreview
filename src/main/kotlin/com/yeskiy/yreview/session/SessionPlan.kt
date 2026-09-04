@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.session
 
+import com.yeskiy.yreview.bridge.OpenCodeClient
 import com.yeskiy.yreview.bridge.SessionKey
 
 /**
@@ -35,6 +36,9 @@ data class SessionPlan(
          * [sessionKey] is the address of this session on the bridge. The channel server
          * reads it from the environment and sends it back in a header, so the IDE can send
          * a batch to this session alone.
+         *
+         * [httpPort] and [httpPassword] belong to an agent that runs an HTTP server of its
+         * own. The password travels in the environment, and never on the command line.
          */
         fun of(
             projectPath: String,
@@ -45,28 +49,43 @@ data class SessionPlan(
             javaPath: String? = null,
             configFile: String? = null,
             sessionKey: String? = null,
+            httpPort: Int? = null,
+            httpPassword: String? = null,
         ): SessionPlan {
-            val ready = agent.push == PushKind.CHANNEL &&
-                bridge is BridgeLookup.Available &&
-                server is ChannelServer.Answer.Found &&
-                javaPath != null
+            val serverPath = (server as? ChannelServer.Answer.Found)?.path
+            /** A registration reaches the agent only when all three parts of the server stand. */
+            val registered = bridge is BridgeLookup.Available && serverPath != null && javaPath != null
+            val ready = agent.push == PushKind.CHANNEL && registered
             return SessionPlan(
                 command = ShellCommand.shellCommand(
-                    AgentLaunch.arguments(agent, command, configFile.takeIf { ready })
+                    AgentLaunch.arguments(
+                        agent,
+                        command,
+                        configFile.takeIf { registered },
+                        javaPath.takeIf { registered },
+                        serverPath.takeIf { registered },
+                        httpPort,
+                    )
                 ),
                 workingDirectory = ShellCommand.windowsPath(projectPath),
-                environment = when (bridge) {
-                    is BridgeLookup.Available -> buildMap {
-                        put(BridgeDiscovery.URL_VARIABLE, bridge.url)
-                        put(BridgeDiscovery.TOKEN_VARIABLE, bridge.token)
-                        sessionKey?.let { put(SessionKey.VARIABLE, it) }
-                    }
-                    is BridgeLookup.Unavailable, BridgeLookup.ChannelOff -> emptyMap()
-                },
+                environment = bridgeVariables(bridge, sessionKey) +
+                    AgentLaunch.variables(agent, configFile.takeIf { registered }) +
+                    httpPassword?.let { mapOf(OpenCodeClient.PASSWORD_VARIABLE to it) }.orEmpty(),
                 status = status(agent, command, bridge, server, javaPath),
                 bridgeReady = ready
             )
         }
+
+        /** The address and the token of the bridge, and the address of this session on it. */
+        private fun bridgeVariables(bridge: BridgeLookup, sessionKey: String?): Map<String, String> =
+            when (bridge) {
+                is BridgeLookup.Available -> buildMap {
+                    put(BridgeDiscovery.URL_VARIABLE, bridge.url)
+                    put(BridgeDiscovery.TOKEN_VARIABLE, bridge.token)
+                    sessionKey?.let { put(SessionKey.VARIABLE, it) }
+                }
+                is BridgeLookup.Unavailable, BridgeLookup.ChannelOff -> emptyMap()
+            }
 
         /**
          * The agent decides first. An agent that takes no message into a running session

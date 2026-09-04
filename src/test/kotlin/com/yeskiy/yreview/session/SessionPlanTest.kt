@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.session
 
+import com.yeskiy.yreview.bridge.OpenCodeClient
 import com.yeskiy.yreview.bridge.SessionKey
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -277,4 +278,50 @@ class SessionPlanTest {
             custom.status,
         )
     }
+
+    @Test
+    fun `opencode listens on the port the plugin gave it`() {
+        val line = openCode().command.last()
+
+        assertTrue(line.contains("--hostname"), line)
+        assertTrue(line.contains("127.0.0.1"), line)
+        assertTrue(line.contains("--port"), line)
+        assertTrue(line.contains("47821"), line)
+    }
+
+    @Test
+    fun `the opencode password travels in the environment only`() {
+        val opencode = openCode()
+
+        assertEquals("s3cret", opencode.environment[OpenCodeClient.PASSWORD_VARIABLE])
+        assertFalse(opencode.command.last().contains("s3cret"), opencode.command.last())
+    }
+
+    @Test
+    fun `the registration of opencode travels in the environment`() {
+        assertEquals(config, openCode().environment["OPENCODE_CONFIG"])
+    }
+
+    @Test
+    fun `a session with no port carries no password variable`() {
+        assertFalse(plan().environment.containsKey(OpenCodeClient.PASSWORD_VARIABLE))
+    }
+
+    @Test
+    fun `codex carries its dotted keys only while the whole server stands`() {
+        val whole = plan(agent = AgentCatalog.of(AgentId.CODEX), command = "codex").command.last()
+        val noBridge = plan(
+            bridge = BridgeLookup.ChannelOff,
+            agent = AgentCatalog.of(AgentId.CODEX),
+            command = "codex",
+        ).command.last()
+
+        assertTrue(whole.contains("mcp_servers.y-review.command="), whole)
+        assertFalse(noBridge.contains("mcp_servers.y-review"), noBridge)
+    }
+
+    private fun openCode() = SessionPlan.of(
+        project, ready, AgentCatalog.of(AgentId.OPENCODE), "opencode",
+        found, javaPath, config, null, 47821, "s3cret",
+    )
 }

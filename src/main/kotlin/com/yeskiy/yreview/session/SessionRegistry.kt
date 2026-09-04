@@ -43,6 +43,15 @@ class SessionRegistry {
         if (at >= 0) open[at] = open[at].copy(name = name)
     }
 
+    /**
+     * A session starts and ends many times behind one tab, and the reach changes with it.
+     * The entry keeps its place, so the picker keeps the order of the tabs.
+     */
+    fun setReach(key: String, reach: SessionReach) {
+        val at = open.indexOfFirst { it.key == key }
+        if (at >= 0) open[at] = open[at].copy(reach = reach)
+    }
+
     fun remove(key: String) {
         open.removeAll { it.key == key }
     }

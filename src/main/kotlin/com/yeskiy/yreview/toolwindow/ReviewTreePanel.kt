@@ -88,6 +88,7 @@ import com.intellij.util.ui.tree.TreeUtil
 import com.intellij.util.ui.update.MergingUpdateQueue
 import com.intellij.util.ui.update.Update
 import com.yeskiy.yreview.bridge.BridgeService
+import com.yeskiy.yreview.bridge.PushFallback
 import com.yeskiy.yreview.bridge.SendMessages
 import com.yeskiy.yreview.bridge.SendPick
 import com.yeskiy.yreview.bridge.SendPicks
@@ -717,19 +718,15 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             store.kind == StoreKind.GIT,
         )
         val outcome = when {
-            route == SendRoute.CHANNEL && bridge.reachOf(target) is SessionReach.LocalHttp && files != null ->
-                SendOutcome(
-                    bridge.pushText(
-                        checkNotNull(target),
-                        tasks.size,
-                        HandoffPrompt.of(
-                            GitDir.label(files.folder, Path.of(repository.root.path)),
-                            repository.commit,
-                            tasks,
-                        ),
-                    ),
-                    null,
+            route == SendRoute.CHANNEL && bridge.reachOf(target) is SessionReach.LocalHttp && files != null -> {
+                val prompt = HandoffPrompt.of(
+                    GitDir.label(files.folder, Path.of(repository.root.path)),
+                    repository.commit,
+                    tasks,
                 )
+                PushFallback.of(bridge.pushText(checkNotNull(target), tasks.size, prompt), prompt)
+                    .let { SendOutcome(it.report, it.clipboard) }
+            }
             route == SendRoute.CHANNEL -> SendOutcome(bridge.sendTasks(repository.root, tasks, target), null)
             files == null -> SendOutcome(
                 SendReport(0, 0, 0, "The plugin did not write the review files of ${repository.root.name}."),

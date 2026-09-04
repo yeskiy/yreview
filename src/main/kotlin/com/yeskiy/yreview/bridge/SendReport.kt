@@ -53,6 +53,8 @@ data class SendReport(
     val agent: String? = null,
     /** False when that agent accepts no message into a running session. */
     val agentCanReceive: Boolean = true,
+    /** True when the prompt went to the clipboard after a push that the session refused. */
+    val copied: Boolean = false,
 )
 
 /** One line for the user, and whether it reports a problem. */
@@ -68,7 +70,7 @@ data class Notice(val text: String, val warning: Boolean)
 object SendMessages {
 
     fun of(report: SendReport): Notice = when {
-        report.problem != null -> Notice(report.problem, warning = true)
+        report.problem != null -> Notice(report.problem + copied(report), warning = true)
         report.tasks == 0 && report.dropped == 0 -> Notice("This repository has no open task.", warning = false)
         report.route.clipboardReason != null -> Notice(
             "${reason(report)}, so the IDE wrote ${TaskLabels.count(report.tasks, "task")} " +
@@ -94,6 +96,10 @@ object SendMessages {
             warning = report.dropped > 0,
         )
     }
+
+    /** A push that failed still leaves the user a way out, so the notice names it. */
+    private fun copied(report: SendReport): String =
+        if (!report.copied) "" else " The IDE copied the prompt to the clipboard, so you can paste it."
 
     private fun lost(report: SendReport): String {
         if (report.dropped == 0) return ""

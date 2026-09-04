@@ -1,9 +1,12 @@
 # The release. A tag that starts with v builds, signs and publishes the plugin.
 #
 # Every secret comes from the GitHub secret store. The repository holds no key, no
-# certificate, and no token. The IntelliJ Platform Gradle Plugin reads the four names
-# below from the environment on its own, so the build file declares no signing block and
-# no publishing block.
+# certificate, and no token.
+#
+# Three secrets carry the release: CERTIFICATE_CHAIN, PRIVATE_KEY, and PUBLISH_TOKEN.
+# PRIVATE_KEY_PASSWORD stays empty. The signer cannot read an encrypted key on a plain
+# runtime, so the documented openssl rsa step removes the password from the key. An
+# unencrypted key ignores the password, therefore an empty secret is correct.
 name: Release
 
 on:
@@ -55,9 +58,27 @@ jobs:
       - name: Run the JetBrains Plugin Verifier
         run: ./gradlew verifyPlugin --console=plain
 
-      - name: Build and sign the plugin archive
+      # The certificate chain reaches the build as a file, and never as an inline value.
+      # The verify task passes an inline chain twice, and the second copy starts with a
+      # hyphen, so the argument parser of the signer stops with "Invalid argument". A file
+      # reaches that task once. The secret holds the chain in PEM form, or in base64, and
+      # this step writes the PEM form either way. It prints no part of the secret.
+      - name: Write the certificate chain to a file
         env:
           CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
+        run: |
+          umask 077
+          chain="${RUNNER_TEMP}/certificate-chain.pem"
+          printf '%s\n' "$CERTIFICATE_CHAIN" | base64 -d > "$chain" 2>/dev/null \
+            || printf '%s\n' "$CERTIFICATE_CHAIN" > "$chain"
+          grep -q "BEGIN CERTIFICATE" "$chain" || {
+            echo "The CERTIFICATE_CHAIN secret holds no PEM certificate."
+            exit 1
+          }
+          echo "CERTIFICATE_CHAIN_FILE=$chain" >> "$GITHUB_ENV"
+
+      - name: Build and sign the plugin archive
+        env:
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew buildPlugin signPlugin --console=plain
@@ -66,17 +87,12 @@ jobs:
       # error. This step fails when the signed archive is missing, so an unsigned build
       # can never reach the Marketplace.
       - name: Check the signature
-        env:
-          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
-          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
-          PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew verifyPluginSignature --console=plain
 
       # This task updates a listing that already exists. The first version of a plugin
       # goes through the web form at https://plugins.jetbrains.com/plugin/add .
       - name: Publish the plugin to the JetBrains Marketplace
         env:
-          CERTIFICATE_CHAIN: ${{ secrets.CERTIFICATE_CHAIN }}
           PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
           PUBLISH_TOKEN: ${{ secrets.PUBLISH_TOKEN }}

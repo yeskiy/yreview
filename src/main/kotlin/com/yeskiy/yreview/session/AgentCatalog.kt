@@ -95,7 +95,7 @@ object AgentCatalog {
             "Claude Code",
             listOf("claude"),
             PushKind.CHANNEL,
-            McpRoute.Flag("--mcp-config"),
+            McpRoute.Flag(AgentLaunch.CONFIG_FLAG),
             "The official installer writes it to the PATH.",
             DesktopApp(
                 "Claude Desktop",

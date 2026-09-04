@@ -6,6 +6,7 @@ import com.intellij.openapi.components.service
 import com.intellij.util.EnvironmentUtil
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -38,20 +39,30 @@ class AgentScan {
 
     private val running = AtomicBoolean(false)
 
+    /** Everybody who asked for the answer of the search that runs right now. */
+    private val waiting = CopyOnWriteArrayList<(Answer) -> Unit>()
+
     fun latest(): Answer = answer
 
     /**
-     * Starts one search on a pooled thread, and calls [onDone] on that same thread. A
-     * second call during a search changes nothing. The caller moves the answer to the user
+     * Starts one search on a pooled thread, and calls [onDone] on that same thread.
+     *
+     * A second call during a search starts no second search, and it still hears the
+     * answer. The tool window starts a search while the project opens, and the panel of a
+     * session asks again a moment later, so a dropped answer would leave that panel
+     * waiting for a search that nobody runs again. The caller moves the answer to the user
      * interface thread itself.
      */
     fun refresh(onDone: (Answer) -> Unit = {}) {
+        waiting.add(onDone)
         if (!running.compareAndSet(false, true)) return
         ApplicationManager.getApplication().executeOnPooledThread {
             val fresh = runCatching { search() }.getOrElse { Answer(emptyMap(), scanned = true) }
             answer = fresh
             running.set(false)
-            onDone(fresh)
+            val heard = waiting.toList()
+            waiting.removeAll(heard)
+            heard.forEach { it(fresh) }
         }
     }
 

@@ -3,15 +3,19 @@ package com.yeskiy.yreview.session
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.terminal.frontend.view.TerminalViewSessionState
+import com.intellij.ui.SimpleTextAttributes
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
+import com.yeskiy.yreview.bridge.BridgeToken
 import com.yeskiy.yreview.bridge.SessionKey
 import com.yeskiy.yreview.diagnostic.SessionLog
 import com.yeskiy.yreview.diagnostic.SessionRecord
+import com.yeskiy.yreview.settings.ReviewConfigurable
 import com.yeskiy.yreview.settings.ReviewSettings
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -40,7 +44,7 @@ import javax.swing.JTextArea
 class ClaudeSessionPanel(
     private val project: Project,
     private val sessionName: String,
-    autoStart: Boolean,
+    private val autoStart: Boolean,
     private val onState: (SessionState) -> Unit
 ) : JPanel(BorderLayout()), Disposable {
 
@@ -65,10 +69,23 @@ class ClaudeSessionPanel(
     /** The configuration file of the running session. It goes away with the session. */
     private var configFile: Path? = null
 
+    /** The loopback port of a session that runs its own HTTP server. Null for every other. */
+    private var httpPort: Int? = null
+
+    /** The password of that server. It travels in the environment only. */
+    private var httpPassword: String? = null
+
+    /**
+     * The agent the running session started with. A change of the setting never moves a
+     * running session, so the buttons of that tab keep naming this agent.
+     */
+    var runningAgent: AgentSpec? = null
+        private set
+
     init {
-        SessionRegistry.getInstance(project).add(sessionKey, sessionName)
+        SessionRegistry.getInstance(project).add(sessionKey, sessionName, SessionReach.None)
         add(status, BorderLayout.SOUTH)
-        showIdle(NO_SESSION, if (autoStart) AUTO_START else PRESS_START)
+        showState()
     }
 
     override fun dispose() {
@@ -80,12 +97,16 @@ class ClaudeSessionPanel(
     val isRunning: Boolean
         get() = session != null
 
+    /** True while the window may run something. No agent is a choice, and it runs nothing. */
+    val startable: Boolean
+        get() = settings().agentChosen && AgentCatalog.of(settings().agentOrDefault()).runnable
+
     /**
      * The tool window opens the first session through this method, because a fresh panel
      * can hold no size yet. The terminal then mounts into a panel that already holds a
      * size, so the first paint of the session shows the whole window.
      */
-    fun startWhenSized() = SizeGate.run(this) { start() }
+    fun startWhenSized() = SizeGate.run(this) { if (startable) start() }
 
     /**
      * A new tab reaches this through [startWhenSized]. The title bar button calls it for
@@ -97,7 +118,7 @@ class ClaudeSessionPanel(
      * ends. A second press during the wait does nothing.
      */
     fun start() {
-        if (isRunning || starting) return
+        if (isRunning || starting || !startable) return
         val basePath = project.basePath ?: return failed(NO_SESSION)
         starting = true
         onState(SessionState.STARTING)
@@ -135,9 +156,9 @@ class ClaudeSessionPanel(
     private fun javaPath(): String? = JavaRuntime.locate()
 
     /**
-     * The channel needs all four parts, so the file appears only when the agent carries a
-     * channel, the bridge answers, the plugin holds the server, and the IDE names a Java
-     * runtime. A failed write leaves the session without the channel.
+     * The file appears only when the route of the agent reads one, the bridge answers, the
+     * plugin holds the server, and the IDE names a Java runtime. A failed write leaves the
+     * session without the review server.
      */
     private fun writeConfig(
         agent: AgentSpec,
@@ -145,12 +166,12 @@ class ClaudeSessionPanel(
         server: ChannelServer.Answer,
         javaPath: String?,
     ): Path? {
-        if (agent.push != PushKind.CHANNEL) return null
+        if (!AgentMcp.needsFile(agent)) return null
         if (bridge !is BridgeLookup.Available || server !is ChannelServer.Answer.Found) return null
         javaPath ?: return null
-        return runCatching { ChannelConfig.write(javaPath, server.path) }
+        return runCatching { ChannelConfig.write(agent.id, javaPath, server.path) }
             .onFailure {
-                thisLogger().warn("The review session wrote no channel configuration file.", it)
+                thisLogger().warn("The review session wrote no server configuration file.", it)
                 SessionLog.getInstance(project).record(SessionRecord.Failure.of(CONFIG_WORK, it))
             }
             .getOrNull()
@@ -170,6 +191,10 @@ class ClaudeSessionPanel(
         val agent = AgentCatalog.of(settings().agentOrDefault())
         val written = writeConfig(agent, bridge, server, javaPath)
         configFile = written
+        httpPort = if (agent.push == PushKind.LOCAL_HTTP) FreePort.pick() else null
+        httpPassword = httpPort?.let { BridgeToken.newToken() }
+        SessionRegistry.getInstance(project)
+            .setReach(sessionKey, SessionReach.of(agent, httpPort, httpPassword))
         val plan = SessionPlan.of(
             basePath,
             bridge,
@@ -179,10 +204,12 @@ class ClaudeSessionPanel(
             javaPath,
             written?.toString(),
             sessionKey,
+            httpPort,
+            httpPassword,
         )
         val started = ReviewTerminal.open(project, plan)
         if (started == null) {
-            dropConfig()
+            forget()
             record(plan, server, javaPath, written, terminalStarted = false)
             return failed(NO_TERMINAL)
         }
@@ -190,6 +217,7 @@ class ClaudeSessionPanel(
         remove(idle)
         terminal = started
         session = started
+        runningAgent = agent
         watch(started)
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)
@@ -255,8 +283,20 @@ class ClaudeSessionPanel(
 
     private fun endSession() {
         session = null
-        dropConfig()
+        forget()
         onState(SessionState.ENDED)
+    }
+
+    /**
+     * Drops everything that belonged to one run. Nothing may reach a session that ended,
+     * so the registry hears that this tab takes no send until the next start.
+     */
+    private fun forget() {
+        dropConfig()
+        httpPort = null
+        httpPassword = null
+        runningAgent = null
+        SessionRegistry.getInstance(project).setReach(sessionKey, SessionReach.None)
     }
 
     /**
@@ -282,9 +322,76 @@ class ClaudeSessionPanel(
         repaint()
     }
 
+    /** The idle state that the stored choice asks for. A project with no choice gets the selector. */
+    private fun showState() = when {
+        !settings().agentChosen -> showSelector()
+        settings().agentOrDefault() == AgentId.NONE -> showIdle(AgentRows.NO_AGENT, "")
+        else -> showIdle(NO_SESSION, if (autoStart) AUTO_START else PRESS_START)
+    }
+
+    /**
+     * The idle state of a project where nobody chose an agent yet.
+     *
+     * A press on a line writes the choice and starts a session. The search runs on a
+     * pooled thread, so the panel draws at once and fills itself when the answer arrives.
+     */
+    private fun showSelector() {
+        val answer = AgentScan.getInstance().latest()
+        idle.emptyText.setText(if (chosenBefore()) AgentRows.UNKNOWN_CHOICE else AgentRows.CHOOSE)
+        if (!answer.scanned) {
+            idle.emptyText.appendLine(AgentRows.SEARCHING)
+            AgentScan.getInstance().refresh { onScan() }
+        } else {
+            if (!answer.anyFound) idle.emptyText.appendLine(AgentRows.NOTHING_FOUND)
+            AgentRows.offered(answer).forEach { spec ->
+                idle.emptyText.appendLine(
+                    AgentRows.row(spec, found = answer.of(spec.id).found),
+                    SimpleTextAttributes.LINK_PLAIN_ATTRIBUTES,
+                ) { choose(spec) }
+            }
+            if (answer.anyFound) idle.emptyText.appendLine(AgentRows.OTHER_AGENTS)
+        }
+        status.text = ""
+        add(idle, BorderLayout.CENTER)
+        revalidate()
+        repaint()
+    }
+
+    /** The answer arrives on a pooled thread, so the redraw moves to the other thread. */
+    private fun onScan() = ApplicationManager.getApplication()
+        .invokeLater({ if (!settings().agentChosen) showSelector() }, project.disposed)
+
+    /** True while a name is stored that this build does not know. */
+    private fun chosenBefore(): Boolean = !settings().state.agent.isNullOrBlank()
+
+    /**
+     * A press on a row writes the choice. Another agent opens the settings page, because
+     * the user must type a command there. No agent shows one sentence and starts nothing.
+     */
+    private fun choose(spec: AgentSpec) {
+        settings().agent = spec.id
+        when (spec.id) {
+            AgentId.CUSTOM -> {
+                openSettings()
+                showState()
+            }
+            AgentId.NONE -> showIdle(AgentRows.NO_AGENT, "")
+            else -> {
+                showIdle(NO_SESSION, AUTO_START)
+                start()
+            }
+        }
+    }
+
+    /** The page holds the command field, the full agent list, and the Add button. */
+    private fun openSettings() =
+        ShowSettingsUtil.getInstance().showSettingsDialog(project, ReviewConfigurable::class.java)
+
+    /** An agent that runs nothing needs no line about the bridge, and it must not be nagged. */
     private fun bridgeState(): String {
-        val basePath = project.basePath ?: return NO_DIRECTORY
         val agent = AgentCatalog.of(settings().agentOrDefault())
+        if (!agent.runnable) return ""
+        val basePath = project.basePath ?: return NO_DIRECTORY
         return SessionPlan.of(
             basePath,
             lookup(basePath),
@@ -307,7 +414,7 @@ class ClaudeSessionPanel(
     }
 
     private companion object {
-        const val CONFIG_WORK = "write the channel configuration file"
+        const val CONFIG_WORK = "write the server configuration file"
         const val NO_SESSION = "No review session runs."
         const val NO_TERMINAL = "The terminal did not start. The IDE log holds the reason."
         const val NO_DIRECTORY = "This project has no directory, so a session cannot start here."

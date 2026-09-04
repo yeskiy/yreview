@@ -80,4 +80,21 @@ class SessionRegistryTest {
         assertEquals("OpenCode 3", registry.nameOf("bbbbbbbbbbbbbbbb"))
         assertEquals(SessionReach.LocalHttp(47821, "s3cret"), registry.reachOf("bbbbbbbbbbbbbbbb"))
     }
+
+    @Test
+    fun `a new reach keeps the place and the name of the session`() {
+        registry.add("aaaaaaaaaaaaaaaa", "Claude 1", SessionReach.None)
+        registry.add("bbbbbbbbbbbbbbbb", "Claude 2", SessionReach.None)
+        registry.setReach("aaaaaaaaaaaaaaaa", SessionReach.LocalHttp(47821, "s3cret"))
+
+        assertEquals(listOf("Claude 1", "Claude 2"), registry.entries().map { it.name })
+        assertEquals(SessionReach.LocalHttp(47821, "s3cret"), registry.reachOf("aaaaaaaaaaaaaaaa"))
+    }
+
+    @Test
+    fun `a new reach for a key that left changes nothing`() {
+        registry.setReach("cccccccccccccccc", SessionReach.Channel)
+
+        assertEquals(emptyList(), registry.entries())
+    }
 }
