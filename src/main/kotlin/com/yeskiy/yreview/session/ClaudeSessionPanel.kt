@@ -135,11 +135,17 @@ class ClaudeSessionPanel(
     private fun javaPath(): String? = JavaRuntime.locate()
 
     /**
-     * The channel needs all three parts, so the file appears only when the bridge answers,
-     * the plugin holds the server, and the IDE names a Java runtime. A failed write leaves
-     * the session without the channel.
+     * The channel needs all four parts, so the file appears only when the agent carries a
+     * channel, the bridge answers, the plugin holds the server, and the IDE names a Java
+     * runtime. A failed write leaves the session without the channel.
      */
-    private fun writeConfig(bridge: BridgeLookup, server: ChannelServer.Answer, javaPath: String?): Path? {
+    private fun writeConfig(
+        agent: AgentSpec,
+        bridge: BridgeLookup,
+        server: ChannelServer.Answer,
+        javaPath: String?,
+    ): Path? {
+        if (agent.push != PushKind.CHANNEL) return null
         if (bridge !is BridgeLookup.Available || server !is ChannelServer.Answer.Found) return null
         javaPath ?: return null
         return runCatching { ChannelConfig.write(javaPath, server.path) }
@@ -161,12 +167,14 @@ class ClaudeSessionPanel(
         dropConfig()
         val server = channelServer()
         val javaPath = javaPath()
-        val written = writeConfig(bridge, server, javaPath)
+        val agent = AgentCatalog.of(settings().agentOrDefault())
+        val written = writeConfig(agent, bridge, server, javaPath)
         configFile = written
         val plan = SessionPlan.of(
             basePath,
             bridge,
-            settings().command(settings().agentOrDefault()),
+            agent,
+            settings().command(agent.id),
             server,
             javaPath,
             written?.toString(),
@@ -276,10 +284,12 @@ class ClaudeSessionPanel(
 
     private fun bridgeState(): String {
         val basePath = project.basePath ?: return NO_DIRECTORY
+        val agent = AgentCatalog.of(settings().agentOrDefault())
         return SessionPlan.of(
             basePath,
             lookup(basePath),
-            settings().command(settings().agentOrDefault()),
+            agent,
+            settings().command(agent.id),
             channelServer(),
             javaPath(),
         ).status

@@ -23,7 +23,7 @@ class SendPicksTest {
     fun `a folder store route never allows a session target`() {
         // SendRoutes decides whether a push can happen, and the picker asks it.
         // One rule, two readers, so the button and the send can never disagree.
-        val route = SendRoutes.of(channel = true, readers = 2, gitRepository = false)
+        val route = SendRoutes.of(channel = true, receivers = 2, gitRepository = false)
 
         assertEquals(SendRoute.NO_REPOSITORY, route)
         assertEquals(

@@ -7,25 +7,64 @@ import kotlin.test.assertNull
 class SendRoutesTest {
 
     @Test
-    fun `the closed switch beats a reader`() {
-        assertEquals(SendRoute.CHANNEL_OFF, SendRoutes.of(channel = false, readers = 3, gitRepository = true))
-        assertEquals(SendRoute.CHANNEL_OFF, SendRoutes.of(channel = false, readers = 0, gitRepository = true))
+    fun `a switch that is off beats every count`() {
+        assertEquals(SendRoute.CHANNEL_OFF, SendRoutes.of(channel = false, receivers = 3, gitRepository = true))
+        assertEquals(SendRoute.CHANNEL_OFF, SendRoutes.of(channel = false, receivers = 0, gitRepository = true))
     }
 
     @Test
-    fun `the open switch reaches the channel while a session reads`() {
-        assertEquals(SendRoute.CHANNEL, SendRoutes.of(channel = true, readers = 1, gitRepository = true))
+    fun `a folder that no git repository holds beats every count`() {
+        assertEquals(SendRoute.NO_REPOSITORY, SendRoutes.of(channel = true, receivers = 3, gitRepository = false))
+        assertEquals(SendRoute.NO_REPOSITORY, SendRoutes.of(channel = false, receivers = 0, gitRepository = false))
     }
 
     @Test
-    fun `the open switch without a reader goes to the clipboard`() {
-        assertEquals(SendRoute.NO_SESSION, SendRoutes.of(channel = true, readers = 0, gitRepository = true))
+    fun `one receiver is enough for the channel route`() {
+        assertEquals(SendRoute.CHANNEL, SendRoutes.of(channel = true, receivers = 1, gitRepository = true))
     }
 
     @Test
-    fun `a folder store never reaches the channel`() {
-        assertEquals(SendRoute.NO_REPOSITORY, SendRoutes.of(channel = true, readers = 3, gitRepository = false))
-        assertEquals(SendRoute.NO_REPOSITORY, SendRoutes.of(channel = false, readers = 0, gitRepository = false))
+    fun `no receiver falls to the clipboard`() {
+        assertEquals(SendRoute.NO_SESSION, SendRoutes.of(channel = true, receivers = 0, gitRepository = true))
+    }
+
+    @Test
+    fun `one opencode session and no event stream still takes the channel route`() {
+        // An OpenCode session opens no event stream. It answers a loopback port instead.
+        // Without this case the push into an OpenCode session never runs, and no other
+        // test would show it.
+        val reachable = 1
+        val outside = 0
+
+        assertEquals(
+            SendRoute.CHANNEL,
+            SendRoutes.of(channel = true, receivers = reachable + outside, gitRepository = true),
+        )
+    }
+
+    @Test
+    fun `one codex session with an open stream falls to the clipboard`() {
+        // Codex can hold a channel server for the review tools and still ignore a push.
+        // Its stream must never make the route look ready.
+        val reachable = 0
+        val outside = 0
+
+        assertEquals(
+            SendRoute.NO_SESSION,
+            SendRoutes.of(channel = true, receivers = reachable + outside, gitRepository = true),
+        )
+    }
+
+    @Test
+    fun `a stream that no tab can name still counts as a receiver`() {
+        // A session of another window, or one that started before the session key existed.
+        val reachable = 0
+        val outside = 1
+
+        assertEquals(
+            SendRoute.CHANNEL,
+            SendRoutes.of(channel = true, receivers = reachable + outside, gitRepository = true),
+        )
     }
 
     @Test

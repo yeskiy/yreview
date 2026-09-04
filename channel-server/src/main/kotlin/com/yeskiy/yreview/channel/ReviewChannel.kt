@@ -148,9 +148,16 @@ class ReviewChannel(private val sink: ResolveSink) {
         data class Ambiguous(val given: String) : Match
     }
 
-    /** A full id wins. One open comment that starts with the given text also wins. */
+    /**
+     * A full id wins. One open comment that starts with the given text also wins.
+     *
+     * With no open batch the server knows nothing about the work of this session, so it
+     * passes the given text on and the IDE decides. An agent that takes no push reads the
+     * ids from tasks.json, and this is the only way those ids reach the IDE.
+     */
     private fun match(given: String): Match = synchronized(lock) {
         val open = openBatches.values.flatten()
+        if (open.isEmpty()) return Match.Open(given)
         val prefixed = open.filter { it.startsWith(given) }
         when {
             open.contains(given) -> Match.Open(given)
@@ -228,6 +235,7 @@ class ReviewChannel(private val sink: ResolveSink) {
             "2. Make the change that the comment asks for.",
             "3. Call review_resolve with the ids of the comments that you fixed.",
             "Copy each id exactly as the event shows it.",
+            "An id also comes from the tasks.json file of the review folder, when no channel event arrived.",
             "Do not call review_resolve for a comment that you did not fix.",
             "Tell the person which comments you left open, and why.",
         ).joinToString("\n")

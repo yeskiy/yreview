@@ -11,6 +11,7 @@ data class SessionPlan(
     val workingDirectory: String,
     val environment: Map<String, String>,
     val status: String,
+    /** True while this session carries the channel. An agent with no channel reads false. */
     val bridgeReady: Boolean
 ) {
 
@@ -23,11 +24,13 @@ data class SessionPlan(
         private const val NO_RUNTIME =
             "The IDE names no Java runtime, so the plugin cannot start the channel server."
 
+        const val NO_COMMAND = "This agent has no command yet. Name one in Settings, Tools, Yreview."
+
         /**
-         * The channel needs three parts. The bridge must answer, the plugin must hold the
-         * channel server, and the IDE must name a Java runtime. The plugin appends the two
-         * flags only then, and [configFile] holds the configuration file the caller wrote
-         * for this session.
+         * The channel needs four parts. The agent must carry one, the bridge must answer,
+         * the plugin must hold the channel server, and the IDE must name a Java runtime.
+         * The plugin appends the flags of the agent only then, and [configFile] holds the
+         * configuration file the caller wrote for this session.
          *
          * [sessionKey] is the address of this session on the bridge. The channel server
          * reads it from the environment and sends it back in a header, so the IDE can send
@@ -36,41 +39,55 @@ data class SessionPlan(
         fun of(
             projectPath: String,
             bridge: BridgeLookup,
-            command: String = AgentCatalog.of(AgentCatalog.DEFAULT).defaultCommand,
+            agent: AgentSpec = AgentCatalog.of(AgentCatalog.DEFAULT),
+            command: String = agent.defaultCommand,
             server: ChannelServer.Answer = ChannelServer.Answer.Unknown,
             javaPath: String? = null,
             configFile: String? = null,
             sessionKey: String? = null,
         ): SessionPlan {
-            val ready = bridge is BridgeLookup.Available &&
+            val ready = agent.push == PushKind.CHANNEL &&
+                bridge is BridgeLookup.Available &&
                 server is ChannelServer.Answer.Found &&
                 javaPath != null
             return SessionPlan(
                 command = ShellCommand.shellCommand(
-                    AgentLaunch.arguments(
-                        AgentCatalog.of(AgentCatalog.DEFAULT),
-                        command,
-                        configFile.takeIf { ready },
-                    )
+                    AgentLaunch.arguments(agent, command, configFile.takeIf { ready })
                 ),
                 workingDirectory = ShellCommand.windowsPath(projectPath),
                 environment = when (bridge) {
-                    is BridgeLookup.Available -> mapOf(
-                        BridgeDiscovery.URL_VARIABLE to bridge.url,
-                        BridgeDiscovery.TOKEN_VARIABLE to bridge.token
-                    ) + sessionKey?.let { mapOf(SessionKey.VARIABLE to it) }.orEmpty()
+                    is BridgeLookup.Available -> buildMap {
+                        put(BridgeDiscovery.URL_VARIABLE, bridge.url)
+                        put(BridgeDiscovery.TOKEN_VARIABLE, bridge.token)
+                        sessionKey?.let { put(SessionKey.VARIABLE, it) }
+                    }
                     is BridgeLookup.Unavailable, BridgeLookup.ChannelOff -> emptyMap()
                 },
-                status = status(bridge, server, javaPath),
-                bridgeReady = bridge is BridgeLookup.Available
+                status = status(agent, command, bridge, server, javaPath),
+                bridgeReady = ready
             )
         }
 
         /**
-         * The bridge decides first. A session without a bridge carries no channel whatever
-         * the machine holds, so the text names the bridge and stops there.
+         * The agent decides first. An agent that takes no message into a running session
+         * never carries a channel, whatever the machine holds, so the text says that and
+         * stops there.
          */
         private fun status(
+            agent: AgentSpec,
+            command: String,
+            bridge: BridgeLookup,
+            server: ChannelServer.Answer,
+            javaPath: String?,
+        ): String = when {
+            command.isBlank() -> NO_COMMAND
+            agent.push == PushKind.NONE ->
+                "${agent.label} does not accept a message into a running session. " +
+                    "Use Copy Selected, then paste the prompt in the session."
+            else -> channelStatus(bridge, server, javaPath)
+        }
+
+        private fun channelStatus(
             bridge: BridgeLookup,
             server: ChannelServer.Answer,
             javaPath: String?,

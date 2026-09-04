@@ -20,14 +20,19 @@ enum class SendRoute(val clipboardReason: String?) {
  *
  * A folder store beats every other answer, because the channel names a branch and a
  * commit, and a folder that no git repository holds has neither. The switch of the user
- * comes next, and the number of readers comes last.
+ * comes next, and the number of receivers comes last.
+ *
+ * [receivers] counts the sessions that can take a send right now, over any transport. It
+ * is NOT the number of open event streams. A session that answers a loopback port of its
+ * own opens no stream and still counts. A session whose agent ignores a pushed message
+ * does not count, even while a channel server of that session holds a stream.
  */
 object SendRoutes {
 
-    fun of(channel: Boolean, readers: Int, gitRepository: Boolean): SendRoute = when {
+    fun of(channel: Boolean, receivers: Int, gitRepository: Boolean): SendRoute = when {
         !gitRepository -> SendRoute.NO_REPOSITORY
         !channel -> SendRoute.CHANNEL_OFF
-        readers > 0 -> SendRoute.CHANNEL
+        receivers > 0 -> SendRoute.CHANNEL
         else -> SendRoute.NO_SESSION
     }
 }
@@ -44,6 +49,10 @@ data class SendReport(
     val folder: String? = null,
     /** The name of the one session the user chose, or null when the send reached every one. */
     val targetName: String? = null,
+    /** The label of the agent the session window runs, or null when the plugin does not know. */
+    val agent: String? = null,
+    /** False when that agent accepts no message into a running session. */
+    val agentCanReceive: Boolean = true,
 )
 
 /** One line for the user, and whether it reports a problem. */
@@ -62,7 +71,7 @@ object SendMessages {
         report.problem != null -> Notice(report.problem, warning = true)
         report.tasks == 0 && report.dropped == 0 -> Notice("This repository has no open task.", warning = false)
         report.route.clipboardReason != null -> Notice(
-            "${report.route.clipboardReason}, so the IDE wrote ${TaskLabels.count(report.tasks, "task")} " +
+            "${reason(report)}, so the IDE wrote ${TaskLabels.count(report.tasks, "task")} " +
                 "to ${report.folder} and copied the prompt to the clipboard." + lost(report),
             warning = false,
         )
@@ -90,5 +99,19 @@ object SendMessages {
         if (report.dropped == 0) return ""
         val verb = if (report.dropped == 1) "was" else "were"
         return " ${TaskLabels.count(report.dropped, "task")} $verb dropped, because ${report.dropReason}."
+    }
+
+    /**
+     * Why a send went to the clipboard. The route carries a general reason, and an agent
+     * that accepts no message into a running session carries a reason of its own.
+     */
+    private fun reason(report: SendReport): String {
+        val agent = report.agent
+        if (report.route != SendRoute.NO_SESSION || agent == null) return report.route.clipboardReason.orEmpty()
+        return if (report.agentCanReceive) {
+            "No $agent session reads this project"
+        } else {
+            "$agent does not accept a message into a running session"
+        }
     }
 }

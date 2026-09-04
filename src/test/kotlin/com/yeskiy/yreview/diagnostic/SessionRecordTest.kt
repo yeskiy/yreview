@@ -36,7 +36,14 @@ class SessionRecordTest {
     private val ready = BridgeLookup.Available("http://127.0.0.1:64343", token)
 
     private fun session(bridge: BridgeLookup) = SessionRecord.Session.of(
-        plan = SessionPlan.of(project, bridge, "claude", server, javaPath, configFile),
+        plan = SessionPlan.of(
+            project,
+            bridge,
+            command = "claude",
+            server = server,
+            javaPath = javaPath,
+            configFile = configFile,
+        ),
         server = server,
         javaPath = javaPath,
         configFile = configFile,

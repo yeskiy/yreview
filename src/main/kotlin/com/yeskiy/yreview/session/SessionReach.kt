@@ -38,4 +38,22 @@ sealed interface SessionReach {
 
         override fun takesSend(streamOpen: Boolean): Boolean = false
     }
+
+    companion object {
+
+        /**
+         * The reach of one session, from the agent it runs.
+         *
+         * [port] and [password] come from the plugin, and both are null unless the agent
+         * runs a server of its own. An agent that takes no push is reached by nothing,
+         * even while a channel server of that session holds an open event stream for the
+         * review tools.
+         */
+        fun of(agent: AgentSpec, port: Int?, password: String?): SessionReach = when (agent.push) {
+            PushKind.CHANNEL -> Channel
+            PushKind.LOCAL_HTTP ->
+                if (port != null && password != null) LocalHttp(port, password) else None
+            PushKind.NONE -> None
+        }
+    }
 }

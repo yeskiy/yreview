@@ -133,7 +133,7 @@ class BridgeService(private val project: Project) : Disposable {
             streams = reached,
             dropped = plan.dropped.size,
             dropReason = plan.reason.ifEmpty { null },
-            targetName = target?.let { SessionRegistry.getInstance(project).nameOf(it) },
+            targetName = target?.let { nameOf(it) },
         )
     }
 
@@ -169,9 +169,44 @@ class BridgeService(private val project: Project) : Disposable {
         return server.streamCount() - server.openKeys().count { it in known }
     }
 
+    /**
+     * How many sessions can take a send right now, over any transport.
+     *
+     * The named sessions come from the reach of each tab. The others are open event
+     * streams that no tab can name, and the row for every session reaches exactly those.
+     * [readerCount] must never feed the route, because it counts streams and a session
+     * that answers a loopback port of its own opens none.
+     */
+    fun receiverCount(): Int = reachableCount() + outsideCount()
+
     /** How a send gets to one session. Nothing reaches a null key or an unknown one. */
     fun reachOf(key: String?): SessionReach =
         key?.let { SessionRegistry.getInstance(project).reachOf(it) } ?: SessionReach.None
+
+    /**
+     * Puts one prompt into a session that runs an HTTP server of its own.
+     *
+     * The bridge carries nothing here. The plugin posts straight to the port of that
+     * session, so this report names one stream after a good push and none after a bad one.
+     * A good answer proves that the server of the session took the text, and it does not
+     * prove that the session showed it.
+     */
+    fun pushText(key: String, tasks: Int, text: String): SendReport {
+        val reach = reachOf(key)
+        if (reach !is SessionReach.LocalHttp) {
+            return SendReport(0, 0, 0, "That session is no longer open.", targetName = nameOf(key))
+        }
+        val problem = OpenCodeClient.push(reach.port, reach.password, text)
+        return SendReport(
+            tasks = if (problem == null) tasks else 0,
+            batches = 0,
+            streams = if (problem == null) 1 else 0,
+            problem = problem,
+            targetName = nameOf(key),
+        )
+    }
+
+    private fun nameOf(key: String): String? = SessionRegistry.getInstance(project).nameOf(key)
 
     /** A task the channel refuses is a loss, so the log names every identifier it lost. */
     private fun reportLoss(plan: BatchPlan) {

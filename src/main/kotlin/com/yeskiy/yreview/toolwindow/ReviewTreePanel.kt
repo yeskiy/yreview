@@ -104,6 +104,9 @@ import com.yeskiy.yreview.handoff.HandoffFiles
 import com.yeskiy.yreview.handoff.HandoffPlace
 import com.yeskiy.yreview.handoff.HandoffPrompt
 import com.yeskiy.yreview.handoff.PromptFolder
+import com.yeskiy.yreview.session.AgentCatalog
+import com.yeskiy.yreview.session.PushKind
+import com.yeskiy.yreview.session.SessionReach
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.settings.grouping
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
@@ -642,7 +645,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         val bridge = BridgeService.getInstance(project)
         val route = SendRoutes.of(
             ReviewSettings.getInstance(project).channel,
-            bridge.readerCount(),
+            bridge.receiverCount(),
             store?.kind == StoreKind.GIT,
         )
         return SendPicks.of(bridge.liveChoices(), bridge.outsideCount(), route == SendRoute.CHANNEL)
@@ -710,10 +713,23 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         val readers = bridge.readerCount()
         val route = SendRoutes.of(
             ReviewSettings.getInstance(project).channel,
-            readers,
+            bridge.receiverCount(),
             store.kind == StoreKind.GIT,
         )
         val outcome = when {
+            route == SendRoute.CHANNEL && bridge.reachOf(target) is SessionReach.LocalHttp && files != null ->
+                SendOutcome(
+                    bridge.pushText(
+                        checkNotNull(target),
+                        tasks.size,
+                        HandoffPrompt.of(
+                            GitDir.label(files.folder, Path.of(repository.root.path)),
+                            repository.commit,
+                            tasks,
+                        ),
+                    ),
+                    null,
+                )
             route == SendRoute.CHANNEL -> SendOutcome(bridge.sendTasks(repository.root, tasks, target), null)
             files == null -> SendOutcome(
                 SendReport(0, 0, 0, "The plugin did not write the review files of ${repository.root.name}."),
@@ -721,8 +737,17 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             )
             else -> {
                 val folder = GitDir.label(files.folder, Path.of(repository.root.path))
+                val agent = AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())
                 SendOutcome(
-                    SendReport(tasks.size, 0, 0, route = route, folder = folder),
+                    SendReport(
+                        tasks.size,
+                        0,
+                        0,
+                        route = route,
+                        folder = folder,
+                        agent = agent.label,
+                        agentCanReceive = agent.push != PushKind.NONE,
+                    ),
                     HandoffPrompt.of(folder, repository.commit, tasks),
                 )
             }

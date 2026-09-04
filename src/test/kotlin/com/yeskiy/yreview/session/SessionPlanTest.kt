@@ -18,11 +18,13 @@ class SessionPlanTest {
 
     private fun plan(
         bridge: BridgeLookup = ready,
+        agent: AgentSpec = AgentCatalog.of(AgentId.CLAUDE),
+        command: String = "claude",
         server: ChannelServer.Answer = found,
         javaPath: String? = this.javaPath,
         configFile: String? = config,
         sessionKey: String? = null,
-    ) = SessionPlan.of(project, bridge, "claude", server, javaPath, configFile, sessionKey)
+    ) = SessionPlan.of(project, bridge, agent, command, server, javaPath, configFile, sessionKey)
 
     private fun shell(configFile: String? = null) = ShellCommand.shellCommand(
         AgentLaunch.arguments(AgentCatalog.of(AgentId.CLAUDE), "claude", configFile)
@@ -46,7 +48,7 @@ class SessionPlanTest {
 
     @Test
     fun `the plan runs the command of the settings`() {
-        val custom = SessionPlan.of(project, ready, "C:/tools/claude.exe", found, javaPath, config)
+        val custom = plan(command = "C:/tools/claude.exe")
 
         assertTrue(custom.command.last().contains("C:/tools/claude.exe"), custom.command.last())
     }
@@ -125,7 +127,7 @@ class SessionPlanTest {
         assertEquals(shell(), plan.command)
         assertFalse(plan.command.last().contains(AgentLaunch.CONFIG_FLAG))
         assertFalse(plan.command.last().contains(AgentLaunch.CHANNEL_FLAG))
-        assertTrue(plan.bridgeReady)
+        assertFalse(plan.bridgeReady)
     }
 
     @Test
@@ -160,7 +162,7 @@ class SessionPlanTest {
 
         assertEquals(shell(), plan.command)
         assertFalse(plan.command.last().contains(AgentLaunch.CHANNEL_FLAG))
-        assertTrue(plan.bridgeReady)
+        assertFalse(plan.bridgeReady)
     }
 
     @Test
@@ -223,5 +225,56 @@ class SessionPlanTest {
     @Test
     fun `a plan without a key carries no key variable`() {
         assertFalse(plan().environment.containsKey(SessionKey.VARIABLE))
+    }
+
+    @Test
+    fun `an agent without a channel runs plain`() {
+        val opencode = plan(agent = AgentCatalog.of(AgentId.OPENCODE), command = "opencode")
+
+        assertEquals(listOf("opencode"), AgentLaunch.arguments(AgentCatalog.of(AgentId.OPENCODE), "opencode", config))
+        assertFalse(opencode.command.last().contains(AgentLaunch.CHANNEL_FLAG), opencode.command.last())
+        assertFalse(opencode.command.last().contains(AgentLaunch.CONFIG_FLAG), opencode.command.last())
+    }
+
+    @Test
+    fun `the status of an agent that takes no message names the agent and the way out`() {
+        val antigravity = plan(agent = AgentCatalog.of(AgentId.ANTIGRAVITY), command = "agy")
+
+        assertEquals(
+            "Antigravity CLI does not accept a message into a running session. " +
+                "Use Copy Selected, then paste the prompt in the session.",
+            antigravity.status,
+        )
+        assertFalse(antigravity.bridgeReady)
+    }
+
+    @Test
+    fun `the status of an agent with a port of its own does not say that a message never arrives`() {
+        // OpenCode takes a send over a loopback port, so the status must not tell the user
+        // that a message never arrives. This session carries no channel all the same.
+        val opencode = plan(agent = AgentCatalog.of(AgentId.OPENCODE), command = "opencode")
+
+        assertFalse(opencode.bridgeReady)
+        assertFalse(opencode.status.contains("does not accept a message"), opencode.status)
+        assertTrue(opencode.status.contains(ready.url), opencode.status)
+    }
+
+    @Test
+    fun `an agent without a channel still reaches the bridge through the environment`() {
+        // The IDE server carries the review tools, so the address still travels.
+        val opencode = plan(agent = AgentCatalog.of(AgentId.OPENCODE), command = "opencode")
+
+        assertEquals(ready.url, opencode.environment[BridgeDiscovery.URL_VARIABLE])
+        assertEquals(token, opencode.environment[BridgeDiscovery.TOKEN_VARIABLE])
+    }
+
+    @Test
+    fun `an agent with no command yet says so`() {
+        val custom = plan(agent = AgentCatalog.of(AgentId.CUSTOM), command = "")
+
+        assertEquals(
+            "This agent has no command yet. Name one in Settings, Tools, Yreview.",
+            custom.status,
+        )
     }
 }

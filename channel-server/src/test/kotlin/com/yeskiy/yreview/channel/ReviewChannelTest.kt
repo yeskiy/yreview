@@ -320,4 +320,37 @@ class ReviewChannelTest {
         assertNull(newest.isError)
         assertTrue(notifications.size == count, "every batch must reach the model")
     }
+
+    @Test
+    fun `reports an id to the bridge when no batch was ever pushed`() = runBlocking<Unit> {
+        // An agent that takes no push reads the id from tasks.json, so the server must pass it on.
+        val client = setUp()
+        client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("c3f9a12aabbccddeeff00112233445566778899a")))
+
+        assertEquals(listOf(listOf("c3f9a12aabbccddeeff00112233445566778899a")), reported.toList())
+    }
+
+    @Test
+    fun `passes an id on without a batch even when the id is short`() = runBlocking<Unit> {
+        val client = setUp()
+        client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("c3f9a12")))
+
+        assertEquals(listOf(listOf("c3f9a12")), reported.toList())
+    }
+
+    @Test
+    fun `an open batch still guards the match`() = runBlocking<Unit> {
+        // The guard stays for a session that receives a push, so a wrong id is still refused.
+        val client = setUp()
+        push(batch)
+        val result = client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("ffffff0")))
+
+        assertEquals(true, result.isError)
+        assertEquals(emptyList(), reported.toList())
+    }
+
+    @Test
+    fun `the instructions name the file that holds the ids without a push`() {
+        assertContains(ReviewChannel.INSTRUCTIONS, "tasks.json")
+    }
 }

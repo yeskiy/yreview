@@ -164,4 +164,89 @@ class SendMessagesTest {
             SendMessages.of(SendReport(tasks = 3, batches = 1, streams = 2)).text,
         )
     }
+
+    @Test
+    fun `an agent with no channel gets a reason that names it`() {
+        val notice = SendMessages.of(
+            SendReport(
+                tasks = 4,
+                batches = 0,
+                streams = 0,
+                route = SendRoute.NO_SESSION,
+                folder = ".git/y-review",
+                agent = "Antigravity CLI",
+                agentCanReceive = false,
+            )
+        )
+
+        assertEquals(
+            "Antigravity CLI does not accept a message into a running session, " +
+                "so the IDE wrote 4 tasks to .git/y-review and copied the prompt to the clipboard.",
+            notice.text,
+        )
+        assertFalse(notice.warning)
+    }
+
+    @Test
+    fun `an agent that can receive but runs nowhere is named too`() {
+        val notice = SendMessages.of(
+            SendReport(
+                tasks = 1,
+                batches = 0,
+                streams = 0,
+                route = SendRoute.NO_SESSION,
+                folder = ".git/y-review",
+                agent = "OpenCode",
+                agentCanReceive = true,
+            )
+        )
+
+        assertEquals(
+            "No OpenCode session reads this project, " +
+                "so the IDE wrote 1 task to .git/y-review and copied the prompt to the clipboard.",
+            notice.text,
+        )
+    }
+
+    @Test
+    fun `the agent never rewrites the reason of a closed switch`() {
+        // The closed switch and the folder store are facts of the project, not of the
+        // agent, so the agent must never rewrite either sentence.
+        val off = SendMessages.of(
+            SendReport(
+                tasks = 4,
+                batches = 0,
+                streams = 0,
+                route = SendRoute.CHANNEL_OFF,
+                folder = ".git/y-review",
+                agent = "OpenCode",
+            )
+        )
+
+        assertTrue(off.text.startsWith("The review channel is off in the settings,"), off.text)
+    }
+
+    @Test
+    fun `names the session that took a pushed prompt`() {
+        val notice = SendMessages.of(SendReport(tasks = 3, batches = 0, streams = 1, targetName = "OpenCode 1"))
+
+        assertEquals("The IDE sent 3 tasks to OpenCode 1.", notice.text)
+        assertFalse(notice.warning)
+    }
+
+    @Test
+    fun `warns when the session refused a pushed prompt`() {
+        val notice = SendMessages.of(
+            SendReport(
+                tasks = 3,
+                batches = 0,
+                streams = 0,
+                problem = "/tui/append-prompt answered 401.",
+                targetName = "OpenCode 1",
+            )
+        )
+
+        assertTrue(notice.warning)
+        assertEquals("/tui/append-prompt answered 401.", notice.text)
+    }
 }
