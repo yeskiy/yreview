@@ -18,14 +18,14 @@ class ClaudeSessionToolWindowFactory : ToolWindowFactory {
 
     /**
      * The platform asks once, while the project opens, and it asks away from the user
-     * interface thread. The search for a Claude installation therefore runs here, and it
-     * keeps its answer for the whole application.
-     *
-     * The window stays registered whatever this answer is, so the settings page can show
-     * it again without a restart.
+     * interface thread. The window now carries the agent selector, so it appears unless
+     * the user cleared the switch. The search for the installed agents starts here and
+     * nothing waits for it, so the project opens at the same speed as before.
      */
-    override fun shouldBeAvailable(project: Project): Boolean =
-        ReviewSettings.getInstance(project).sessionWindowShown(ClaudeDetection.getInstance().install().found)
+    override fun shouldBeAvailable(project: Project): Boolean {
+        AgentScan.getInstance().refresh()
+        return ReviewSettings.getInstance(project).sessionWindowShown()
+    }
 
     /**
      * The platform builds the content once for the project, on the user interface thread.

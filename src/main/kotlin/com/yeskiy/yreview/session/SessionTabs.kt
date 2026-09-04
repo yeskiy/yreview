@@ -71,7 +71,7 @@ class SessionTabs(
     fun open(start: Boolean = true) {
         if (!SessionRules.canOpen(tabs.size)) return
         val number = SessionRules.freeNumber(tabs.map { it.number }.toSet())
-        val panel = ClaudeSessionPanel(project, SessionRules.name(number)) { state -> rename(number, state) }
+        val panel = ClaudeSessionPanel(project, SessionRules.name(number), start) { state -> rename(number, state) }
         val content = ContentFactory.getInstance()
             .createContent(panel, SessionRules.label(number, SessionState.NOT_STARTED), false)
         content.isCloseable = true

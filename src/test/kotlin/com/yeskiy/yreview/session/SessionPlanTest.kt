@@ -14,7 +14,7 @@ class SessionPlanTest {
     private val serverPath = "C:/Users/one/plugins/y-review/channel/y-review-channel.jar"
     private val found = ChannelServer.Answer.Found(serverPath)
     private val javaPath = "C:/Program Files/JetBrains/jbr/bin/java.exe"
-    private val config = "/tmp/claude-y-review-mcp-1.json"
+    private val config = "/tmp/y-review-mcp-1.json"
 
     private fun plan(
         bridge: BridgeLookup = ready,
@@ -24,9 +24,13 @@ class SessionPlanTest {
         sessionKey: String? = null,
     ) = SessionPlan.of(project, bridge, "claude", server, javaPath, configFile, sessionKey)
 
+    private fun shell(configFile: String? = null) = ShellCommand.shellCommand(
+        AgentLaunch.arguments(AgentCatalog.of(AgentId.CLAUDE), "claude", configFile)
+    )
+
     @Test
     fun `the plan runs the command in the project directory`() {
-        assertEquals(ClaudeCommand.shellCommand("claude", config), plan().command)
+        assertEquals(shell(config), plan().command)
         assertEquals(project, plan().workingDirectory)
     }
 
@@ -34,10 +38,10 @@ class SessionPlanTest {
     fun `the plan appends the two flags of the channel`() {
         val line = plan().command.last()
 
-        assertTrue(line.contains(ClaudeCommand.CONFIG_FLAG), line)
+        assertTrue(line.contains(AgentLaunch.CONFIG_FLAG), line)
         assertTrue(line.contains(config), line)
-        assertTrue(line.contains(ClaudeCommand.CHANNEL_FLAG), line)
-        assertTrue(line.contains(ClaudeCommand.CHANNEL_VALUE), line)
+        assertTrue(line.contains(AgentLaunch.CHANNEL_FLAG), line)
+        assertTrue(line.contains(AgentLaunch.CHANNEL_VALUE), line)
     }
 
     @Test
@@ -71,7 +75,7 @@ class SessionPlanTest {
 
         assertTrue(plan.environment.isEmpty())
         assertFalse(plan.bridgeReady)
-        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+        assertFalse(plan.command.last().contains(AgentLaunch.CHANNEL_FLAG))
     }
 
     @Test
@@ -95,7 +99,7 @@ class SessionPlanTest {
         assertEquals(project, plan.workingDirectory)
         assertTrue(plan.environment.isEmpty())
         assertFalse(plan.bridgeReady)
-        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+        assertFalse(plan.command.last().contains(AgentLaunch.CHANNEL_FLAG))
     }
 
     @Test
@@ -118,9 +122,9 @@ class SessionPlanTest {
     fun `an unknown plugin folder starts the session without the flags`() {
         val plan = plan(server = ChannelServer.Answer.Unknown, configFile = null)
 
-        assertEquals(ClaudeCommand.shellCommand("claude"), plan.command)
-        assertFalse(plan.command.last().contains(ClaudeCommand.CONFIG_FLAG))
-        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+        assertEquals(shell(), plan.command)
+        assertFalse(plan.command.last().contains(AgentLaunch.CONFIG_FLAG))
+        assertFalse(plan.command.last().contains(AgentLaunch.CHANNEL_FLAG))
         assertTrue(plan.bridgeReady)
     }
 
@@ -139,7 +143,7 @@ class SessionPlanTest {
 
         assertTrue(plan.status.contains(serverPath), plan.status)
         assertTrue(plan.status.contains("The session starts without the channel."), plan.status)
-        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+        assertFalse(plan.command.last().contains(AgentLaunch.CHANNEL_FLAG))
     }
 
     @Test
@@ -147,15 +151,15 @@ class SessionPlanTest {
         // A caller that writes no configuration file must never produce a --mcp-config flag.
         val plan = plan(server = ChannelServer.Answer.Missing(serverPath), configFile = config)
 
-        assertFalse(plan.command.last().contains(ClaudeCommand.CONFIG_FLAG), plan.command.last())
+        assertFalse(plan.command.last().contains(AgentLaunch.CONFIG_FLAG), plan.command.last())
     }
 
     @Test
     fun `an IDE without a java runtime starts the session without the flags`() {
         val plan = plan(javaPath = null, configFile = null)
 
-        assertEquals(ClaudeCommand.shellCommand("claude"), plan.command)
-        assertFalse(plan.command.last().contains(ClaudeCommand.CHANNEL_FLAG))
+        assertEquals(shell(), plan.command)
+        assertFalse(plan.command.last().contains(AgentLaunch.CHANNEL_FLAG))
         assertTrue(plan.bridgeReady)
     }
 
@@ -171,7 +175,7 @@ class SessionPlanTest {
     fun `an IDE without a java runtime never carries the flags`() {
         val plan = plan(javaPath = null, configFile = config)
 
-        assertFalse(plan.command.last().contains(ClaudeCommand.CONFIG_FLAG), plan.command.last())
+        assertFalse(plan.command.last().contains(AgentLaunch.CONFIG_FLAG), plan.command.last())
     }
 
     @Test

@@ -1,0 +1,132 @@
+package com.yeskiy.yreview.session
+
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
+
+class AgentCatalogTest {
+
+    @Test
+    fun `the catalog holds one record for every identifier`() {
+        assertEquals(AgentId.entries.toSet(), AgentCatalog.ALL.map { it.id }.toSet())
+        assertEquals(AgentId.entries.size, AgentCatalog.ALL.size)
+    }
+
+    @Test
+    fun `claude code is the default and it carries the channel`() {
+        assertEquals(AgentId.CLAUDE, AgentCatalog.DEFAULT)
+        assertEquals(PushKind.CHANNEL, AgentCatalog.of(AgentId.CLAUDE).push)
+        assertEquals("claude", AgentCatalog.of(AgentId.CLAUDE).defaultCommand)
+    }
+
+    @Test
+    fun `exactly two agents take a send`() {
+        assertEquals(
+            listOf(AgentId.CLAUDE, AgentId.OPENCODE),
+            AgentCatalog.ALL.filter { it.push != PushKind.NONE }.map { it.id },
+        )
+        assertEquals(PushKind.LOCAL_HTTP, AgentCatalog.of(AgentId.OPENCODE).push)
+    }
+
+    @Test
+    fun `a per session route names its flag or its variable`() {
+        assertEquals(McpRoute.Flag("--mcp-config", ""), AgentCatalog.of(AgentId.CLAUDE).mcp)
+        assertEquals(McpRoute.Variable("OPENCODE_CONFIG"), AgentCatalog.of(AgentId.OPENCODE).mcp)
+        assertEquals(McpRoute.Keys, AgentCatalog.of(AgentId.CODEX).mcp)
+        assertEquals(
+            McpRoute.Variable("GEMINI_CLI_SYSTEM_DEFAULTS_PATH"),
+            AgentCatalog.of(AgentId.GEMINI).mcp,
+        )
+        assertEquals(McpRoute.Flag("--additional-mcp-config", "@"), AgentCatalog.of(AgentId.COPILOT).mcp)
+    }
+
+    @Test
+    fun `a stored route asks the user first`() {
+        assertEquals(McpRoute.AddCommand, AgentCatalog.of(AgentId.ANTIGRAVITY).mcp)
+        assertEquals(McpRoute.UserFile(".cursor/mcp.json"), AgentCatalog.of(AgentId.CURSOR).mcp)
+    }
+
+    @Test
+    fun `an agent with no proved route registers nothing`() {
+        // Aider reads no server at all. Amp has no route this plugin proved.
+        assertEquals(McpRoute.None, AgentCatalog.of(AgentId.AIDER).mcp)
+        assertEquals(McpRoute.None, AgentCatalog.of(AgentId.AMP).mcp)
+        assertEquals(McpRoute.None, AgentCatalog.of(AgentId.CUSTOM).mcp)
+        assertEquals(McpRoute.None, AgentCatalog.of(AgentId.NONE).mcp)
+    }
+
+    @Test
+    fun `the none entry runs nothing and names no command`() {
+        val none = AgentCatalog.of(AgentId.NONE)
+
+        assertFalse(none.runnable)
+        assertEquals(emptyList(), none.commands)
+        assertEquals(PushKind.NONE, none.push)
+    }
+
+    @Test
+    fun `the custom entry runs a command the user names`() {
+        val custom = AgentCatalog.of(AgentId.CUSTOM)
+
+        assertTrue(custom.runnable)
+        assertEquals(emptyList(), custom.commands)
+        assertEquals("", custom.defaultCommand)
+    }
+
+    @Test
+    fun `the cursor record holds both installed names`() {
+        assertEquals(listOf("cursor-agent", "agent"), AgentCatalog.of(AgentId.CURSOR).commands)
+    }
+
+    @Test
+    fun `a brand with a desktop application says so`() {
+        assertEquals("Claude Desktop", AgentCatalog.of(AgentId.CLAUDE).desktop?.label)
+        assertFalse(AgentCatalog.of(AgentId.CLAUDE).desktop!!.sharesConfig)
+        assertTrue(AgentCatalog.of(AgentId.CODEX).desktop!!.sharesConfig)
+        assertTrue(AgentCatalog.of(AgentId.ANTIGRAVITY).desktop!!.sharesConfig)
+        assertTrue(AgentCatalog.of(AgentId.CURSOR).desktop!!.sharesConfig)
+        assertNull(AgentCatalog.of(AgentId.COPILOT).desktop)
+        assertNull(AgentCatalog.of(AgentId.NONE).desktop)
+    }
+
+    @Test
+    fun `every desktop note says that the window cannot run it`() {
+        AgentCatalog.ALL.mapNotNull { it.desktop }.forEach {
+            assertTrue(it.note.contains("cannot run it"), it.label)
+            assertTrue(it.label.isNotBlank())
+        }
+    }
+
+    @Test
+    fun `every record carries a label and a hint`() {
+        AgentCatalog.ALL.forEach {
+            assertTrue(it.label.isNotBlank(), "${it.id} has no label")
+            assertTrue(it.hint.isNotBlank(), "${it.id} has no hint")
+        }
+    }
+
+    @Test
+    fun `the found agents stand first and none stands last`() {
+        val order = AgentCatalog.ordered(setOf(AgentId.GEMINI, AgentId.CODEX)).map { it.id }
+
+        assertEquals(listOf(AgentId.CODEX, AgentId.GEMINI), order.take(2))
+        assertEquals(AgentId.NONE, order.last())
+        assertEquals(AgentId.entries.size, order.size)
+    }
+
+    @Test
+    fun `a stored name comes back as the same identifier`() {
+        AgentId.entries.forEach { assertEquals(it, AgentCatalog.parse(it.name)) }
+    }
+
+    @Test
+    fun `an unknown stored name is not a choice`() {
+        assertNull(AgentCatalog.parse(null))
+        assertNull(AgentCatalog.parse(""))
+        assertNull(AgentCatalog.parse("   "))
+        assertNull(AgentCatalog.parse("WINDSURF"))
+        assertNull(AgentCatalog.parse("claude"))
+    }
+}

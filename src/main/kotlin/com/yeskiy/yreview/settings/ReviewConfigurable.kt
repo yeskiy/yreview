@@ -12,8 +12,9 @@ import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.gutter.CommentGutter
-import com.yeskiy.yreview.session.ClaudeCommand
-import com.yeskiy.yreview.session.ClaudeDetection
+import com.yeskiy.yreview.session.AgentId
+import com.yeskiy.yreview.session.AgentLaunch
+import com.yeskiy.yreview.session.AgentScan
 import com.yeskiy.yreview.session.JavaRuntime
 import com.yeskiy.yreview.store.NotesSharing
 import java.awt.Font
@@ -90,7 +91,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
                         "A close of the tab ends the session and the process behind it. " +
                         "The Send button of the review window names the session that gets the tasks. " +
                         "It asks for one while two or more sessions read the comment channel. " +
-                        "The switch starts off when this machine holds no Claude Code installation. " +
+                        "The window shows by default, and a clear box hides it. " +
                         "The window appears and disappears at once, so no restart is needed."
                 )
             }
@@ -154,7 +155,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             channel.isSelected != settings().channel ||
             sessionWindow.isSelected != shown() ||
             maximize.isSelected != MaximizeSettings.getInstance().full ||
-            command.text.trim() != settings().claudeCommand ||
+            command.text.trim() != settings().command(agent()) ||
             remote.text.trim() != settings().remote ||
             refspec.isSelected != settings().writeRefspec ||
             editorMarks.isSelected != settings().editorMarks ||
@@ -164,12 +165,12 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         settings().sharing = selected()
         settings().channel = channel.isSelected
         settings().sessionWindow = sessionWindow.isSelected
-        settings().claudeCommand = command.text
+        settings().setCommand(agent(), command.text)
         settings().remote = remote.text
         settings().writeRefspec = refspec.isSelected
         settings().editorMarks = editorMarks.isSelected
         settings().autoStartSession = autoStart.isSelected
-        command.text = settings().claudeCommand
+        command.text = settings().command(agent())
         remote.text = settings().remote
         BridgeService.getInstance(project).applySwitch(channel.isSelected)
         SessionWindow.show(project, sessionWindow.isSelected)
@@ -182,7 +183,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         channel.isSelected = settings().channel
         sessionWindow.isSelected = shown()
         maximize.isSelected = MaximizeSettings.getInstance().full
-        command.text = settings().claudeCommand
+        command.text = settings().command(agent())
         remote.text = settings().remote
         refspec.isSelected = settings().writeRefspec
         editorMarks.isSelected = settings().editorMarks
@@ -210,24 +211,31 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             "The plugin ships the channel server, and the Java runtime of the IDE runs it. $found"
     }
 
+    /**
+     * The platform builds this page on the user interface thread, so the text reads the
+     * answer the scan already holds and it waits for nothing.
+     */
     private fun commandHelp(): String {
-        val install = ClaudeDetection.getInstance().install()
-        val found = install.path
-            ?.let { "This machine holds Claude Code at $it, so that path also works here." }
-            ?: "No Claude Code installation was found on this machine."
+        val answer = AgentScan.getInstance().latest()
+        val install = answer.of(AgentId.CLAUDE)
+        val found = when {
+            !answer.scanned -> "The plugin is looking for the installed agents."
+            install.found -> "This machine holds Claude Code at ${install.path}, so that path also works here."
+            else -> "The plugin did not find Claude Code on this machine."
+        }
         return "A shell runs this one command, and the shell loads the profile of the user. " +
             "Paste a full path when the command is not on the PATH. $found"
     }
 
     private fun selected(): CommentSharing = choice.selectedItem as? CommentSharing ?: CommentSharing.LOCAL_ONLY
 
-    private fun shown(): Boolean =
-        settings().sessionWindowShown(ClaudeDetection.getInstance().install().found)
+    private fun shown(): Boolean = settings().sessionWindowShown()
+
+    private fun agent(): AgentId = settings().agentOrDefault()
 
     private fun settings(): ReviewSettings = ReviewSettings.getInstance(project)
 
     private companion object {
-        val ARGUMENTS = ClaudeCommand.CONFIG_FLAG + " <the configuration file of the session>\n" +
-            ClaudeCommand.CHANNEL_FLAG + " " + ClaudeCommand.CHANNEL_VALUE
+        val ARGUMENTS = AgentLaunch.appendedText(AgentId.CLAUDE)
     }
 }

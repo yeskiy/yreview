@@ -18,7 +18,7 @@ import kotlin.io.path.writeText
  */
 object ChannelConfig {
 
-    private const val PREFIX = "claude-y-review-mcp-"
+    private const val PREFIX = "y-review-mcp-"
 
     private const val SUFFIX = ".json"
 
@@ -43,7 +43,7 @@ object ChannelConfig {
         JSON.encodeToString(
             Document(
                 mapOf(
-                    ClaudeCommand.SERVER_NAME to Entry(
+                    AgentLaunch.SERVER_NAME to Entry(
                         STDIO,
                         javaPath,
                         listOf(CLASS_PATH_FLAG, serverPath, ChannelServer.MAIN_CLASS)

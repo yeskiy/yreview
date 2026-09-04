@@ -40,6 +40,7 @@ import javax.swing.JTextArea
 class ClaudeSessionPanel(
     private val project: Project,
     private val sessionName: String,
+    autoStart: Boolean,
     private val onState: (SessionState) -> Unit
 ) : JPanel(BorderLayout()), Disposable {
 
@@ -67,7 +68,7 @@ class ClaudeSessionPanel(
     init {
         SessionRegistry.getInstance(project).add(sessionKey, sessionName)
         add(status, BorderLayout.SOUTH)
-        showIdle(NO_SESSION, AUTO_START)
+        showIdle(NO_SESSION, if (autoStart) AUTO_START else PRESS_START)
     }
 
     override fun dispose() {
@@ -165,7 +166,7 @@ class ClaudeSessionPanel(
         val plan = SessionPlan.of(
             basePath,
             bridge,
-            settings().claudeCommand,
+            settings().command(settings().agentOrDefault()),
             server,
             javaPath,
             written?.toString(),
@@ -275,7 +276,13 @@ class ClaudeSessionPanel(
 
     private fun bridgeState(): String {
         val basePath = project.basePath ?: return NO_DIRECTORY
-        return SessionPlan.of(basePath, lookup(basePath), settings().claudeCommand, channelServer(), javaPath()).status
+        return SessionPlan.of(
+            basePath,
+            lookup(basePath),
+            settings().command(settings().agentOrDefault()),
+            channelServer(),
+            javaPath(),
+        ).status
     }
 
     /** A text area, not a label. The status text wraps, and it never renders markup. */

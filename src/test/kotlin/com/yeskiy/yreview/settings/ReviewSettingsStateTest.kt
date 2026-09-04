@@ -2,6 +2,7 @@ package com.yeskiy.yreview.settings
 
 import com.intellij.openapi.util.JDOMUtil
 import com.intellij.util.xmlb.XmlSerializer
+import com.yeskiy.yreview.session.AgentId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -43,24 +44,26 @@ class ReviewSettingsStateTest {
     }
 
     @Test
-    fun `an unset session window follows the search`() {
+    fun `the session window shows unless the user cleared the switch`() {
         val settings = ReviewSettings()
-        settings.loadState(ReviewSettings.State())
 
-        assertTrue(settings.sessionWindowShown(claudeFound = true))
-        assertFalse(settings.sessionWindowShown(claudeFound = false))
+        assertTrue(settings.sessionWindowShown())
+
+        settings.sessionWindow = false
+
+        assertFalse(settings.sessionWindowShown())
     }
 
     @Test
-    fun `a chosen session window beats the search`() {
+    fun `a chosen session window survives a load`() {
         val settings = ReviewSettings()
-        settings.loadState(ReviewSettings.State())
+        settings.loadState(ReviewSettings.State().apply { sessionWindow = false })
 
-        settings.sessionWindow = false
-        assertFalse(settings.sessionWindowShown(claudeFound = true))
+        assertFalse(settings.sessionWindowShown())
 
         settings.sessionWindow = true
-        assertTrue(settings.sessionWindowShown(claudeFound = false))
+
+        assertTrue(settings.sessionWindowShown())
     }
 
     @Test
@@ -117,27 +120,133 @@ class ReviewSettingsStateTest {
     }
 
     @Test
-    fun `a blank command falls back to the default`() {
+    fun `the choice and the commands round trip through the service`() {
         val settings = ReviewSettings()
-        settings.loadState(ReviewSettings.State())
-
-        settings.claudeCommand = "   "
-        assertEquals("claude", settings.claudeCommand)
-
-        settings.claudeCommand = "  my-claude  "
-        assertEquals("my-claude", settings.claudeCommand)
-    }
-
-    @Test
-    fun `the command round trips through the service`() {
-        val settings = ReviewSettings()
-        settings.loadState(ReviewSettings.State())
-        settings.claudeCommand = "claude"
+        settings.agent = AgentId.OPENCODE
+        settings.setCommand(AgentId.OPENCODE, "/opt/oc/opencode")
+        settings.markMcpAdded(AgentId.CURSOR)
 
         val second = ReviewSettings()
         second.loadState(read(settings.state))
 
-        assertEquals("claude", second.claudeCommand)
+        assertEquals(AgentId.OPENCODE, second.agent)
+        assertEquals("/opt/oc/opencode", second.command(AgentId.OPENCODE))
+        assertTrue(second.mcpAdded(AgentId.CURSOR))
+    }
+
+    @Test
+    fun `a fresh install has chosen no agent`() {
+        val settings = ReviewSettings()
+
+        assertNull(settings.agent)
+        assertFalse(settings.agentChosen)
+        assertEquals(AgentId.CLAUDE, settings.agentOrDefault())
+    }
+
+    @Test
+    fun `a chosen agent comes back`() {
+        val settings = ReviewSettings()
+
+        settings.agent = AgentId.OPENCODE
+
+        assertEquals(AgentId.OPENCODE, settings.agent)
+        assertTrue(settings.agentChosen)
+        assertEquals("OPENCODE", settings.state.agent)
+    }
+
+    @Test
+    fun `a stored name this build does not know counts as no choice`() {
+        val settings = ReviewSettings()
+
+        settings.loadState(ReviewSettings.State().apply { agent = "WINDSURF" })
+
+        assertNull(settings.agent)
+        assertFalse(settings.agentChosen)
+    }
+
+    @Test
+    fun `every agent keeps a command of its own`() {
+        val settings = ReviewSettings()
+
+        settings.setCommand(AgentId.CLAUDE, "C:/tools/claude.exe")
+        settings.setCommand(AgentId.OPENCODE, "/opt/oc/opencode")
+
+        assertEquals("C:/tools/claude.exe", settings.command(AgentId.CLAUDE))
+        assertEquals("/opt/oc/opencode", settings.command(AgentId.OPENCODE))
+        assertEquals("codex", settings.command(AgentId.CODEX))
+    }
+
+    @Test
+    fun `a blank command falls back to the default of that agent`() {
+        val settings = ReviewSettings()
+
+        settings.setCommand(AgentId.GEMINI, "   ")
+
+        assertEquals("gemini", settings.command(AgentId.GEMINI))
+        assertFalse(settings.state.agentCommands.containsKey("GEMINI"))
+    }
+
+    @Test
+    fun `the custom agent has no default command`() {
+        val settings = ReviewSettings()
+
+        assertEquals("", settings.command(AgentId.CUSTOM))
+
+        settings.setCommand(AgentId.CUSTOM, "my-agent")
+
+        assertEquals("my-agent", settings.command(AgentId.CUSTOM))
+    }
+
+    @Test
+    fun `an older file that held one claude command keeps it`() {
+        val settings = ReviewSettings()
+
+        settings.loadState(ReviewSettings.State().apply { claudeCommand = "D:/bin/claude.cmd" })
+
+        assertEquals("D:/bin/claude.cmd", settings.command(AgentId.CLAUDE))
+    }
+
+    @Test
+    fun `an older file with the plain default needs no migration`() {
+        val settings = ReviewSettings()
+
+        settings.loadState(ReviewSettings.State().apply { claudeCommand = "claude" })
+
+        assertEquals("claude", settings.command(AgentId.CLAUDE))
+        assertFalse(settings.state.agentCommands.containsKey("CLAUDE"))
+    }
+
+    @Test
+    fun `an older build still reads the claude command this build wrote`() {
+        val settings = ReviewSettings()
+
+        settings.setCommand(AgentId.CLAUDE, "C:/tools/claude.exe")
+
+        assertEquals("C:/tools/claude.exe", settings.state.claudeCommand)
+    }
+
+    @Test
+    fun `a stored registration is remembered once`() {
+        val settings = ReviewSettings()
+
+        assertFalse(settings.mcpAdded(AgentId.ANTIGRAVITY))
+
+        settings.markMcpAdded(AgentId.ANTIGRAVITY)
+        settings.markMcpAdded(AgentId.ANTIGRAVITY)
+
+        assertTrue(settings.mcpAdded(AgentId.ANTIGRAVITY))
+        assertFalse(settings.mcpAdded(AgentId.CURSOR))
+        assertEquals(listOf("ANTIGRAVITY"), settings.state.mcpAdded)
+    }
+
+    @Test
+    fun `the none choice is a real choice`() {
+        val settings = ReviewSettings()
+
+        settings.agent = AgentId.NONE
+
+        assertTrue(settings.agentChosen)
+        assertEquals(AgentId.NONE, settings.agentOrDefault())
     }
 
     @Test

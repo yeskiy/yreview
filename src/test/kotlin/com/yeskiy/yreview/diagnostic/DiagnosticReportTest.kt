@@ -48,7 +48,7 @@ class DiagnosticReportTest {
         channel = true,
         sharing = "Local only",
         sessionWindow = "not chosen",
-        claudeCommand = "claude",
+        agentCommand = "claude",
     )
 
     /** One record that carries every value the report must never show. */

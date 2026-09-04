@@ -1,12 +1,7 @@
 package com.yeskiy.yreview.session
 
 /**
- * Builds the command line of a review session.
- *
- * The base command comes from the settings, because every machine holds Claude Code in
- * its own place. The plugin owns the two flags a review session needs. One flag declares
- * the channel server, and the other flag registers that server for the session. An entry
- * in a configuration file alone never registers a channel.
+ * Wraps the command line of a review session in a shell.
  *
  * A shell runs the command, so the profile of the user loads and a command that is a
  * shell function still resolves. The shell carries no flag that keeps it alive, therefore
@@ -14,21 +9,10 @@ package com.yeskiy.yreview.session
  *
  * The session reads the project from the working directory, which is why [windowsPath]
  * still matters. The IDE server refuses a WSL path.
+ *
+ * Nothing here knows any agent. [AgentLaunch] builds the argument list.
  */
-object ClaudeCommand {
-
-    /** The default of the official JetBrains plugin as well. Every installer writes it to the PATH. */
-    const val DEFAULT_COMMAND = "claude"
-
-    /** The channel event carries the server name, so this name reaches the model. */
-    const val SERVER_NAME = "y-review"
-
-    const val CONFIG_FLAG = "--mcp-config"
-
-    /** Channels are a research preview, so a server outside the Anthropic list needs this flag. */
-    const val CHANNEL_FLAG = "--dangerously-load-development-channels"
-
-    const val CHANNEL_VALUE = "server:$SERVER_NAME"
+object ShellCommand {
 
     /** The shell of a machine that is not Windows, when the environment names none. */
     const val FALLBACK_SHELL = "/bin/sh"
@@ -45,28 +29,15 @@ object ClaudeCommand {
     }
 
     /**
-     * The flags the plugin appends. The settings page shows the same strings, so a user
-     * reads what the session really runs.
-     */
-    fun flags(configFile: String): List<String> =
-        listOf(CONFIG_FLAG, configFile, CHANNEL_FLAG, CHANNEL_VALUE)
-
-    /** Without a configuration file the session starts plain, and it carries no channel. */
-    fun arguments(command: String, configFile: String? = null): List<String> =
-        listOf(command) + configFile?.let { flags(it) }.orEmpty()
-
-    /**
      * One line for the shell. Every part is a literal string, so a path with a space and
      * a flag that starts with two hyphens both reach the agent unchanged.
      */
-    fun shellLine(command: String, configFile: String? = null, windows: Boolean = onWindows()): String {
-        val parts = arguments(command, configFile)
-        return if (windows) {
+    fun shellLine(parts: List<String>, windows: Boolean = onWindows()): String =
+        if (windows) {
             parts.joinToString(" ", prefix = "& ") { powerShellQuote(it) }
         } else {
             parts.joinToString(" ") { posixQuote(it) }
         }
-    }
 
     /**
      * The wrapper of the session. Windows runs PowerShell without the -NoProfile flag, so
@@ -74,15 +45,14 @@ object ClaudeCommand {
      * reason. Neither wrapper carries a flag that keeps it alive after the agent exits.
      */
     fun shellCommand(
-        command: String,
-        configFile: String? = null,
+        parts: List<String>,
         windows: Boolean = onWindows(),
         shell: String = loginShell(),
     ): List<String> =
         if (windows) {
-            listOf("powershell.exe", "-NoLogo", "-Command", shellLine(command, configFile, windows = true))
+            listOf("powershell.exe", "-NoLogo", "-Command", shellLine(parts, windows = true))
         } else {
-            listOf(shell, "-l", "-c", shellLine(command, configFile, windows = false))
+            listOf(shell, "-l", "-c", shellLine(parts, windows = false))
         }
 
     fun onWindows(): Boolean =

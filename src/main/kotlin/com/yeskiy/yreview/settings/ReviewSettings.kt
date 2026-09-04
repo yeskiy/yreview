@@ -6,7 +6,8 @@ import com.intellij.openapi.components.State
 import com.intellij.openapi.components.Storage
 import com.intellij.openapi.components.service
 import com.intellij.openapi.project.Project
-import com.yeskiy.yreview.session.ClaudeCommand
+import com.yeskiy.yreview.session.AgentCatalog
+import com.yeskiy.yreview.session.AgentId
 import com.yeskiy.yreview.store.NotesSharing
 import com.yeskiy.yreview.tasks.TaskGrouping
 import com.yeskiy.yreview.tasks.TaskKindFilter
@@ -73,8 +74,8 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         var channel: Boolean = true
 
         /**
-         * Whether the Claude tool window appears. A null value means that the user never
-         * chose, and then the search for a Claude installation decides.
+         * Whether the session tool window appears. A null value means that the user never
+         * chose, and the window then shows by default.
          */
         @JvmField
         var sessionWindow: Boolean? = null
@@ -82,9 +83,36 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
         /**
          * The command a review session runs. Every machine holds Claude Code in its own
          * place, so the default names the launcher every installer writes to the PATH.
+         *
+         * A newer build keeps one command for each agent in [agentCommands]. This field
+         * stays, so an older build still reads the command of Claude Code.
          */
         @JvmField
-        var claudeCommand: String = ClaudeCommand.DEFAULT_COMMAND
+        var claudeCommand: String = AgentCatalog.of(AgentCatalog.DEFAULT).defaultCommand
+
+        /**
+         * The agent a review session runs, as the name of an [AgentId]. A null value means
+         * that the user never chose, and the session window then shows the selector. The
+         * plugin never writes an empty text here.
+         */
+        @JvmField
+        var agent: String? = null
+
+        /**
+         * One command for each agent, keyed by the name of an [AgentId]. A key that is
+         * absent means the default command of that agent. A custom path for one agent
+         * therefore survives a switch to another agent and back.
+         */
+        @JvmField
+        var agentCommands: MutableMap<String, String> = LinkedHashMap()
+
+        /**
+         * The agents whose stored registration the user already approved, by the name of
+         * an [AgentId]. The settings page reads this, so it asks once and not on every
+         * visit. A user who wants the write again presses Add again.
+         */
+        @JvmField
+        var mcpAdded: MutableList<String> = mutableListOf()
 
         /** The git remote that a shared note goes to. Not every repository names it origin. */
         @JvmField
@@ -121,6 +149,17 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
 
     override fun loadState(state: State) {
         current = state
+        migrateOneCommand()
+    }
+
+    /**
+     * An older file held one command, and it held it for Claude Code alone. The value
+     * moves into the map once, and the old field stays so an older build still reads it.
+     */
+    private fun migrateOneCommand() {
+        val stored = current.claudeCommand.trim()
+        if (stored.isEmpty() || stored == AgentCatalog.of(AgentId.CLAUDE).defaultCommand) return
+        current.agentCommands.putIfAbsent(AgentId.CLAUDE.name, stored)
     }
 
     var sharing: CommentSharing
@@ -135,19 +174,49 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
             current.channel = value
         }
 
-    /** The choice of the user about the Claude tool window, or null while nobody chose. */
+    /** The choice of the user about the session tool window, or null while nobody chose. */
     var sessionWindow: Boolean?
         get() = current.sessionWindow
         set(value) {
             current.sessionWindow = value
         }
 
-    /** The command of a review session. A blank field falls back to the default. */
-    var claudeCommand: String
-        get() = current.claudeCommand.trim().ifEmpty { ClaudeCommand.DEFAULT_COMMAND }
+    /** The agent of a review session, or null while nobody chose. */
+    var agent: AgentId?
+        get() = AgentCatalog.parse(current.agent)
         set(value) {
-            current.claudeCommand = value.trim().ifEmpty { ClaudeCommand.DEFAULT_COMMAND }
+            current.agent = value?.name
         }
+
+    /** True after the user picked an agent that this build knows. */
+    val agentChosen: Boolean get() = agent != null
+
+    /** The agent a session runs. An unset choice falls back to Claude Code. */
+    fun agentOrDefault(): AgentId = agent ?: AgentCatalog.DEFAULT
+
+    /** The command of one agent. A blank value falls back to the default of that agent. */
+    fun command(id: AgentId): String =
+        current.agentCommands[id.name]?.trim()?.takeIf { it.isNotEmpty() }
+            ?: AgentCatalog.of(id).defaultCommand
+
+    /** A value that matches the default is not stored, so a later default change reaches the user. */
+    fun setCommand(id: AgentId, value: String) {
+        val trimmed = value.trim()
+        if (trimmed.isEmpty() || trimmed == AgentCatalog.of(id).defaultCommand) {
+            current.agentCommands.remove(id.name)
+        } else {
+            current.agentCommands[id.name] = trimmed
+        }
+        if (id == AgentId.CLAUDE) current.claudeCommand = command(id)
+    }
+
+    /** True after the user approved the stored registration of this agent once. */
+    fun mcpAdded(id: AgentId): Boolean = current.mcpAdded.contains(id.name)
+
+    /** The settings page calls this after the write or the command really succeeded. */
+    fun markMcpAdded(id: AgentId) {
+        if (!current.mcpAdded.contains(id.name)) current.mcpAdded.add(id.name)
+    }
 
     /** The git remote of a shared note. A blank field falls back to the default. */
     var remote: String
@@ -174,8 +243,11 @@ class ReviewSettings : PersistentStateComponent<ReviewSettings.State> {
             current.autoStartSession = value
         }
 
-    /** True when the Claude tool window may appear. An unset choice follows the search. */
-    fun sessionWindowShown(claudeFound: Boolean): Boolean = current.sessionWindow ?: claudeFound
+    /**
+     * True while the session window may appear. The window carries the agent selector, so
+     * it shows by default and a machine with no agent still reads what to install.
+     */
+    fun sessionWindowShown(): Boolean = current.sessionWindow ?: true
 
     /** The view state of one tab. Every toolbar action of that tab reads and writes it. */
     fun tab(scope: TaskScope): TabState = when (scope) {

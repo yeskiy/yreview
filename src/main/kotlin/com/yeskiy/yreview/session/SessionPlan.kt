@@ -36,7 +36,7 @@ data class SessionPlan(
         fun of(
             projectPath: String,
             bridge: BridgeLookup,
-            command: String = ClaudeCommand.DEFAULT_COMMAND,
+            command: String = AgentCatalog.of(AgentCatalog.DEFAULT).defaultCommand,
             server: ChannelServer.Answer = ChannelServer.Answer.Unknown,
             javaPath: String? = null,
             configFile: String? = null,
@@ -46,8 +46,14 @@ data class SessionPlan(
                 server is ChannelServer.Answer.Found &&
                 javaPath != null
             return SessionPlan(
-                command = ClaudeCommand.shellCommand(command, configFile.takeIf { ready }),
-                workingDirectory = ClaudeCommand.windowsPath(projectPath),
+                command = ShellCommand.shellCommand(
+                    AgentLaunch.arguments(
+                        AgentCatalog.of(AgentCatalog.DEFAULT),
+                        command,
+                        configFile.takeIf { ready },
+                    )
+                ),
+                workingDirectory = ShellCommand.windowsPath(projectPath),
                 environment = when (bridge) {
                     is BridgeLookup.Available -> mapOf(
                         BridgeDiscovery.URL_VARIABLE to bridge.url,

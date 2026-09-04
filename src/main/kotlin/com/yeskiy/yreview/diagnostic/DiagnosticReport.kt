@@ -29,7 +29,7 @@ data class ReportFacts(
     val channel: Boolean,
     val sharing: String,
     val sessionWindow: String,
-    val claudeCommand: String,
+    val agentCommand: String,
 )
 
 /**
@@ -76,7 +76,7 @@ object DiagnosticReport {
             line("channel", state(facts.channel)),
             line("sharing", facts.sharing),
             line("session window", facts.sessionWindow),
-            line("claude command", facts.claudeCommand),
+            line("agent command", facts.agentCommand),
             "",
             "Records, newest first (${records.size} of ${SessionLog.LIMIT})",
             if (records.isEmpty()) "  none" else records.joinToString("\n\n") { it.text() },
@@ -99,7 +99,7 @@ object DiagnosticReport {
             channel = settings.channel,
             sharing = settings.sharing.label,
             sessionWindow = choice(settings.sessionWindow),
-            claudeCommand = settings.claudeCommand,
+            agentCommand = settings.command(settings.agentOrDefault()),
         )
     }
 
