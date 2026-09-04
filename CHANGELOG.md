@@ -42,17 +42,19 @@ public version had.
 - Add a color scheme page, so the background of a commented range follows the scheme.
 - Expose the open comments to the IDE Model Context Protocol server, so an agent inside the
   IDE reads and resolves them.
-- Run a Claude Code session in a tool window of the IDE, and send the open tasks to it.
+- Run a command line agent in a tool window of the IDE, and send the open tasks to it. The
+  window opens one tab for each session, and every tab carries the name of its own agent.
+  The plugin knows nine agents, and it also runs a command that you type.
 - Ship a channel server inside the plugin, and run it with the Java runtime of the IDE. The
   server carries the tasks into a running session over the Model Context Protocol.
 - Serve a review bridge on the loopback interface, guarded by a secret that the IDE makes
   for each run. The session reads the address and the secret from a discovery file under
   the user profile.
 - Write `AGENT.md` and `tasks.json` into the git directory on every send, so an agent
-  outside Claude Code reads the same tasks. The plugin reads `done.txt` from the same
+  that takes no push reads the same tasks. The plugin reads `done.txt` from the same
   folder and closes the tasks the agent reports.
-- Switch the channel and the Claude tool window off, and name the Claude command, in the
-  settings page.
+- Choose the command line agent, name its command, and switch the channel or the session
+  tool window off, in the settings page.
 - Add an application switch that lets a maximized tool window cover the editor completely.
 
 [Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.0...HEAD
