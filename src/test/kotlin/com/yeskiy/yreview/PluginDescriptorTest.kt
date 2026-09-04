@@ -25,7 +25,7 @@ class PluginDescriptorTest {
     private val maximizeStartup =
         "<postStartupActivity implementation=\"com.yeskiy.yreview.settings.MaximizeStartup\" />"
 
-    private val icon = "icon=\"AllIcons.Diff.AddComment_14x14\""
+    private val icon = "icon=\"/icons/yReviewAddComment.svg\""
 
     private val shortcut = "<keyboard-shortcut keymap=\"\$default\" first-keystroke=\"control shift G\" />"
 
