@@ -48,8 +48,8 @@ class SessionTabs(
 
     /**
      * The project closes, so every session that still runs ends here. A panel that a tab
-     * already disposed ends nothing a second time, because the close of a session and the
-     * delete of the configuration file both run once.
+     * already disposed ends nothing a second time, because the close of a session runs
+     * once.
      */
     override fun dispose() {
         tabs.toList().forEach { it.panel.dispose() }

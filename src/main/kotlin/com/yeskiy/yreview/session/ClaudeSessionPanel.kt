@@ -66,9 +66,6 @@ class ClaudeSessionPanel(
     /** True between the press on Start and the mount of the terminal. */
     private var starting = false
 
-    /** The configuration file of the running session. It goes away with the session. */
-    private var configFile: Path? = null
-
     /** The loopback port of a session that runs its own HTTP server. Null for every other. */
     private var httpPort: Int? = null
 
@@ -90,7 +87,6 @@ class ClaudeSessionPanel(
 
     override fun dispose() {
         SessionRegistry.getInstance(project).remove(sessionKey)
-        dropConfig()
         terminal?.close()
     }
 
@@ -177,20 +173,13 @@ class ClaudeSessionPanel(
             .getOrNull()
     }
 
-    private fun dropConfig() {
-        ChannelConfig.delete(configFile)
-        configFile = null
-    }
-
     private fun mount(basePath: String, bridge: BridgeLookup) {
         starting = false
         if (isRunning) return
-        dropConfig()
         val server = channelServer()
         val javaPath = javaPath()
         val agent = AgentCatalog.of(settings().agentOrDefault())
         val written = writeConfig(agent, bridge, server, javaPath)
-        configFile = written
         httpPort = if (agent.push == PushKind.LOCAL_HTTP) FreePort.pick() else null
         httpPassword = httpPort?.let { BridgeToken.newToken() }
         SessionRegistry.getInstance(project)
@@ -292,7 +281,6 @@ class ClaudeSessionPanel(
      * so the registry hears that this tab takes no send until the next start.
      */
     private fun forget() {
-        dropConfig()
         httpPort = null
         httpPassword = null
         runningAgent = null

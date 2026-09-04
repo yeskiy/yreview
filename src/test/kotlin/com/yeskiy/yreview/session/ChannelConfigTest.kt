@@ -5,13 +5,16 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 import java.util.jar.JarFile
-import kotlin.io.path.deleteIfExists
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class ChannelConfigTest {
@@ -24,6 +27,15 @@ class ChannelConfigTest {
 
     private fun entry(text: String) =
         Json.parseToJsonElement(text).jsonObject["mcpServers"]!!.jsonObject["y-review"]!!.jsonObject
+
+    private fun withHome(body: (Path) -> Unit) {
+        val home = Files.createTempDirectory("y-review-home")
+        try {
+            body(home)
+        } finally {
+            home.toFile().deleteRecursively()
+        }
+    }
 
     @Test
     fun `the file declares one stdio server named y-review`() {
@@ -70,24 +82,77 @@ class ChannelConfigTest {
     }
 
     @Test
-    fun `a written file holds the same text and a delete removes it`() {
-        val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath)
-        try {
+    fun `a written file stands at the stable path and holds the text`() {
+        withHome { home ->
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+
+            assertEquals(ConfigFile.path(home, AgentId.CLAUDE), file)
             assertTrue(file.isRegularFile())
             assertEquals(text(), file.readText())
-            assertTrue(file.fileName.toString().endsWith(".json"))
-        } finally {
-            file.deleteIfExists()
         }
-
-        val second = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath)
-        ChannelConfig.delete(second)
-        assertFalse(second.isRegularFile())
     }
 
     @Test
-    fun `a delete of nothing changes nothing`() {
-        ChannelConfig.delete(null)
+    fun `two sessions of one agent write the same file and it stays`() {
+        withHome { home ->
+            val first = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            val second = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+
+            assertEquals(first, second)
+            assertTrue(second.isRegularFile())
+        }
+    }
+
+    @Test
+    fun `two agents write two files of their own shape`() {
+        withHome { home ->
+            val claude = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            val opencode = ChannelConfig.write(AgentId.OPENCODE, javaPath, serverPath, home)
+
+            assertNotEquals(claude, opencode)
+            assertTrue(claude.readText().contains("mcpServers"))
+            assertTrue(opencode.readText().contains("\"mcp\""))
+        }
+    }
+
+    @Test
+    fun `the same content twice leaves the file alone`() {
+        withHome { home ->
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            Files.setLastModifiedTime(file, FileTime.fromMillis(0))
+            val before = Files.getLastModifiedTime(file)
+
+            ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+
+            assertEquals(before, Files.getLastModifiedTime(file))
+            assertEquals(text(), file.readText())
+        }
+    }
+
+    @Test
+    fun `changed content writes the file again`() {
+        withHome { home ->
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            Files.setLastModifiedTime(file, FileTime.fromMillis(0))
+            val before = Files.getLastModifiedTime(file)
+            val moved = "C:\\Program Files\\JetBrains\\jbr-26\\bin\\java.exe"
+
+            ChannelConfig.write(AgentId.CLAUDE, moved, serverPath, home)
+
+            assertEquals(ChannelConfig.text(AgentId.CLAUDE, moved, serverPath), file.readText())
+            assertNotEquals(before, Files.getLastModifiedTime(file))
+        }
+    }
+
+    @Test
+    fun `a write leaves no temporary file beside the target`() {
+        withHome { home ->
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+
+            Files.list(file.parent).use { stream ->
+                assertEquals(listOf(file), stream.toList())
+            }
+        }
     }
 
     @Test

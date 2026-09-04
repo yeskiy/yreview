@@ -2,13 +2,15 @@ package com.yeskiy.yreview.session
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
-import kotlin.io.path.deleteIfExists
-import kotlin.io.path.writeText
+import java.nio.file.StandardCopyOption
+import kotlin.io.path.isRegularFile
+import kotlin.io.path.readText
 
 /**
- * Writes the Model Context Protocol configuration file of one review session.
+ * Writes the Model Context Protocol configuration file of one agent.
  *
  * The file declares one stdio server, and the name of that server is y-review. The name
  * matters, because a channel event carries the server name to the model.
@@ -17,14 +19,15 @@ import kotlin.io.path.writeText
  * its arguments in one array. Every other agent names the object mcpServers, and it holds
  * the program apart from its arguments.
  *
+ * The file stands at a path that outlives the session, and [ConfigFile] holds that path
+ * and the rule of the write.
+ *
  * The file holds no secret. The session hands the bridge address and the bridge token to
  * the server through the environment, and never through this file or a command line.
  */
 object ChannelConfig {
 
-    private const val PREFIX = "y-review-mcp-"
-
-    private const val SUFFIX = ".json"
+    private const val TEMPORARY_SUFFIX = ".tmp"
 
     private const val STDIO = "stdio"
 
@@ -62,12 +65,41 @@ object ChannelConfig {
         }
     }
 
-    /** The caller owns the file, and it deletes the file when the session ends. */
-    fun write(id: AgentId, javaPath: String, serverPath: String): Path =
-        Files.createTempFile(PREFIX, SUFFIX).also { it.writeText(text(id, javaPath, serverPath)) }
+    /**
+     * Puts the file of [id] in place, and answers the path of it.
+     *
+     * A file that already holds this text stays as it is, so a start that changes nothing
+     * writes nothing. The session never removes the file.
+     */
+    fun write(
+        id: AgentId,
+        javaPath: String,
+        serverPath: String,
+        home: Path = BridgeDiscovery.homeDirectory(),
+    ): Path {
+        val target = ConfigFile.path(home, id)
+        val wanted = text(id, javaPath, serverPath)
+        if (!ConfigFile.needsWrite(onDisk(target), wanted)) return target
+        Files.createDirectories(target.parent)
+        val temporary = Files.createTempFile(target.parent, ConfigFile.fileName(id), TEMPORARY_SUFFIX)
+        Files.writeString(temporary, wanted)
+        move(temporary, target)
+        return target
+    }
 
-    fun delete(file: Path?) {
-        file ?: return
-        runCatching { file.deleteIfExists() }
+    /** Null when no file stands there, and null when a read of it fails. */
+    private fun onDisk(target: Path): String? =
+        if (target.isRegularFile()) runCatching { target.readText() }.getOrNull() else null
+
+    /**
+     * The same move that [com.yeskiy.yreview.bridge.DiscoveryFile] makes. An agent that
+     * reads the file while the plugin writes it never sees half a document.
+     */
+    private fun move(temporary: Path, target: Path) {
+        try {
+            Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        } catch (unsupported: IOException) {
+            Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING)
+        }
     }
 }

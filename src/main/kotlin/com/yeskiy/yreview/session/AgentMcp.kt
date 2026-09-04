@@ -3,10 +3,11 @@ package com.yeskiy.yreview.session
 /**
  * How one agent gets the review server of the plugin.
  *
- * A per session route runs by itself. The plugin writes a temporary file, names it for
- * that one run, and touches nothing the user owns. A stored route needs a file the agent
- * owns, so the plugin shows the exact command or the exact document, and it writes only
- * after the user presses Add.
+ * A per session route runs by itself. The plugin writes a file of its own, one for each
+ * agent, and touches nothing the user owns. That file stays after the session ends,
+ * because the agent keeps the path and starts a later job with it. A stored route needs a
+ * file the agent owns, so the plugin shows the exact command or the exact document, and it
+ * writes only after the user presses Add.
  *
  * The plugin never registers a server it cannot make work. An agent with no proved route
  * gets nothing, and the file protocol carries the whole loop for that agent.
