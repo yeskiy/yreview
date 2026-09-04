@@ -45,6 +45,10 @@ public version had.
 - Run a command line agent in a tool window of the IDE, and send the open tasks to it. The
   window opens one tab for each session, and every tab carries the name of its own agent.
   The plugin knows nine agents, and it also runs a command that you type.
+- Give a tab a name of your own, or let the agent name it. Claude Code, GitHub Copilot CLI
+  and Cursor CLI write the session name into the window title, and OpenCode answers it on a
+  port of its own. An agent that names its own sessions keeps that right, and the plugin
+  then names the command you type in the session instead.
 - Ship a channel server inside the plugin, and run it with the Java runtime of the IDE. The
   server carries the tasks into a running session over the Model Context Protocol.
 - Serve a review bridge on the loopback interface, guarded by a secret that the IDE makes
