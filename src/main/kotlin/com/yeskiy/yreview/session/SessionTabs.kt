@@ -104,8 +104,13 @@ class SessionTabs(
     }
 
     /** Everything that names one tab, read from the tab and from the panel behind it. */
-    private fun facts(tab: SessionTab): TabFacts =
-        TabFacts(tab.number, tab.panel.tabAgent?.short, tab.state, byUser = tab.byUser)
+    private fun facts(tab: SessionTab): TabFacts = TabFacts(
+        tab.number,
+        tab.panel.tabAgent?.short,
+        tab.state,
+        byAgent = tab.panel.agentName,
+        byUser = tab.byUser,
+    )
 
     /**
      * Writes the name of one tab. The platform fires a change event on every write, so a

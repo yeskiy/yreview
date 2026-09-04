@@ -4,6 +4,8 @@ import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.terminal.TerminalTitle
+import com.intellij.terminal.TerminalTitleListener
 import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTab
 import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.intellij.terminal.frontend.view.TerminalView
@@ -29,6 +31,25 @@ class ReviewSession internal constructor(
      * is on screen, so the last output stays readable. A second call does nothing.
      */
     fun close() = Disposer.dispose(contents)
+
+    /**
+     * Reports the window title that the process of this session writes.
+     *
+     * The listener dies with the session, because the content manager of the session is
+     * its parent. The thread of the report is not promised, so the caller moves any change
+     * of the window to the user interface thread.
+     */
+    fun watchTitle(onChange: (String?) -> Unit) {
+        onChange(view.title.applicationTitle)
+        view.title.addTitleListener(
+            object : TerminalTitleListener {
+                override fun onTitleChanged(terminalTitle: TerminalTitle) {
+                    onChange(terminalTitle.applicationTitle)
+                }
+            },
+            contents,
+        )
+    }
 }
 
 /**

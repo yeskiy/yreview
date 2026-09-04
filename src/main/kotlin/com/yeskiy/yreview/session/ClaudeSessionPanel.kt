@@ -80,6 +80,15 @@ class ClaudeSessionPanel(
         private set
 
     /**
+     * The name that the agent of this session gave it, or null while it gave none.
+     *
+     * The name belongs to one session. A new start drops it, and a session that ended
+     * keeps it, because the output of that session is still on screen.
+     */
+    var agentName: String? = null
+        private set
+
+    /**
      * The agent of the last session of this tab. It is never cleared, so a tab that shows
      * the output of a session that ended keeps the name of the agent that wrote it.
      */
@@ -133,6 +142,7 @@ class ClaudeSessionPanel(
         if (isRunning || starting || !startable) return
         val basePath = project.basePath ?: return failed(NO_SESSION)
         starting = true
+        agentName = null
         onState(SessionState.STARTING)
         if (terminal == null) status.text = BRIDGE_WAIT
         ApplicationManager.getApplication().executeOnPooledThread {
@@ -229,6 +239,10 @@ class ClaudeSessionPanel(
         runningAgent = agent
         lastAgent = agent
         watch(started)
+        started.watchTitle { raw ->
+            ApplicationManager.getApplication()
+                .invokeLater({ nameFromAgent(AgentTitle.of(agent, raw)) }, project.disposed)
+        }
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)
         status.text = plan.status
@@ -280,6 +294,16 @@ class ClaudeSessionPanel(
         val live = session ?: return
         live.close()
         endSession()
+    }
+
+    /**
+     * Runs on the user interface thread. A name that did not change writes nothing, so the
+     * spinner of an agent cannot make the tab flicker.
+     */
+    fun nameFromAgent(text: String?) {
+        if (agentName == text) return
+        agentName = text
+        project.messageBus.syncPublisher(SESSION_NAMES).namesChanged()
     }
 
     /**
