@@ -1,6 +1,7 @@
 package com.yeskiy.yreview.mcp
 
 import com.yeskiy.yreview.store.NoteRefs
+import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoredComment
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -55,7 +56,8 @@ object ReviewPayloads {
         explicitNulls = false
     }
 
-    fun rowOf(stored: StoredComment, resolved: Boolean): CommentRow? {
+    /** [kind] is the store the record comes from, and it decides whether the record is shared. */
+    fun rowOf(stored: StoredComment, resolved: Boolean, kind: StoreKind): CommentRow? {
         val location = stored.comment.location ?: return null
         return CommentRow(
             id = stored.id,
@@ -65,7 +67,7 @@ object ReviewPayloads {
             revision = location.commit,
             author = stored.comment.author,
             text = stored.comment.description.orEmpty(),
-            shared = NoteRefs.isShared(stored.ref),
+            shared = ReviewArguments.isShared(kind, stored.ref),
             resolved = resolved,
         )
     }
@@ -124,6 +126,15 @@ object ReviewArguments {
         }
         return stack.joinToString("/").ifEmpty { null }
     }
+
+    /**
+     * Tells whether a record of this store reaches a remote.
+     *
+     * A folder store has no remote, so a comment there is never shared, whatever ref it
+     * carries. [shareError] holds the reason a push failed, and a failed push is not shared.
+     */
+    fun isShared(kind: StoreKind, ref: String, shareError: String? = null): Boolean =
+        kind == StoreKind.GIT && NoteRefs.isShared(ref) && shareError == null
 
     /** Returns the problem with the line range, or null when the range is good. */
     fun rangeProblem(startLine: Int, endLine: Int): String? = when {

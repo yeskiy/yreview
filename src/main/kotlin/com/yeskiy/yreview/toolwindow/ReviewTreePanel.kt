@@ -93,13 +93,16 @@ import com.yeskiy.yreview.handoff.CopyPrompt
 import com.yeskiy.yreview.handoff.DoneWatch
 import com.yeskiy.yreview.handoff.GitDir
 import com.yeskiy.yreview.handoff.HandoffFiles
+import com.yeskiy.yreview.handoff.HandoffPlace
 import com.yeskiy.yreview.handoff.HandoffPrompt
 import com.yeskiy.yreview.handoff.PromptFolder
-import com.yeskiy.yreview.handoff.StoreKind
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.settings.grouping
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewCommentListener
+import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.store.StoreKind
+import com.yeskiy.yreview.store.StoreRoot
 import com.yeskiy.yreview.store.ideGitRunner
 import com.yeskiy.yreview.tasks.ChangeListFacts
 import com.yeskiy.yreview.tasks.ChangeListScan
@@ -599,12 +602,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
         val roots = chosen.map { it.rootPath }.distinct()
         if (roots.size > 1) {
-            ReviewNotice.warn(project, "Select the tasks of one repository. This selection holds ${roots.size}.")
+            ReviewNotice.warn(project, "Select the tasks of one folder. This selection holds ${roots.size}.")
             return
         }
         val repository = repositories.firstOrNull { it.root.path == roots.single() }
         if (repository == null) {
-            ReviewNotice.warn(project, "Read the tasks again, because the repository of the selection is gone.")
+            ReviewNotice.warn(project, "Read the tasks again, because the folder of the selection is gone.")
             return
         }
         finish(
@@ -624,13 +627,18 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     private fun deliver(repository: RepositoryTasks, tasks: List<ReviewTask>): SendOutcome {
-        val files = writeFiles(repository, tasks)
+        val store = ReviewService.getInstance(project).storeAt(repository.root)
+        val files = writeFiles(store, repository, tasks)
         val bridge = BridgeService.getInstance(project)
-        val route = SendRoutes.of(ReviewSettings.getInstance(project).channel, bridge.readerCount())
+        val route = SendRoutes.of(
+            ReviewSettings.getInstance(project).channel,
+            bridge.readerCount(),
+            store.kind == StoreKind.GIT,
+        )
         if (route == SendRoute.CHANNEL) return SendOutcome(bridge.sendTasks(repository.root, tasks), null)
         if (files == null) {
             return SendOutcome(
-                SendReport(0, 0, 0, "The plugin did not find the git directory of ${repository.root.name}."),
+                SendReport(0, 0, 0, "The plugin did not write the review files of ${repository.root.name}."),
                 null,
             )
         }
@@ -641,9 +649,15 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         )
     }
 
-    /** The rules and the tasks go to the git directory on every send, whatever the route is. */
-    private fun writeFiles(repository: RepositoryTasks, tasks: List<ReviewTask>): HandoffFiles? {
-        val folder = GitDir.reviewFolder(ideGitRunner(project, repository.root)) ?: return null
+    /**
+     * The rules and the tasks go to the review folder on every send, whatever the route is.
+     *
+     * A git repository keeps that folder inside its git directory. A folder store has no
+     * git directory, so it keeps the files beside its own records.
+     */
+    private fun writeFiles(store: StoreRoot, repository: RepositoryTasks, tasks: List<ReviewTask>): HandoffFiles? {
+        val gitDir = if (store.kind == StoreKind.GIT) GitDir.of(ideGitRunner(project, store.root)) else null
+        val folder = HandoffPlace.of(store.kind, Path.of(repository.root.path), gitDir) ?: return null
         val files = HandoffFiles(folder)
         return try {
             files.write(
@@ -728,9 +742,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      */
     private fun folderOf(root: String, tasks: List<ReviewTask>): PromptFolder {
         val repository = repositories.firstOrNull { it.root.path == root }
-        val files = repository?.let { writeFiles(it, tasks) }
+        val store = repository?.let { ReviewService.getInstance(project).storeAt(it.root) }
+        val files = if (store == null || repository == null) null else writeFiles(store, repository, tasks)
         return PromptFolder(
-            store = StoreKind.GIT,
+            store = store?.kind ?: StoreKind.GIT,
             name = root.substringAfterLast('/'),
             root = root,
             done = files?.done?.toString()?.replace('\\', '/').orEmpty(),

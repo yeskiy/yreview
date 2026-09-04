@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.handoff
 
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskKind
 import kotlin.test.Test
@@ -66,6 +67,28 @@ class HandoffPromptTest {
     fun `carries the text of every task`() {
         val text = HandoffPrompt.of(".git/y-review", commit, listOf(comment))
         assertTrue(text.contains("This reload reads git on the user interface thread."), text)
+    }
+
+    @Test
+    fun `a folder store names the counts without a commit`() {
+        val text = HandoffPrompt.of(".y-review", FolderStore.WORKTREE, listOf(comment))
+        assertEquals("1 open task in 1 file.", text.lineSequence().drop(1).first())
+    }
+
+    @Test
+    fun `a folder store still names the two files and the tasks`() {
+        val text = HandoffPrompt.of(".y-review", FolderStore.WORKTREE, listOf(comment))
+        assertEquals(
+            "Read .y-review/AGENT.md, then work through .y-review/tasks.json.",
+            text.lineSequence().first(),
+        )
+        assertTrue(text.contains("a1b2c3 comment src/Parser.kt:88-94"), text)
+    }
+
+    @Test
+    fun `an empty commit names no commit`() {
+        val text = HandoffPrompt.of(".y-review", "", listOf(comment))
+        assertEquals("1 open task in 1 file.", text.lineSequence().drop(1).first())
     }
 
     @Test

@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.handoff
 
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskLabels
 
@@ -17,7 +18,15 @@ object HandoffPrompt {
         val head = "Read $folder/${AgentGuide.FILE_NAME}, then work through $folder/${HandoffFiles.TASKS_NAME}."
         val files = tasks.map { it.path }.distinct().size
         val counts = "${TaskLabels.count(tasks.size, "open task")} in ${TaskLabels.count(files, "file")}"
-        return "$head\n$counts at commit ${commit.take(SHORT_COMMIT)}.\n\n" +
+        return "$head\n$counts${at(commit)}.\n\n" +
             tasks.joinToString("\n\n") { TaskLabels.plainText(it) }
     }
+
+    /** A folder store holds no commit, so its line names the tasks and the files alone. */
+    private fun at(commit: String): String =
+        if (commit.isEmpty() || commit == FolderStore.WORKTREE) {
+            ""
+        } else {
+            " at commit ${commit.take(SHORT_COMMIT)}"
+        }
 }

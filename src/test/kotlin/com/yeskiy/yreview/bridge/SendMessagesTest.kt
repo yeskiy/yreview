@@ -104,6 +104,19 @@ class SendMessagesTest {
     }
 
     @Test
+    fun `names the folder store on the clipboard route`() {
+        val notice = SendMessages.of(
+            SendReport(tasks = 2, batches = 0, streams = 0, route = SendRoute.NO_REPOSITORY, folder = ".y-review")
+        )
+        assertEquals(
+            "The review channel carries the tasks of a git repository only, so the IDE wrote " +
+                "2 tasks to .y-review and copied the prompt to the clipboard.",
+            notice.text,
+        )
+        assertFalse(notice.warning)
+    }
+
+    @Test
     fun `reports a drop on the clipboard route too`() {
         val notice = SendMessages.of(
             SendReport(

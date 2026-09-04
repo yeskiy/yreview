@@ -12,12 +12,20 @@ enum class SendRoute(val clipboardReason: String?) {
     CHANNEL(null),
     NO_SESSION("No Claude Code session reads this project"),
     CHANNEL_OFF("The review channel is off in the settings"),
+    NO_REPOSITORY("The review channel carries the tasks of a git repository only"),
 }
 
-/** Picks the route of one send. The switch of the user beats the number of readers. */
+/**
+ * Picks the route of one send.
+ *
+ * A folder store beats every other answer, because the channel names a branch and a
+ * commit, and a folder that no git repository holds has neither. The switch of the user
+ * comes next, and the number of readers comes last.
+ */
 object SendRoutes {
 
-    fun of(channel: Boolean, readers: Int): SendRoute = when {
+    fun of(channel: Boolean, readers: Int, gitRepository: Boolean): SendRoute = when {
+        !gitRepository -> SendRoute.NO_REPOSITORY
         !channel -> SendRoute.CHANNEL_OFF
         readers > 0 -> SendRoute.CHANNEL
         else -> SendRoute.NO_SESSION

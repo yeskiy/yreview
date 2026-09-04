@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.handoff
 
+import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskKind
 import kotlin.test.Test
@@ -215,6 +216,58 @@ class CopyPromptTest {
         val text = CopyPrompt.of(listOf(api(), web()))
         assertTrue(text.contains("This reload reads git on the user interface thread."), text)
         assertTrue(text.contains("TODO: drop the second lookup."), text)
+    }
+
+    // --- A folder store ---
+
+    private fun notes(tasks: List<ReviewTask> = listOf(comment)) = PromptFolder(
+        store = StoreKind.FOLDER,
+        name = "site",
+        root = "E:/work/site",
+        done = "E:/work/site/.y-review/done.txt",
+        commit = "worktree",
+        tasks = tasks,
+        written = true,
+    )
+
+    @Test
+    fun `a folder store names the folder and never a repository`() {
+        val text = CopyPrompt.of(listOf(notes()))
+        assertTrue(text.contains("- The folder is `E:/work/site`."), text)
+        assertFalse(text.contains("- The repository is"), text)
+    }
+
+    @Test
+    fun `a folder store names no commit`() {
+        assertFalse(CopyPrompt.of(listOf(notes())).contains("belong to the git commit"))
+    }
+
+    @Test
+    fun `a folder store names its own done file`() {
+        val text = CopyPrompt.of(listOf(notes()))
+        assertTrue(text.contains("- Report a finished task in `E:/work/site/.y-review/done.txt`."), text)
+    }
+
+    @Test
+    fun `a git folder and a folder store reach one prompt together`() {
+        val text = CopyPrompt.of(listOf(api(), notes()))
+        assertTrue(text.contains("- The repository is `E:/work/api`."), text)
+        assertTrue(text.contains("- The folder is `E:/work/site`."), text)
+        assertEquals(1, count(text, "## What an identifier looks like"))
+    }
+
+    @Test
+    fun `answers the closing instructions of a folder store`() {
+        assertEquals(
+            listOf(
+                "- The folder is `E:/work/site`.",
+                "- Every file path below starts from that folder.",
+                "- No git repository holds this folder, so the comments live in the " +
+                    "`.y-review` folder and no commit belongs to them.",
+                "- Report a finished task in `E:/work/site/.y-review/done.txt`.",
+            ).joinToString("\n"),
+            CopyPrompt.closing(notes()),
+        )
     }
 
     // --- The closing instructions of one store ---

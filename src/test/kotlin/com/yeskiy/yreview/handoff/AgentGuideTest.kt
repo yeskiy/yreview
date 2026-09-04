@@ -41,6 +41,20 @@ class AgentGuideTest {
     }
 
     @Test
+    fun `names the folder store and the key its records carry`() {
+        assertTrue(AgentGuide.TEXT.contains("`.y-review` folder"), "the guide misses the folder store")
+        assertTrue(AgentGuide.TEXT.contains("`worktree`"), "the guide misses the key of a folder record")
+    }
+
+    @Test
+    fun `states that a folder task closes through the done file`() {
+        assertTrue(
+            AgentGuide.TEXT.contains("Close a task of that"),
+            "the guide does not say how a folder task closes",
+        )
+    }
+
+    @Test
     fun `states the character set of an identifier`() {
         assertTrue(
             AgentGuide.TEXT.contains("letters, digits, underscores and hyphens only"),

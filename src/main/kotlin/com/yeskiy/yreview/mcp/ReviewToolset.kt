@@ -18,14 +18,17 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Pair
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.CommentBook
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.store.StoreKind
+import com.yeskiy.yreview.store.StoreRoot
 import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.store.ideGitRunner
-import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -50,9 +53,10 @@ class ReviewToolset : McpToolset {
         |Read them first, then do what each comment asks.
         |The answer is a JSON object with one "comments" array. Each item holds these fields:
         |- "id", the value the other review tools need
-        |- "path", the file inside its git repository
+        |- "path", the file inside its git repository or inside its folder store
         |- "startLine" and "endLine", one based line numbers. 0 means the whole file
-        |- "revision", the git commit that the comment belongs to
+        |- "revision", the git commit that the comment belongs to, or "worktree" for a comment
+        |  of a folder that no git repository holds
         |- "author", "text", "shared" and "resolved"
         """
     )
@@ -70,9 +74,9 @@ class ReviewToolset : McpToolset {
             val rows = reposOf(project).flatMap { repo ->
                 repo.book.commits(refs).flatMap { commit ->
                     if (resolved) repo.book.closed(commit, refs) else repo.book.open(commit, refs)
-                }
+                }.map { it to repo.store.kind }
             }
-            ReviewPayloads.list(rows.mapNotNull { ReviewPayloads.rowOf(it, resolved) })
+            ReviewPayloads.list(rows.mapNotNull { (stored, kind) -> ReviewPayloads.rowOf(stored, resolved, kind) })
         }
     }
 
@@ -117,7 +121,8 @@ class ReviewToolset : McpToolset {
         """
         |Writes a new review comment on a range of lines, so a person reads it later.
         |Use this to record a finding you do not want to fix yourself.
-        |The plugin anchors the comment to the current commit of the file.
+        |The plugin anchors the comment to the current commit of the file. A file that no git
+        |repository holds keeps its comments in a folder store, and there the revision is "worktree".
         |The answer is a JSON object with the new "id", or an "error" field.
         """
     )
@@ -142,23 +147,26 @@ class ReviewToolset : McpToolset {
                 ?: return@withContext ReviewPayloads.error("The project holds no file at $relative.")
 
             val service = ReviewService.getInstance(project)
-            val inRepository = service.relativePath(file)
-                ?: return@withContext ReviewPayloads.error("The file $relative is not in a git repository.")
-            val commit = service.headOf(file)
-                ?: return@withContext ReviewPayloads.error("The repository of $relative has no commit yet.")
-            val root = service.repositoryRoot(file)
-                ?: return@withContext ReviewPayloads.error("The file $relative is not in a git repository.")
+            // The rule of the project decides the store. A file inside a git repository goes
+            // to the notes of that repository, and every other file goes to a folder store.
+            val anchor = when (val found = service.anchorOf(file)) {
+                is AnchorResult.Found -> found.anchor
+                AnchorResult.NoCommit ->
+                    return@withContext ReviewPayloads.error("The repository of $relative has no commit yet.")
+                AnchorResult.NoPlace ->
+                    return@withContext ReviewPayloads.error("The project holds no review store for $relative.")
+            }
 
             // The agent writes where a person writes, so it follows the project setting and it
             // takes the same push path. A shared ref reaches the remote, a local ref does not.
             val ref = NoteRefs.refFor(ReviewSettings.getInstance(project).sharing.shareByDefault)
             try {
-                val result = service.addComment(root, ref, commit, inRepository, startLine, endLine, text)
+                val result = service.addComment(anchor, ref, startLine, endLine, text)
                 ReviewPayloads.added(
                     result.stored.id,
-                    inRepository,
-                    commit,
-                    NoteRefs.isShared(result.stored.ref) && result.shareError == null,
+                    anchor.path,
+                    anchor.key,
+                    ReviewArguments.isShared(anchor.kind, result.stored.ref, result.shareError),
                 )
             } catch (failure: NotesWriteException) {
                 ReviewPayloads.error(failure.message ?: "The comment was not written.")
@@ -189,11 +197,15 @@ class ReviewToolset : McpToolset {
         val prepared = withContext(Dispatchers.IO) {
             val hit = locate(project, id) ?: return@withContext null
             val location = hit.stored.comment.location ?: return@withContext null
-            val file = hit.repo.repository.root.findFileByRelativePath(location.path)
-                ?: LocalFileSystem.getInstance()
-                    .refreshAndFindFileByPath("${hit.repo.repository.root.path}/${location.path}")
-            val atHead = location.commit == hit.repo.repository.currentRevision
-            val older = if (atHead) null else revisionText(project, hit.repo.repository.root, location.commit, location.path)
+            val root = hit.repo.store.root
+            val file = root.findFileByRelativePath(location.path)
+                ?: LocalFileSystem.getInstance().refreshAndFindFileByPath("${root.path}/${location.path}")
+            // A folder store carries no commit, so its key equals the head and the IDE opens
+            // the file itself. A git comment of an older commit opens as a diff.
+            val atHead = location.commit == hit.repo.head
+            val older =
+                if (atHead || hit.repo.store.kind != StoreKind.GIT) null
+                else revisionText(project, root, location.commit, location.path)
             Prepared(
                 id = hit.stored.id,
                 path = location.path,
@@ -207,7 +219,13 @@ class ReviewToolset : McpToolset {
         return withContext(Dispatchers.EDT) { show(project, prepared) }
     }
 
-    private class Repo(val repository: GitRepository, val book: CommentBook)
+    /**
+     * One store the tools read, and the key of its current state.
+     *
+     * [head] is the current commit of a git repository. A folder store holds no commit, so
+     * its key is the constant the folder records carry.
+     */
+    private class Repo(val store: StoreRoot, val head: String?, val book: CommentBook)
 
     private class Hit(val repo: Repo, val stored: StoredComment)
 
@@ -246,10 +264,15 @@ class ReviewToolset : McpToolset {
         return ReviewPayloads.opened(prepared.id, "diff", prepared.path, prepared.line, prepared.revision)
     }
 
+    /** Every store of the project, the git repositories and the folder stores alike. */
     private fun reposOf(project: Project): List<Repo> {
         val service = ReviewService.getInstance(project)
-        return GitRepositoryManager.getInstance(project).repositories
-            .map { Repo(it, service.bookForRoot(it.root)) }
+        val heads = GitRepositoryManager.getInstance(project).repositories
+            .associate { it.root.path to it.currentRevision }
+        return service.storeRoots().map { store ->
+            val head = if (store.kind == StoreKind.GIT) heads[store.root.path] else FolderStore.WORKTREE
+            Repo(store, head, service.bookFor(store))
+        }
     }
 
     private fun locate(project: Project, id: String): Hit? =

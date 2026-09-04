@@ -56,3 +56,78 @@ class AnchorRulesTest {
         assertNull(AnchorRules.relative(base, base))
     }
 }
+
+class AnchorPlanTest {
+
+    private val project = "E:/Projects/site"
+
+    private val head = "9f0e1d2c3b4a5968778695a4b3c2d1e0f9a8b706"
+
+    private fun plan(
+        filePath: String,
+        repositoryRoot: String? = null,
+        head: String? = null,
+        contentRoots: List<String> = emptyList(),
+    ) = AnchorRules.plan(filePath, repositoryRoot, head, { project }, { contentRoots })
+
+    @Test
+    fun `a file of a repository goes to the notes of that repository`() {
+        assertEquals(
+            AnchorPlan.Git("$project/api", head, "src/Main.kt"),
+            plan("$project/api/src/Main.kt", repositoryRoot = "$project/api", head = head),
+        )
+    }
+
+    @Test
+    fun `a file of an inner repository never reaches the folder of a parent`() {
+        val answer = plan(
+            "$project/api/src/Main.kt",
+            repositoryRoot = "$project/api",
+            head = head,
+            contentRoots = listOf(project, "$project/api"),
+        )
+        assertEquals(AnchorPlan.Git("$project/api", head, "src/Main.kt"), answer)
+    }
+
+    @Test
+    fun `a repository without a commit refuses and takes no folder`() {
+        val answer = plan(
+            "$project/api/src/Main.kt",
+            repositoryRoot = "$project/api",
+            head = null,
+            contentRoots = listOf(project),
+        )
+        assertEquals(AnchorPlan.NoCommit, answer)
+    }
+
+    @Test
+    fun `a file that no repository holds goes to the folder store`() {
+        assertEquals(
+            AnchorPlan.Folder(project, "notes/one.md"),
+            plan("$project/notes/one.md"),
+        )
+    }
+
+    @Test
+    fun `a file outside every root has no place`() {
+        assertEquals(AnchorPlan.NoPlace, plan("E:/Elsewhere/a.kt"))
+    }
+
+    @Test
+    fun `the root of a repository is not a file of that repository`() {
+        assertEquals(AnchorPlan.NoPlace, plan("$project/api", repositoryRoot = "$project/api", head = head))
+    }
+
+    @Test
+    fun `a repository does not read the project roots`() {
+        var reads = 0
+        AnchorRules.plan(
+            "$project/api/src/Main.kt",
+            "$project/api",
+            head,
+            { project },
+            { reads += 1; listOf(project) },
+        )
+        assertEquals(0, reads, "the rule read the content roots of the project")
+    }
+}

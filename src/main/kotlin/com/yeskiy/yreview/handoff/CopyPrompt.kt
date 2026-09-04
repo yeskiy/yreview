@@ -1,15 +1,9 @@
 package com.yeskiy.yreview.handoff
 
+import com.yeskiy.yreview.store.FolderStore
+import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskLabels
-
-/**
- * Where the review files of one folder live.
- *
- * A git repository keeps them inside the git directory. A folder that no git repository
- * covers needs a store of its own, and that store closes a task through another path.
- */
-enum class StoreKind { GIT }
 
 /**
  * One group of the clipboard prompt.
@@ -66,13 +60,21 @@ object CopyPrompt {
             commitLine(folder),
             reportLine(folder),
         ).joinToString("\n")
+
+        StoreKind.FOLDER -> listOf(
+            "- The folder is `${folder.root}`.",
+            "- Every file path below starts from that folder.",
+            "- No git repository holds this folder, so the comments live in the " +
+                "`${FolderStore.FOLDER}` folder and no commit belongs to them.",
+            reportLine(folder),
+        ).joinToString("\n")
     }
 
     private fun head(groups: List<PromptFolder>): String =
         "${AgentGuide.TITLE}\n\n" +
             "You work through ${TaskLabels.count(groups.sumOf { it.tasks.size }, "open review task")} " +
             "in ${TaskLabels.count(groups.size, "folder")}. Read the rules once. " +
-            "Each folder below names its own repository and its own report file."
+            "Each folder below names its own root and its own report file."
 
     private fun section(index: Int, size: Int, folder: PromptFolder): String =
         "## Folder ${index + 1} of $size: ${folder.name}\n\n" +

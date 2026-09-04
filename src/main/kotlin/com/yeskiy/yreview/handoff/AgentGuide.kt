@@ -26,7 +26,7 @@ object AgentGuide {
 
         Every review folder holds a `tasks.json` file. The file holds one JSON object.
 
-        - `repository` is the path of the repository.
+        - `repository` is the path of the folder the tasks belong to.
         - `commit` is the git commit the tasks belong to.
         - `generated` is the time the plugin wrote the file.
         - `tasks` is the array of open tasks.
@@ -40,6 +40,12 @@ object AgentGuide {
         - `text` is the work to do.
         - `pattern` is `TODO` or `FIXME`. Only a task of the kind `todo` holds it.
         - `author` is the person who wrote the comment. Only a task of the kind `comment` holds it.
+
+        ## A folder that no git repository holds
+
+        The plugin keeps the comments of such a folder in a `.y-review` folder. The `commit`
+        value of those tasks is `worktree`, which is not a git commit. Close a task of that
+        folder through `done.txt`, the same way as every other task.
 
         ## What an identifier looks like
 

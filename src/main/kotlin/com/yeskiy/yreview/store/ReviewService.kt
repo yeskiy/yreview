@@ -51,16 +51,26 @@ class ReviewService(private val project: Project) {
     /** The rule of the project, applied to one file. Every caller asks this and nothing else. */
     fun anchorOf(file: VirtualFile): AnchorResult {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)
-        if (repository != null) {
-            val head = repository.currentRevision ?: return AnchorResult.NoCommit
-            val path = AnchorRules.relative(file.path, repository.root.path) ?: return AnchorResult.NoPlace
-            return AnchorResult.Found(ReviewAnchor(StoreKind.GIT, repository.root, head, path))
+        val plan = AnchorRules.plan(
+            file.path,
+            repository?.root?.path,
+            repository?.currentRevision,
+            { projectDirPath() },
+            { contentRootPaths() },
+        )
+        return when (plan) {
+            is AnchorPlan.Git -> {
+                val root = repository?.root ?: return AnchorResult.NoPlace
+                AnchorResult.Found(ReviewAnchor(StoreKind.GIT, root, plan.commit, plan.path))
+            }
+            is AnchorPlan.Folder -> {
+                val root = LocalFileSystem.getInstance().findFileByPath(plan.root)
+                    ?: return AnchorResult.NoPlace
+                AnchorResult.Found(ReviewAnchor(StoreKind.FOLDER, root, FolderStore.WORKTREE, plan.path))
+            }
+            AnchorPlan.NoCommit -> AnchorResult.NoCommit
+            AnchorPlan.NoPlace -> AnchorResult.NoPlace
         }
-        val rootPath = AnchorRules.folderRoot(file.path, projectDirPath(), contentRootPaths())
-            ?: return AnchorResult.NoPlace
-        val root = LocalFileSystem.getInstance().findFileByPath(rootPath) ?: return AnchorResult.NoPlace
-        val path = AnchorRules.relative(file.path, rootPath) ?: return AnchorResult.NoPlace
-        return AnchorResult.Found(ReviewAnchor(StoreKind.FOLDER, root, FolderStore.WORKTREE, path))
     }
 
     fun bookFor(anchor: ReviewAnchor): CommentBook = bookFor(StoreRoot(anchor.kind, anchor.root))
