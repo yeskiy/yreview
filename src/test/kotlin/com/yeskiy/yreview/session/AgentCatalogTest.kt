@@ -152,4 +152,51 @@ class AgentCatalogTest {
         assertEquals("Agent", AgentCatalog.of(AgentId.CUSTOM).short)
         assertEquals("Session", AgentCatalog.of(AgentId.NONE).short)
     }
+
+    @Test
+    fun `five agents name their own sessions`() {
+        assertEquals(
+            listOf(AgentId.CLAUDE, AgentId.OPENCODE, AgentId.ANTIGRAVITY, AgentId.COPILOT, AgentId.CURSOR),
+            AgentCatalog.ALL.filter { it.naming is Naming.Agent }.map { it.id },
+        )
+    }
+
+    @Test
+    fun `an agent that names its own session takes no rename from the plugin`() {
+        assertFalse(AgentCatalog.of(AgentId.CLAUDE).renamable)
+        assertFalse(AgentCatalog.of(AgentId.CURSOR).renamable)
+    }
+
+    @Test
+    fun `every other agent leaves the name to the user`() {
+        // Amp renames a thread with a separate shell command, not inside the session.
+        // The title lives on a server that the plugin cannot read, so no two names can
+        // fight. The owner therefore chose to let the user name an Amp tab.
+        listOf(AgentId.CODEX, AgentId.GEMINI, AgentId.AIDER, AgentId.AMP, AgentId.CUSTOM, AgentId.NONE)
+            .forEach { assertTrue(AgentCatalog.of(it).renamable, it.name) }
+    }
+
+    @Test
+    fun `an agent that owns the name names the command the user types`() {
+        AgentCatalog.ALL.mapNotNull { it.naming as? Naming.Agent }.forEach {
+            assertTrue(it.command.startsWith("/"), it.command)
+        }
+        assertEquals(Naming.Agent("/rename"), AgentCatalog.of(AgentId.CLAUDE).naming)
+    }
+
+    @Test
+    fun `the plugin offers a rename for every agent that names no session of its own`() {
+        AgentCatalog.ALL.forEach {
+            assertEquals(it.naming is Naming.User, it.renamable, it.id.name)
+        }
+    }
+
+    @Test
+    fun `every agent answers who names a session`() {
+        val byAgent = AgentCatalog.ALL.filter { it.naming is Naming.Agent }.map { it.id }
+        val byUser = AgentCatalog.ALL.filter { it.naming is Naming.User }.map { it.id }
+
+        assertEquals(AgentId.entries.toSet(), (byAgent + byUser).toSet())
+        assertEquals(AgentId.entries.size, byAgent.size + byUser.size)
+    }
 }

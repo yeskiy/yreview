@@ -46,6 +46,22 @@ sealed interface McpRoute {
 }
 
 /**
+ * Who names a session of one agent.
+ *
+ * An agent with a rename command of its own owns the name of its session. The plugin shows
+ * the name that agent gives, and it offers no rename, because two names of one session
+ * would fight. Every other agent leaves the name free, and the user may type one.
+ */
+sealed interface Naming {
+
+    /** The agent renames its own session. [command] is what the user types in the session. */
+    data class Agent(val command: String) : Naming
+
+    /** Nobody but the user names a session of this agent. */
+    data object User : Naming
+}
+
+/**
  * A desktop application of the same brand.
  *
  * The session window runs a terminal, so it can never run a desktop application. This
@@ -69,6 +85,8 @@ data class AgentSpec(
     val commands: List<String>,
     val push: PushKind,
     val mcp: McpRoute,
+    /** Who names a session of this agent. The plugin offers a rename to the user alone. */
+    val naming: Naming,
     val hint: String,
     val desktop: DesktopApp? = null,
 ) {
@@ -78,6 +96,9 @@ data class AgentSpec(
 
     /** True while the session window can start this choice in a terminal. */
     val runnable: Boolean get() = id != AgentId.NONE
+
+    /** True while the user may give a tab of this agent a name of their own. */
+    val renamable: Boolean get() = naming is Naming.User
 }
 
 /**
@@ -99,6 +120,7 @@ object AgentCatalog {
             listOf("claude"),
             PushKind.CHANNEL,
             McpRoute.Flag(AgentLaunch.CONFIG_FLAG),
+            Naming.Agent("/rename"),
             "The official installer writes it to the PATH.",
             DesktopApp(
                 "Claude Desktop",
@@ -114,6 +136,7 @@ object AgentCatalog {
             listOf("opencode"),
             PushKind.LOCAL_HTTP,
             McpRoute.Variable("OPENCODE_CONFIG"),
+            Naming.Agent("/rename"),
             "It installs through npm, Homebrew, or Scoop.",
         ),
         AgentSpec(
@@ -123,6 +146,7 @@ object AgentCatalog {
             listOf("codex"),
             PushKind.NONE,
             McpRoute.Keys,
+            Naming.User,
             "It installs through npm or Homebrew.",
             DesktopApp(
                 "the ChatGPT desktop application",
@@ -138,6 +162,7 @@ object AgentCatalog {
             listOf("agy"),
             PushKind.NONE,
             McpRoute.AddCommand,
+            Naming.Agent("/rename"),
             "Google ships it as the follower of Gemini CLI.",
             DesktopApp(
                 "the Antigravity editor",
@@ -153,6 +178,7 @@ object AgentCatalog {
             listOf("gemini"),
             PushKind.NONE,
             McpRoute.Variable("GEMINI_CLI_SYSTEM_DEFAULTS_PATH"),
+            Naming.User,
             "It installs through npm. Google ended the consumer tiers on 2026-06-18.",
         ),
         AgentSpec(
@@ -162,6 +188,7 @@ object AgentCatalog {
             listOf("copilot"),
             PushKind.NONE,
             McpRoute.Flag("--additional-mcp-config", "@"),
+            Naming.Agent("/rename"),
             "It installs through npm or winget, and it needs a Copilot subscription.",
         ),
         AgentSpec(
@@ -171,6 +198,7 @@ object AgentCatalog {
             listOf("cursor-agent", "agent"),
             PushKind.NONE,
             McpRoute.UserFile(".cursor/mcp.json"),
+            Naming.Agent("/rename"),
             "The Cursor installer writes both names to the PATH.",
             DesktopApp(
                 "the Cursor editor",
@@ -186,6 +214,7 @@ object AgentCatalog {
             listOf("aider"),
             PushKind.NONE,
             McpRoute.None,
+            Naming.User,
             "It installs through pip or pipx. It reads no Model Context Protocol server.",
         ),
         AgentSpec(
@@ -195,6 +224,11 @@ object AgentCatalog {
             listOf("amp"),
             PushKind.NONE,
             McpRoute.None,
+            // The owner chose this value, and it is not a technical fact. Amp renames a
+            // thread with the shell command amp threads rename. That command does not run
+            // inside the session, and the title lives on the ampcode.com server. The plugin
+            // can never show that title, so no two names can fight.
+            Naming.User,
             "Sourcegraph ships it, and it needs a paid plan.",
             DesktopApp(
                 "Amp for macOS",
@@ -209,6 +243,7 @@ object AgentCatalog {
             emptyList(),
             PushKind.NONE,
             McpRoute.None,
+            Naming.User,
             "Name the command yourself. A shell function works, because a shell runs the command.",
         ),
         AgentSpec(
@@ -218,6 +253,7 @@ object AgentCatalog {
             emptyList(),
             PushKind.NONE,
             McpRoute.None,
+            Naming.User,
             "The window starts nothing. Copy the tasks and paste them where your agent runs.",
         ),
     )
