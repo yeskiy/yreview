@@ -78,6 +78,10 @@
 
     <notificationGroup id="Yreview" displayType="BALLOON" />
 
+    <errorHandler implementation="com.yeskiy.yreview.diagnostic.ReviewErrorSubmitter" />
+
+    <troubleInfoCollector implementation="com.yeskiy.yreview.diagnostic.ReviewTroubleInfo" />
+
     <projectConfigurable parentId="tools"
                          id="com.yeskiy.yreview.settings"
                          displayName="Yreview"
@@ -86,6 +90,14 @@
   </extensions>
 
   <actions>
+    <action id="com.yeskiy.yreview.CopyDiagnostics"
+            class="com.yeskiy.yreview.diagnostic.CopyDiagnosticsAction"
+            icon="AllIcons.Actions.Copy"
+            text="Copy Yreview Diagnostic Report"
+            description="Put a report about this project and the last review records on the clipboard.">
+      <add-to-group group-id="HelpDiagnosticTools" anchor="last" />
+    </action>
+
     <action id="com.yeskiy.yreview.AddComment"
             class="com.yeskiy.yreview.action.AddCommentAction"
             icon="/icons/yReviewAddComment.svg"

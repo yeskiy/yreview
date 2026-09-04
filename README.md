@@ -246,6 +246,24 @@ The bridge secret lives in memory and in one file under your user profile, never
 repository, a log file, or a command line. Read [SECURITY.md](SECURITY.md) for the full
 list of what the plugin touches.
 
+## Report a problem
+
+1. Open an issue at https://github.com/yeskiy/yreview/issues .
+2. Run `Copy Yreview Diagnostic Report` from Help, Diagnostic Tools, or from the menu you
+   get with the right mouse button in the Yreview tool window.
+3. Read the report, then paste it into the issue.
+4. The report holds the versions, the switches and the state of the last review records. It
+   holds no comment text, no path of your machine, no git remote, no address of an author
+   and no bridge token.
+5. After a crash, press `Report to the Yreview Issue Tracker` in the error dialog of the
+   IDE. That opens a filled issue form in the browser. Nothing goes anywhere until you
+   press Submit there.
+6. The plugin sends nothing anywhere on its own. Every report needs a press.
+
+The log of the IDE at Help, Show Log in Explorer holds one line for each record. Help,
+Collect Logs and Diagnostic Data writes the same report into `troubleshooting.txt` inside
+the archive.
+
 ## License
 
 Apache License 2.0. See [LICENSE](LICENSE) for the full text and [NOTICE](NOTICE) for the

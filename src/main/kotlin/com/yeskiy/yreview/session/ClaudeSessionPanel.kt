@@ -14,6 +14,8 @@ import com.intellij.terminal.frontend.view.TerminalViewSessionState
 import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
+import com.yeskiy.yreview.diagnostic.SessionLog
+import com.yeskiy.yreview.diagnostic.SessionRecord
 import com.yeskiy.yreview.settings.ReviewSettings
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -44,7 +46,7 @@ class ClaudeSessionPanel(
 ) : JPanel(BorderLayout()), Disposable {
 
     private val status = statusArea()
-    private val idle = JBPanelWithEmptyText(BorderLayout()).apply { add(status, BorderLayout.SOUTH) }
+    private val idle = JBPanelWithEmptyText(BorderLayout())
 
     /** The tab on screen. It stays after the session ends, because the output stays. */
     private var terminal: ReviewSession? = null
@@ -59,6 +61,7 @@ class ClaudeSessionPanel(
     private var configFile: Path? = null
 
     init {
+        add(status, BorderLayout.SOUTH)
         showIdle(NO_SESSION, AUTO_START)
     }
 
@@ -135,7 +138,10 @@ class ClaudeSessionPanel(
         if (bridge !is BridgeLookup.Available || server !is ChannelServer.Answer.Found) return null
         javaPath ?: return null
         return runCatching { ChannelConfig.write(javaPath, server.path) }
-            .onFailure { thisLogger().warn("The review session wrote no channel configuration file.", it) }
+            .onFailure {
+                thisLogger().warn("The review session wrote no channel configuration file.", it)
+                SessionLog.getInstance(project).record(SessionRecord.Failure.of(CONFIG_WORK, it))
+            }
             .getOrNull()
     }
 
@@ -156,6 +162,7 @@ class ClaudeSessionPanel(
         val started = ReviewTerminal.open(project, plan)
         if (started == null) {
             dropConfig()
+            record(plan, server, javaPath, written, terminalStarted = false)
             return failed(NO_TERMINAL)
         }
         terminal?.let { drop(it) }
@@ -165,10 +172,34 @@ class ClaudeSessionPanel(
         watch(started)
         add(started.view.component, BorderLayout.CENTER)
         toolWindow.setTitle(RUNNING_TITLE)
+        status.text = plan.status
+        record(plan, server, javaPath, written, terminalStarted = true)
         revalidate()
         repaint()
         IdeFocusManager.getInstance(project).requestFocus(started.view.preferredFocusableComponent, true)
     }
+
+    /**
+     * Keeps what this start did, so a report can explain a session that went wrong.
+     *
+     * The record reads the address of the bridge from the plan, and it reads no other value
+     * of the environment. The token therefore never reaches it.
+     */
+    private fun record(
+        plan: SessionPlan,
+        server: ChannelServer.Answer,
+        javaPath: String?,
+        configFile: Path?,
+        terminalStarted: Boolean,
+    ) = SessionLog.getInstance(project).record(
+        SessionRecord.Session.of(
+            plan = plan,
+            server = server,
+            javaPath = javaPath,
+            configFile = configFile?.toString(),
+            terminalStarted = terminalStarted,
+        )
+    )
 
     /**
      * Follows the session behind the terminal. The view reports Terminated after the
@@ -265,6 +296,7 @@ class ClaudeSessionPanel(
     }
 
     private companion object {
+        const val CONFIG_WORK = "write the channel configuration file"
         const val RUNNING_TITLE = "Running"
         const val ENDED_TITLE = "Ended"
         const val NOT_STARTED_TITLE = "Not started"

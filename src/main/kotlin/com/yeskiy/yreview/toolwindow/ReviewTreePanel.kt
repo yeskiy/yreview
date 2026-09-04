@@ -89,6 +89,8 @@ import com.yeskiy.yreview.bridge.SendMessages
 import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
 import com.yeskiy.yreview.bridge.SendRoutes
+import com.yeskiy.yreview.diagnostic.SessionLog
+import com.yeskiy.yreview.diagnostic.SessionRecord
 import com.yeskiy.yreview.handoff.CopyPrompt
 import com.yeskiy.yreview.handoff.DoneWatch
 import com.yeskiy.yreview.handoff.GitDir
@@ -630,23 +632,28 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         val store = ReviewService.getInstance(project).storeAt(repository.root)
         val files = writeFiles(store, repository, tasks)
         val bridge = BridgeService.getInstance(project)
+        val readers = bridge.readerCount()
         val route = SendRoutes.of(
             ReviewSettings.getInstance(project).channel,
-            bridge.readerCount(),
+            readers,
             store.kind == StoreKind.GIT,
         )
-        if (route == SendRoute.CHANNEL) return SendOutcome(bridge.sendTasks(repository.root, tasks), null)
-        if (files == null) {
-            return SendOutcome(
+        val outcome = when {
+            route == SendRoute.CHANNEL -> SendOutcome(bridge.sendTasks(repository.root, tasks), null)
+            files == null -> SendOutcome(
                 SendReport(0, 0, 0, "The plugin did not write the review files of ${repository.root.name}."),
                 null,
             )
+            else -> {
+                val folder = GitDir.label(files.folder, Path.of(repository.root.path))
+                SendOutcome(
+                    SendReport(tasks.size, 0, 0, route = route, folder = folder),
+                    HandoffPrompt.of(folder, repository.commit, tasks),
+                )
+            }
         }
-        val folder = GitDir.label(files.folder, Path.of(repository.root.path))
-        return SendOutcome(
-            SendReport(tasks.size, 0, 0, route = route, folder = folder),
-            HandoffPrompt.of(folder, repository.commit, tasks),
-        )
+        SessionLog.getInstance(project).record(SessionRecord.Send.of(outcome.report, store.kind, readers))
+        return outcome
     }
 
     /**
@@ -672,6 +679,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             files
         } catch (failure: IOException) {
             logger.warn("the review plugin did not write the task files", failure)
+            SessionLog.getInstance(project).record(SessionRecord.Failure.of("write the task files", failure))
             null
         }
     }
@@ -1017,6 +1025,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                 common.createCollapseAllAction(expander, tree),
                 Separator.getInstance(),
                 manager.getAction(IdeActions.GROUP_VERSION_CONTROLS),
+                Separator.getInstance(),
+                manager.getAction(COPY_DIAGNOSTICS),
             )
         )
     }
@@ -1376,6 +1386,9 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         private const val NO_TASK = "This scope has no open review task."
 
         private const val PLACE = "YReviewTasks"
+
+        /** The descriptor registers this action, and the popup menu of the tree shows it. */
+        private const val COPY_DIAGNOSTICS = "com.yeskiy.yreview.CopyDiagnostics"
 
         private const val PREVIEW_PROPORTION = "YReviewTasks.preview"
 
