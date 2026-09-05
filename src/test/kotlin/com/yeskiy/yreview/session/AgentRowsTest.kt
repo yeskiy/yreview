@@ -93,7 +93,7 @@ class AgentRowsTest {
 
         assertTrue(text.startsWith("No agent."), text)
         assertEquals(false, text.contains("not found"))
-        assertTrue(AgentRows.NO_AGENT.contains("Copy Selected"), AgentRows.NO_AGENT)
+        assertTrue(AgentRows.NO_AGENT.contains("the Copy button"), AgentRows.NO_AGENT)
     }
 
     @Test

@@ -429,10 +429,9 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         val found = JavaRuntime.locate()
             ?.let { "This IDE runs the server with the Java at $it." }
             ?: "This IDE names no Java runtime, so a session starts without the channel."
-        return "The channel pushes a task to a running session at once. " +
-            "With the channel off, the plugin opens no port. " +
-            "Every send then writes AGENT.md and tasks.json in .git/y-review, " +
-            "and it copies the prompt to the clipboard. " +
+        return "Every send writes AGENT.md and tasks.json in .git/y-review. " +
+            "The channel decides only whether the tasks also reach a running session at once. " +
+            "With the channel off, the plugin opens no port, and the send copies the prompt to the clipboard. " +
             "The plugin ships the channel server, and the Java runtime of the IDE runs it. $found"
     }
 

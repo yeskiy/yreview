@@ -10,7 +10,7 @@ import com.yeskiy.yreview.tasks.TaskLabels
  */
 enum class SendRoute(val clipboardReason: String?) {
     CHANNEL(null),
-    NO_SESSION("No Claude Code session reads this project"),
+    NO_SESSION("No session reads this project"),
     CHANNEL_OFF("The review channel is off in the settings"),
     NO_REPOSITORY("The review channel carries the tasks of a git repository only"),
 }
@@ -82,7 +82,7 @@ object SendMessages {
             warning = true,
         )
         report.streams == 0 -> Notice(
-            "No Claude Code session reads this project. " +
+            "No session reads this project. " +
                 "Start a session with the review channel, then send the tasks again." + lost(report),
             warning = true,
         )

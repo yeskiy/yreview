@@ -24,7 +24,7 @@ object AgentRows {
 
     /** What the window shows after the user chose No agent. It never asks again. */
     const val NO_AGENT =
-        "No agent runs in this window. Use Copy Selected, and paste the tasks where your agent runs."
+        "No agent runs in this window. Use the Copy button, and paste the tasks where your agent runs."
 
     /**
      * One line of the selector. It always says whether Send reaches this agent.

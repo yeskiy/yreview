@@ -243,7 +243,7 @@ class SessionPlanTest {
 
         assertEquals(
             "Antigravity CLI does not accept a message into a running session. " +
-                "Use Copy Selected, then paste the prompt in the session.",
+                "Use the Copy button, then paste the prompt in the session.",
             antigravity.status,
         )
         assertFalse(antigravity.bridgeReady)

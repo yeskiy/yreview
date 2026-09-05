@@ -8,10 +8,7 @@ import com.yeskiy.yreview.settings.ReviewSettings
 
 class ClaudeSessionToolWindowFactory : ToolWindowFactory {
 
-    /**
-     * The stripe shows this name. The identifier of the tool window stays as it is, so the
-     * saved layout of the user survives the new name.
-     */
+    /** The stripe shows this name. */
     override fun init(toolWindow: ToolWindow) {
         toolWindow.stripeTitle = STRIPE_TITLE
     }
@@ -44,6 +41,6 @@ class ClaudeSessionToolWindowFactory : ToolWindowFactory {
     }
 
     private companion object {
-        const val STRIPE_TITLE = "Claude"
+        const val STRIPE_TITLE = "Yreview Session"
     }
 }

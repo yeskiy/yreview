@@ -26,7 +26,7 @@ class SendMessagesTest {
     fun `warns when no session reads the bridge`() {
         val notice = SendMessages.of(SendReport(tasks = 2, batches = 1, streams = 0))
         assertTrue(notice.warning)
-        assertTrue(notice.text.contains("No Claude Code session reads this project."), notice.text)
+        assertTrue(notice.text.contains("No session reads this project."), notice.text)
     }
 
     @Test
@@ -83,7 +83,7 @@ class SendMessagesTest {
             SendReport(tasks = 4, batches = 0, streams = 0, route = SendRoute.NO_SESSION, folder = ".git/y-review")
         )
         assertEquals(
-            "No Claude Code session reads this project, so the IDE wrote 4 tasks to .git/y-review " +
+            "No session reads this project, so the IDE wrote 4 tasks to .git/y-review " +
                 "and copied the prompt to the clipboard.",
             notice.text,
         )

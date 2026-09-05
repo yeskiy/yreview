@@ -57,7 +57,7 @@ class SendRoutesTest {
     @Test
     fun `only the channel route hides the reason`() {
         assertNull(SendRoute.CHANNEL.clipboardReason)
-        assertEquals("No Claude Code session reads this project", SendRoute.NO_SESSION.clipboardReason)
+        assertEquals("No session reads this project", SendRoute.NO_SESSION.clipboardReason)
         assertEquals("The review channel is off in the settings", SendRoute.CHANNEL_OFF.clipboardReason)
         assertEquals(
             "The review channel carries the tasks of a git repository only",

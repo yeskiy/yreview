@@ -93,7 +93,7 @@ class PluginDescriptorTest {
             terminal.contains("id=\"${SessionWindow.ID}\""),
             "the settings page shows and hides the window by this identifier"
         )
-        assertEquals("Claude Review", SessionWindow.ID)
+        assertEquals("Yreview Session", SessionWindow.ID)
     }
 
     @Test

@@ -4,7 +4,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
 
 /**
- * The Claude tool window, as the settings page and the descriptor both name it.
+ * The session tool window, as the settings page and the descriptor both name it.
  *
  * The platform reads ToolWindowFactory.shouldBeAvailable once, while the project opens,
  * and it registers the window whatever that answer is. A later change of the switch
@@ -13,7 +13,7 @@ import com.intellij.openapi.wm.ToolWindowManager
 object SessionWindow {
 
     /** The identifier in y-review-terminal.xml. The saved layout of the user keeps it. */
-    const val ID = "Claude Review"
+    const val ID = "Yreview Session"
 
     /**
      * Shows or hides the window now. The platform accepts the change on the user interface

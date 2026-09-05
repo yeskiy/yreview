@@ -109,5 +109,5 @@ object ReviewTerminal {
             .requestFocus(false)
             .createTab()
 
-    private const val TAB_NAME = "Claude Review"
+    private const val TAB_NAME = "Yreview Session"
 }
