@@ -852,7 +852,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun folderOf(root: String, tasks: List<ReviewTask>): PromptFolder {
         val repository = repositories.firstOrNull { it.root.path == root }
         val store = repository?.let { ReviewService.getInstance(project).storeAt(it.root) }
-        val files = if (store == null || repository == null) null else writeFiles(store, repository, tasks)
+        val files = if (store == null) null else writeFiles(store, repository, tasks)
         return PromptFolder(
             store = store?.kind ?: StoreKind.GIT,
             name = root.substringAfterLast('/'),
