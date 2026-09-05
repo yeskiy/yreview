@@ -2,6 +2,7 @@ package com.yeskiy.yreview.session
 
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ex.TooltipDescriptionProvider
 import com.intellij.openapi.ui.TestDialogManager
 import com.intellij.openapi.ui.TestInputDialog
 import com.intellij.openapi.util.Disposer
@@ -133,6 +134,24 @@ class SessionTabsTest : BasePlatformTestCase() {
             "Claude Code names its own sessions. Type /rename in the session to name it.",
             event.presentation.description,
         )
+    }
+
+    fun `test every title bar button carries its reason where the toolbar paints it`() {
+        settings().agent = AgentId.CLAUDE
+
+        val buttons = openTabs().titleActions()
+            .map { it to TestActionEvent.createTestEvent(it) }
+            .onEach { (action, event) -> action.update(event) }
+
+        // A title bar button paints the description of its presentation for an action of
+        // this kind only, and only while that description differs from the text.
+        assertEquals(3, buttons.size)
+        buttons.forEach { (action, event) ->
+            val name = event.presentation.text
+            assertTrue(name, action is TooltipDescriptionProvider)
+            assertNotNull(name, event.presentation.description)
+            assertFalse(name, name == event.presentation.description)
+        }
     }
 
     fun `test the rename is on for an agent that names no session`() {

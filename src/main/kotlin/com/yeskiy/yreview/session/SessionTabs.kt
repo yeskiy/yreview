@@ -5,6 +5,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.actionSystem.ex.TooltipDescriptionProvider
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
@@ -69,6 +70,13 @@ class SessionTabs(
         tabs.clear()
     }
 
+    /**
+     * The buttons of the title bar, in the order the bar shows them.
+     *
+     * A title bar button paints the description of its presentation for an action of this
+     * kind only, and it paints that line for a button that is off as well. An action that
+     * carries no such kind shows the text of the button and nothing more.
+     */
     fun titleActions(): List<AnAction> = listOf(NewSessionAction(), RenameAction(), StateAction())
 
     /**
@@ -142,7 +150,7 @@ class SessionTabs(
      * Opens one more session. The bridge serves a fixed number of event streams, and a
      * session over that number would read no comment, so the button stops there.
      */
-    private inner class NewSessionAction : AnAction(), DumbAware {
+    private inner class NewSessionAction : AnAction(), DumbAware, TooltipDescriptionProvider {
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
@@ -164,7 +172,7 @@ class SessionTabs(
      * builds the menu of a content tab itself. It is off for an agent that names its own
      * sessions, and the reason then stands in the hint of the button.
      */
-    private inner class RenameAction : AnAction(), DumbAware {
+    private inner class RenameAction : AnAction(), DumbAware, TooltipDescriptionProvider {
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
@@ -198,7 +206,7 @@ class SessionTabs(
      * user interface thread, because the state of a session lives there and no data call
      * reads it.
      */
-    private inner class StateAction : AnAction(), DumbAware {
+    private inner class StateAction : AnAction(), DumbAware, TooltipDescriptionProvider {
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
