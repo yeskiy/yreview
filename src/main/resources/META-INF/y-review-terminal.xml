@@ -1,8 +1,4 @@
 <idea-plugin>
-  <dependencies>
-    <module name="intellij.terminal.frontend" />
-  </dependencies>
-
   <extensions defaultExtensionNs="com.intellij">
     <toolWindow id="Yreview Session" anchor="bottom" canCloseContents="true"
                 icon="/icons/yReviewSession.svg"
