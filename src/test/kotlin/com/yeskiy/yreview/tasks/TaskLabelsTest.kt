@@ -7,6 +7,8 @@ import kotlin.test.assertTrue
 
 class TaskLabelsTest {
 
+    private val escape = Char(27)
+
     private val comment = ReviewTask(
         id = "a1b2c3",
         kind = TaskKind.COMMENT,
@@ -169,5 +171,18 @@ class TaskLabelsTest {
             "todo-abc-12 todo src/main/kotlin/Parser.kt:12\nTODO: drop this",
             TaskLabels.plainText(todo),
         )
+    }
+
+    @Test
+    fun `the clipboard text carries no escape sequence`() {
+        val text = TaskLabels.plainText(comment.copy(text = "red" + escape + "[31m alert"))
+
+        assertFalse(text.contains(escape), text)
+        assertTrue(text.contains("red[31m alert"), text)
+    }
+
+    @Test
+    fun `the clipboard text keeps the lines of the comment`() {
+        assertTrue(TaskLabels.plainText(comment).contains("first line\nsecond line"))
     }
 }

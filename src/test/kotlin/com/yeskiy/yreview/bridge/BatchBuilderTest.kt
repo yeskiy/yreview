@@ -9,6 +9,8 @@ import kotlin.test.assertTrue
 
 class BatchBuilderTest {
 
+    private val escape = Char(27)
+
     private val commit = "4f2c8b1c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6"
 
     private fun task(
@@ -163,5 +165,15 @@ class BatchBuilderTest {
     fun `makes a batch id the contract accepts`() {
         val batch = BatchBuilder().build("main", commit, listOf(task())).batches.single()
         assertTrue(Regex("^[A-Za-z0-9_-]{1,200}$").matches(batch.batchId))
+    }
+
+    @Test
+    fun `the batch carries no escape sequence`() {
+        val text = builder()
+            .build("main", commit, listOf(task(text = "red" + escape + "[31m alert")))
+            .batches.single().comments.single().text
+
+        assertFalse(text.contains(escape), text)
+        assertEquals("red[31m alert", text)
     }
 }

@@ -2,6 +2,7 @@ package com.yeskiy.yreview.handoff
 
 import com.yeskiy.yreview.tasks.TaskDocument
 import com.yeskiy.yreview.tasks.TaskJson
+import com.yeskiy.yreview.tasks.TaskText
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -27,9 +28,13 @@ class HandoffFiles(val folder: Path) {
     fun write(document: TaskDocument) {
         Files.createDirectories(folder)
         replace(guide, AgentGuide.TEXT + "\n")
-        replace(tasks, TaskJson.encode(document) + "\n")
+        replace(tasks, TaskJson.encode(clean(document)) + "\n")
         open(done)
     }
+
+    /** An agent reads this file in a terminal, so every task text follows the rule of [TaskText]. */
+    private fun clean(document: TaskDocument): TaskDocument =
+        document.copy(tasks = document.tasks.map { it.copy(text = TaskText.of(it.text)) })
 
     /**
      * Makes an empty done file when there is none.

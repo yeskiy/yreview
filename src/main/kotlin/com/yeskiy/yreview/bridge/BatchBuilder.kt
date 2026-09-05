@@ -1,6 +1,7 @@
 package com.yeskiy.yreview.bridge
 
 import com.yeskiy.yreview.tasks.ReviewTask
+import com.yeskiy.yreview.tasks.TaskText
 import java.security.SecureRandom
 
 /** One task the channel cannot carry, and the reason it cannot carry it. */
@@ -53,7 +54,7 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
         startLine = task.startLine.coerceIn(0, MAX_LINE),
         endLine = task.endLine.coerceIn(0, MAX_LINE),
         revision = task.revision,
-        text = task.text.trim().take(MAX_TEXT),
+        text = TaskText.of(task.text).trim().take(MAX_TEXT),
     )
 
     private fun branchName(branch: String): String =

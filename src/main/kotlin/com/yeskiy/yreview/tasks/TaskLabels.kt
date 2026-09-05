@@ -66,9 +66,14 @@ object TaskLabels {
             .wrapWithHtmlBody()
             .toString()
 
-    /** One task for the clipboard. The identifier stays whole, because an agent copies it back. */
+    /**
+     * One task for the clipboard. The identifier stays whole, because an agent copies it back.
+     *
+     * A person pastes this text into a terminal, so the text of the task follows the rule
+     * of [TaskText] first.
+     */
     fun plainText(task: ReviewTask): String =
-        "${task.id} ${kindWord(task)} ${task.path}:${lines(task)}\n${task.text.trim()}"
+        "${task.id} ${kindWord(task)} ${task.path}:${lines(task)}\n${TaskText.of(task.text).trim()}"
 
     fun count(value: Int, name: String): String = "$value $name${if (value == 1) "" else "s"}"
 

@@ -14,6 +14,8 @@ import kotlin.test.assertTrue
 
 class HandoffFilesTest {
 
+    private val escape = Char(27)
+
     private val task = ReviewTask(
         id = "firstTask",
         kind = TaskKind.COMMENT,
@@ -102,6 +104,18 @@ class HandoffFilesTest {
             files.done.writeText("firstTask\n")
             files.write(document())
             assertEquals("firstTask\n", files.done.readText())
+        }
+    }
+
+    @Test
+    fun `the task file carries no escape sequence`() {
+        withFolder { folder ->
+            val files = HandoffFiles(folder)
+            files.write(document(listOf(task.copy(text = "red" + escape + "[31m alert"))))
+
+            val written = files.tasks.readText()
+            assertFalse(written.contains(escape), written)
+            assertTrue(written.contains("red[31m alert"), written)
         }
     }
 }
