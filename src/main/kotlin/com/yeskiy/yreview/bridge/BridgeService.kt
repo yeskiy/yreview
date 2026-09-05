@@ -27,12 +27,15 @@ class BridgeService(private val project: Project) : Disposable {
 
     private val lock = Any()
 
+    @Volatile
     private var server: BridgeServer? = null
 
     private var discovery: DiscoveryFile? = null
 
+    /** Where the server listens now. Null means that no server runs. */
     @Volatile
-    private var address: BridgeAddress? = null
+    var address: BridgeAddress? = null
+        private set
 
     /**
      * Starts the server once. Returns where it listens, or null when it cannot start.
@@ -76,6 +79,16 @@ class BridgeService(private val project: Project) : Disposable {
         start()
         return server
     }
+
+    /**
+     * The server that listens now. Null means that the bridge is still down.
+     *
+     * A start binds a port and writes a file, and it holds the lock while it does so. The
+     * thread that draws the window must do none of that, so a caller on that thread reads
+     * this and never starts the server. The startup activity, the tool window and every
+     * comment write already ask for a start on a pooled thread.
+     */
+    private fun runningServer(): BridgeServer? = if (address == null) null else server
 
     /**
      * The number of sessions that read the channel right now.
@@ -145,9 +158,13 @@ class BridgeService(private val project: Project) : Disposable {
      * that reaches the bridge through the channel counts only while its channel server
      * holds a stream. A session that reads a port of its own counts while its tab lives.
      * A session that takes no send never counts.
+     *
+     * A button of the toolbar reads this while it draws itself, so the bridge never starts
+     * here. A bridge that is still down names no session, and the button then offers the
+     * copy route.
      */
     fun liveChoices(): List<SessionChoice> {
-        val open = startedServer()?.openKeys().orEmpty().toSet()
+        val open = runningServer()?.openKeys().orEmpty().toSet()
         return SessionRegistry.getInstance(project).entries()
             .filter { it.reach.takesSend(streamOpen = it.key in open) }
             .map { SessionChoice(it.key, it.name) }
