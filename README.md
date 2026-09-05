@@ -15,7 +15,7 @@ Nothing leaves your machine. The plugin has no server, and the author receives n
 - Report a problem: https://github.com/yeskiy/yreview/issues
 - Report a security weakness in private: [SECURITY.md](SECURITY.md)
 
-<!-- SCREENSHOT: a comment card open inside the editor, over the lines it covers. -->
+![A comment card open in the editor, over the lines that it covers](docs/images/comment-card.png)
 
 ## What it does
 
@@ -39,7 +39,7 @@ other agent reads them from the clipboard, and from the two files that each send
 the git directory. When the agent reports that a task is done, the plugin marks the comment
 resolved.
 
-<!-- SCREENSHOT: the tool window with the four tabs and the task tree. -->
+![The tool window with its four tabs, the task tree, and the preview of one comment](docs/images/tool-window.png)
 
 ## Where the comments are stored
 
@@ -252,7 +252,7 @@ flatten the directories, the preview pane, the kind filter, and the resolved swi
 resolved switch lists the comments that somebody already resolved. It starts off, and each
 tab keeps its own answer.
 
-<!-- SCREENSHOT: the settings page at Settings, Tools, Yreview. -->
+![The settings page at Settings, Tools, Yreview](docs/images/settings.png)
 
 ## Privacy
 
