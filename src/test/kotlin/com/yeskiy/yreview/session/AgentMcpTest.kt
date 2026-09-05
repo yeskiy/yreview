@@ -55,13 +55,63 @@ class AgentMcpTest {
         assertEquals(
             listOf(
                 "-c",
-                "mcp_servers.y-review.command=\"C:\\\\Program Files\\\\JetBrains\\\\jbr\\\\bin\\\\java.exe\"",
+                "mcp_servers.y-review.command='''C:\\Program Files\\JetBrains\\jbr\\bin\\java.exe'''",
                 "-c",
-                "mcp_servers.y-review.args=[\"-cp\"," +
-                    "\"C:\\\\Users\\\\one\\\\plugins\\\\y-review\\\\channel\\\\y-review-channel.jar\"," +
-                    "\"com.yeskiy.yreview.channel.MainKt\"]",
+                "mcp_servers.y-review.args=['''-cp'''," +
+                    "'''C:\\Users\\one\\plugins\\y-review\\channel\\y-review-channel.jar'''," +
+                    "'''com.yeskiy.yreview.channel.MainKt''']",
             ),
             AgentMcp.arguments(spec(AgentId.CODEX), java, jar, null),
+        )
+    }
+
+    @Test
+    fun `codex must accept a windows path that keeps every backslash raw`() {
+        val values = AgentMcp.arguments(spec(AgentId.CODEX), java, jar, null).filterNot { it == "-c" }
+
+        assertEquals(2, values.size)
+        values.forEach {
+            assertTrue(it.contains("\\"), it)
+            assertFalse(it.contains("\\\\"), it)
+        }
+        assertTrue(values[0].contains(java), values[0])
+        assertTrue(values[1].contains(jar), values[1])
+    }
+
+    @Test
+    fun `codex must accept a path that holds an apostrophe`() {
+        val owner = "C:\\Users\\O'Brien\\jbr\\bin\\java.exe"
+
+        assertEquals(
+            listOf(
+                "-c",
+                "mcp_servers.y-review.command='''$owner'''",
+                "-c",
+                "mcp_servers.y-review.args=['''-cp'''," +
+                    "'''$jar'''," +
+                    "'''com.yeskiy.yreview.channel.MainKt''']",
+            ),
+            AgentMcp.arguments(spec(AgentId.CODEX), owner, jar, null),
+        )
+    }
+
+    @Test
+    fun `codex must accept a posix path`() {
+        assertEquals(
+            listOf(
+                "-c",
+                "mcp_servers.y-review.command='''/usr/lib/jvm/jbr/bin/java'''",
+                "-c",
+                "mcp_servers.y-review.args=['''-cp'''," +
+                    "'''/home/one/.local/share/y-review/y-review-channel.jar'''," +
+                    "'''com.yeskiy.yreview.channel.MainKt''']",
+            ),
+            AgentMcp.arguments(
+                spec(AgentId.CODEX),
+                "/usr/lib/jvm/jbr/bin/java",
+                "/home/one/.local/share/y-review/y-review-channel.jar",
+                null,
+            ),
         )
     }
 

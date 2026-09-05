@@ -86,8 +86,9 @@ object AgentMcp {
         listOf(javaPath, ChannelServer.CLASS_PATH_FLAG, serverPath, ChannelServer.MAIN_CLASS)
 
     /**
-     * The two dotted keys of Codex. The value is read as TOML, so a backslash doubles and
-     * the whole value stands in double quotes. A single quote would not survive the shell.
+     * The two dotted keys of Codex. Codex reads each value as TOML, and a multi-line
+     * literal string keeps every backslash raw. The form also holds an apostrophe, so a
+     * Windows path reaches Codex unchanged. The shell wrapper passes a single quote through.
      */
     private fun keys(javaPath: String, serverPath: String): List<String> = listOf(
         KEY_FLAG,
@@ -98,5 +99,5 @@ object AgentMcp {
                 .joinToString(",") { toml(it) } + "]",
     )
 
-    private fun toml(value: String): String = "\"" + value.replace("\\", "\\\\") + "\""
+    private fun toml(value: String): String = "'''$value'''"
 }
