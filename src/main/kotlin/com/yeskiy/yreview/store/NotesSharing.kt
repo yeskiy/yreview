@@ -14,6 +14,11 @@ data class ShareResult(val ok: Boolean, val message: String)
  * The push runs first and the refspec follows it. A push that failed therefore writes no
  * line into the git configuration file of the user.
  *
+ * The refspec also needs a remote that git already holds. The settings hold plain text, and
+ * git pushes to a path as well as to a name, so a push can answer well while no remote of
+ * that name exists. A refspec under such a name would build a remote that the user never
+ * made, and the next fetch of that user would then fail.
+ *
  * The settings name the remote, because not every repository calls it origin. The settings
  * also hold the refspec switch. A user who keeps the git configuration file by hand clears
  * that switch, and the plugin then writes nothing into that file.
@@ -27,10 +32,13 @@ class NotesSharing(
     fun share(ref: String): ShareResult {
         val pushed = git.run("push", remote, ref)
         if (!pushed.ok) return failure(pushed, "The push failed.")
-        if (!writeRefspec) return ShareResult(true, "")
+        if (!writeRefspec || !known()) return ShareResult(true, "")
         val configured = addFetchRefspec()
         return if (configured.ok) ShareResult(true, "") else failure(configured, "The fetch refspec was not added.")
     }
+
+    /** True when git already holds a remote of this name. The push carried the note either way. */
+    private fun known(): Boolean = git.run("remote", "get-url", remote).ok
 
     /**
      * Writes the safe refspec and drops the forced one that an older version wrote.

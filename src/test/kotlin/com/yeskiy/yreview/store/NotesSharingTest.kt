@@ -210,6 +210,31 @@ class NotesSharingTest {
     }
 
     /**
+     * A remote setting can hold a path instead of a name. Git pushes to such a path, so the
+     * push answers well, and no remote of that name exists. A fetch refspec written under
+     * that name would build a remote that the user never made.
+     */
+    @Test
+    fun `a remote setting that names a path adds no remote to the git configuration`() {
+        TempRepo().use { repo ->
+            val bare = repo.addRemote("upstream")
+            check(repo.git.run("remote", "remove", "upstream").ok)
+            val head = repo.commit("a.kt", "one")
+            NotesGateway(repo.git).append(NoteRefs.DISCUSS, head, note)
+
+            val path = bare.absolutePath.replace('\\', '/')
+
+            val result = NotesSharing(repo.git, remote = path).share(NoteRefs.DISCUSS)
+
+            assertTrue(result.ok, result.message)
+            assertTrue(
+                repo.git.run("config", "--get-regexp", "^remote\\.").stdout.isBlank(),
+                "the plugin must write no remote into the git configuration of the user",
+            )
+        }
+    }
+
+    /**
      * Shares one note, moves the remote ref on, and then writes a note that no push carried.
      * The answer is the line that both sides hold.
      */
