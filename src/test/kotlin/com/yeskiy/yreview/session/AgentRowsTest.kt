@@ -2,6 +2,7 @@ package com.yeskiy.yreview.session
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class AgentRowsTest {
@@ -16,6 +17,16 @@ class AgentRowsTest {
             else AgentInstall.NOTHING
         },
         scanned = true,
+    )
+
+    /** Every sentence that stands where the name of a product stands. */
+    private fun sentences(spec: AgentSpec) = listOf(
+        "Start ${AgentRows.buttonName(spec)}",
+        AgentRows.sendReason(spec),
+        AgentRows.noPush(spec),
+        AgentRows.place(spec, answer()),
+        AgentRows.place(spec, answer(spec.id)),
+        SessionPlan.of("/work", BridgeLookup.ChannelOff, spec, "a-command-of-my-own").status,
     )
 
     @Test
@@ -94,6 +105,92 @@ class AgentRowsTest {
         assertTrue(text.startsWith("No agent."), text)
         assertEquals(false, text.contains("not found"))
         assertTrue(AgentRows.NO_AGENT.contains("the Copy button"), AgentRows.NO_AGENT)
+    }
+
+    @Test
+    fun `two choices of the list name no product`() {
+        assertEquals(
+            listOf(AgentId.CUSTOM, AgentId.NONE),
+            AgentCatalog.ALL.filterNot { it.product }.map { it.id },
+        )
+    }
+
+    @Test
+    fun `no sentence about a choice that names no product ever names that choice`() {
+        // The row of the selector prints the label on purpose, because the row is the
+        // entry of a menu. Every sentence below stands where the name of a product
+        // stands, so none of them may carry the label of a menu entry.
+        AgentCatalog.ALL.filterNot { it.product }.forEach { spec ->
+            sentences(spec).forEach {
+                assertFalse(it.lowercase().contains(spec.label.lowercase()), "${spec.id}: $it")
+            }
+        }
+    }
+
+    @Test
+    fun `every sentence about a product names that product`() {
+        AgentCatalog.ALL.filter { it.product }.forEach { spec ->
+            assertTrue(AgentRows.sendReason(spec).contains(spec.label), spec.id.name)
+            assertTrue(AgentRows.noPush(spec).contains(spec.label), spec.id.name)
+            assertTrue(AgentRows.place(spec, answer()).contains(spec.label), spec.id.name)
+            assertTrue(AgentRows.place(spec, answer(spec.id)).contains(spec.label), spec.id.name)
+        }
+    }
+
+    @Test
+    fun `the send of a choice that names no product says what the plugin did`() {
+        assertEquals(
+            "The session window runs nothing",
+            AgentRows.sendReason(AgentCatalog.of(AgentId.NONE)),
+        )
+        assertEquals(
+            "The plugin puts no message into a command of your own",
+            AgentRows.sendReason(AgentCatalog.of(AgentId.CUSTOM)),
+        )
+    }
+
+    @Test
+    fun `the send of a product names the product and the reason`() {
+        assertEquals(
+            "No Claude Code session reads this project",
+            AgentRows.sendReason(AgentCatalog.of(AgentId.CLAUDE)),
+        )
+        assertEquals(
+            "Antigravity CLI does not accept a message into a running session",
+            AgentRows.sendReason(AgentCatalog.of(AgentId.ANTIGRAVITY)),
+        )
+    }
+
+    @Test
+    fun `the start button of a choice that names no product carries the plain word`() {
+        assertEquals("the session", AgentRows.buttonName(AgentCatalog.of(AgentId.CUSTOM)))
+        assertEquals("the session", AgentRows.buttonName(AgentCatalog.of(AgentId.NONE)))
+        assertEquals("Claude Code", AgentRows.buttonName(claude))
+    }
+
+    @Test
+    fun `the settings line of a choice that names no product carries the hint alone`() {
+        assertEquals(
+            AgentCatalog.of(AgentId.NONE).hint,
+            AgentRows.place(AgentCatalog.of(AgentId.NONE), answer()),
+        )
+        assertEquals(
+            AgentCatalog.of(AgentId.CUSTOM).hint,
+            AgentRows.place(AgentCatalog.of(AgentId.CUSTOM), answer()),
+        )
+    }
+
+    @Test
+    fun `the settings line of a product reads this machine`() {
+        assertEquals(
+            "This machine holds Claude Code at /usr/bin/claude.",
+            AgentRows.place(claude, answer(AgentId.CLAUDE)),
+        )
+        assertEquals(
+            "The plugin did not find Claude Code on this machine. ${claude.hint}",
+            AgentRows.place(claude, answer()),
+        )
+        assertEquals(AgentRows.SEARCHING, AgentRows.place(claude, AgentScan.Answer.NOT_YET))
     }
 
     @Test

@@ -250,6 +250,18 @@ class SessionPlanTest {
     }
 
     @Test
+    fun `the status of a command of the user names no product`() {
+        // Another agent is an entry of a menu, so the status must name no product.
+        val custom = plan(agent = AgentCatalog.of(AgentId.CUSTOM), command = "my-agent")
+
+        assertEquals(
+            "The plugin puts no message into a command of your own. " +
+                "Use the Copy button, then paste the prompt in the session.",
+            custom.status,
+        )
+    }
+
+    @Test
     fun `the status of an agent with a port of its own does not say that a message never arrives`() {
         // OpenCode takes a send over a loopback port, so the status must not tell the user
         // that a message never arrives. This session carries no channel all the same.

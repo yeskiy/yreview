@@ -193,6 +193,17 @@ class SessionTabsTest : BasePlatformTestCase() {
         assertEquals(listOf("New Review Session", "Rename Session", "Start Aider"), buttonTexts(tabs))
     }
 
+    fun `test the button of a choice that names no product carries the plain word`() {
+        // Another agent is an entry of a menu. "Start Another agent" would read as a
+        // request for one more agent, and the plus button is the control that does that.
+        settings().agent = AgentId.CUSTOM
+
+        assertEquals(
+            listOf("New Review Session", "Rename Session", "Start the session"),
+            buttonTexts(openTabs()),
+        )
+    }
+
     fun `test a rename that the user cancelled keeps the name of the tab`() {
         settings().agent = AgentId.AIDER
         val tabs = openTabs()

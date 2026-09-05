@@ -33,6 +33,25 @@ import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
 import javax.swing.JComponent
 
+/**
+ * The box that prints the real strings the session appends.
+ *
+ * The text holds one command, and a user may copy it. The area wraps that command by
+ * character, so a long line never widens the whole dialog. A wrap changes the picture
+ * alone, so the copy still carries every character of the one line.
+ */
+object ArgumentArea {
+
+    fun build() = JBTextArea().apply {
+        isEditable = false
+        isOpaque = false
+        lineWrap = true
+        wrapStyleWord = false
+        font = JBUI.Fonts.create(Font.MONOSPACED, JBUI.Fonts.label().size)
+        border = JBUI.Borders.empty(4, 8)
+    }
+}
+
 class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val choice = ComboBox(CommentSharing.entries.toTypedArray())
@@ -51,7 +70,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     private val commandHelp = helpArea()
 
-    private val appended = argumentArea()
+    private val appended = ArgumentArea.build()
 
     private val tools = helpArea()
 
@@ -265,9 +284,12 @@ class ReviewConfigurable(private val project: Project) : Configurable {
      * The platform builds and resets this page on the user interface thread, so nothing
      * here waits for a search. The search runs on a pooled thread, and the answer fills
      * the two help lines when it lands.
+     *
+     * Every open of the page asks for one search, because a user can install an agent
+     * while the project stays open. The page shows the answer of the last search until the
+     * new one lands, so every control stays usable.
      */
     private fun startScan() {
-        if (AgentScan.getInstance().latest().scanned) return
         AgentScan.getInstance().refresh {
             ApplicationManager.getApplication().invokeLater(
                 {
@@ -331,16 +353,10 @@ class ReviewConfigurable(private val project: Project) : Configurable {
     }
 
     /** One line about this machine, and it never says that an agent is not installed. */
-    private fun commandHelp(spec: AgentSpec): String {
-        val answer = AgentScan.getInstance().latest()
-        val place = when {
-            !answer.scanned -> AgentRows.SEARCHING
-            answer.of(spec.id).found -> "This machine holds ${spec.label} at ${answer.of(spec.id).path}."
-            else -> "The plugin did not find ${spec.label} on this machine. ${spec.hint}"
-        }
-        return "A shell runs this one command, and the shell loads the profile of the user. " +
-            "Paste a full path when the command is not on the PATH. A shell function works too. $place"
-    }
+    private fun commandHelp(spec: AgentSpec): String =
+        "A shell runs this one command, and the shell loads the profile of the user. " +
+            "Paste a full path when the command is not on the PATH. A shell function works too. " +
+            AgentRows.place(spec, AgentScan.getInstance().latest())
 
     /** The button shows only for a route that writes a file the user owns. */
     private fun showAdd(spec: AgentSpec) {
@@ -426,15 +442,6 @@ class ReviewConfigurable(private val project: Project) : Configurable {
     private fun javaPath(): String? = JavaRuntime.locate()
 
     private fun serverPath(): String? = (ChannelServer.locate() as? ChannelServer.Answer.Found)?.path
-
-    /** The real strings, so a user reads what the session runs and not a description of it. */
-    private fun argumentArea() = JBTextArea().apply {
-        isEditable = false
-        isOpaque = false
-        lineWrap = false
-        font = JBUI.Fonts.create(Font.MONOSPACED, JBUI.Fonts.label().size)
-        border = JBUI.Borders.empty(4, 8)
-    }
 
     /** A text area, not a label. The help text wraps, and it never renders markup. */
     private fun helpArea() = JBTextArea().apply {

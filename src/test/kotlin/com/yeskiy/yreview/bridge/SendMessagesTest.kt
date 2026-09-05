@@ -1,5 +1,8 @@
 package com.yeskiy.yreview.bridge
 
+import com.yeskiy.yreview.session.AgentCatalog
+import com.yeskiy.yreview.session.AgentId
+import com.yeskiy.yreview.session.AgentRows
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -174,8 +177,7 @@ class SendMessagesTest {
                 streams = 0,
                 route = SendRoute.NO_SESSION,
                 folder = ".git/y-review",
-                agent = "Antigravity CLI",
-                agentCanReceive = false,
+                agentReason = AgentRows.sendReason(AgentCatalog.of(AgentId.ANTIGRAVITY)),
             )
         )
 
@@ -196,14 +198,54 @@ class SendMessagesTest {
                 streams = 0,
                 route = SendRoute.NO_SESSION,
                 folder = ".git/y-review",
-                agent = "OpenCode",
-                agentCanReceive = true,
+                agentReason = AgentRows.sendReason(AgentCatalog.of(AgentId.OPENCODE)),
             )
         )
 
         assertEquals(
             "No OpenCode session reads this project, " +
                 "so the IDE wrote 1 task to .git/y-review and copied the prompt to the clipboard.",
+            notice.text,
+        )
+    }
+
+    @Test
+    fun `a choice that names no product never reaches the notice as a product`() {
+        // No agent and Another agent are entries of a menu. A notice that names one of
+        // them tells the user about a product that does not exist.
+        AgentCatalog.ALL.filterNot { it.product }.forEach { spec ->
+            val notice = SendMessages.of(
+                SendReport(
+                    tasks = 6,
+                    batches = 0,
+                    streams = 0,
+                    route = SendRoute.NO_SESSION,
+                    folder = ".git/y-review",
+                    agentReason = AgentRows.sendReason(spec),
+                )
+            )
+
+            assertFalse(notice.text.lowercase().contains(spec.label.lowercase()), notice.text)
+            assertTrue(notice.text.endsWith("and copied the prompt to the clipboard."), notice.text)
+        }
+    }
+
+    @Test
+    fun `the choice of no agent says that the window runs nothing`() {
+        val notice = SendMessages.of(
+            SendReport(
+                tasks = 6,
+                batches = 0,
+                streams = 0,
+                route = SendRoute.NO_SESSION,
+                folder = ".git/y-review",
+                agentReason = AgentRows.sendReason(AgentCatalog.of(AgentId.NONE)),
+            )
+        )
+
+        assertEquals(
+            "The session window runs nothing, " +
+                "so the IDE wrote 6 tasks to .git/y-review and copied the prompt to the clipboard.",
             notice.text,
         )
     }
@@ -219,7 +261,7 @@ class SendMessagesTest {
                 streams = 0,
                 route = SendRoute.CHANNEL_OFF,
                 folder = ".git/y-review",
-                agent = "OpenCode",
+                agentReason = AgentRows.sendReason(AgentCatalog.of(AgentId.OPENCODE)),
             )
         )
 

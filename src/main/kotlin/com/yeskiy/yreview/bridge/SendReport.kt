@@ -49,10 +49,8 @@ data class SendReport(
     val folder: String? = null,
     /** The name of the one session the user chose, or null when the send reached every one. */
     val targetName: String? = null,
-    /** The label of the agent the session window runs, or null when the plugin does not know. */
-    val agent: String? = null,
-    /** False when that agent accepts no message into a running session. */
-    val agentCanReceive: Boolean = true,
+    /** Why the choice of the agent sent the prompt to the clipboard, or null. */
+    val agentReason: String? = null,
     /** True when the prompt went to the clipboard after a push that the session refused. */
     val copied: Boolean = false,
 )
@@ -108,16 +106,12 @@ object SendMessages {
     }
 
     /**
-     * Why a send went to the clipboard. The route carries a general reason, and an agent
-     * that accepts no message into a running session carries a reason of its own.
+     * Why a send went to the clipboard.
+     *
+     * The route carries a general reason. The agent rewrites that reason for one route
+     * alone, because a closed switch and a folder store are facts of the project.
      */
-    private fun reason(report: SendReport): String {
-        val agent = report.agent
-        if (report.route != SendRoute.NO_SESSION || agent == null) return report.route.clipboardReason.orEmpty()
-        return if (report.agentCanReceive) {
-            "No $agent session reads this project"
-        } else {
-            "$agent does not accept a message into a running session"
-        }
-    }
+    private fun reason(report: SendReport): String =
+        report.agentReason.takeIf { report.route == SendRoute.NO_SESSION }
+            ?: report.route.clipboardReason.orEmpty()
 }

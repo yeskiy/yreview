@@ -108,7 +108,7 @@ import com.yeskiy.yreview.handoff.HandoffPlace
 import com.yeskiy.yreview.handoff.HandoffPrompt
 import com.yeskiy.yreview.handoff.PromptFolder
 import com.yeskiy.yreview.session.AgentCatalog
-import com.yeskiy.yreview.session.PushKind
+import com.yeskiy.yreview.session.AgentRows
 import com.yeskiy.yreview.session.SessionReach
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.settings.grouping
@@ -744,7 +744,6 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             )
             else -> {
                 val folder = GitDir.label(files.folder, Path.of(repository.root.path))
-                val agent = AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())
                 SendOutcome(
                     SendReport(
                         tasks.size,
@@ -752,8 +751,9 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                         0,
                         route = route,
                         folder = folder,
-                        agent = agent.label,
-                        agentCanReceive = agent.push != PushKind.NONE,
+                        agentReason = AgentRows.sendReason(
+                            AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())
+                        ),
                     ),
                     HandoffPrompt.of(folder, repository.commit, tasks),
                 )

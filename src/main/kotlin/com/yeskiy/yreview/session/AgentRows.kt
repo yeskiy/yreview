@@ -1,7 +1,7 @@
 package com.yeskiy.yreview.session
 
 /**
- * The words of the agent selector.
+ * The words the plugin says about one agent.
  *
  * The text lives away from the panel, so a test reads every sentence with no window on
  * screen. No sentence ever says that an agent is not installed. A wrapper that is a shell
@@ -33,7 +33,7 @@ object AgentRows {
      * carries the hint alone.
      */
     fun row(spec: AgentSpec, found: Boolean): String {
-        if (spec.commands.isEmpty()) return "${spec.label}. ${spec.hint}"
+        if (!spec.product) return "${spec.label}. ${spec.hint}"
         val place = if (found) "found on this machine" else "not found on this machine"
         val send = when (spec.push) {
             PushKind.CHANNEL, PushKind.LOCAL_HTTP -> "Send and Copy both work."
@@ -56,5 +56,43 @@ object AgentRows {
         return AgentCatalog.ALL.filter { answer.of(it.id).found } +
             AgentCatalog.of(AgentId.CUSTOM) +
             AgentCatalog.of(AgentId.NONE)
+    }
+
+    /**
+     * Why the plugin puts no message into a running session of this choice.
+     *
+     * The answer is a clause, so a caller adds the punctuation it needs. A choice that
+     * names no product gets a sentence about the window, because a label of a menu is not
+     * the name of a product.
+     */
+    fun noPush(spec: AgentSpec): String = when {
+        !spec.runnable -> "The session window runs nothing"
+        !spec.product -> "The plugin puts no message into a command of your own"
+        else -> "${spec.label} does not accept a message into a running session"
+    }
+
+    /**
+     * The name that the Start button and the Stop button carry.
+     *
+     * A choice that names no product gives the plain word. "Start Another agent" reads as
+     * a request for one more agent, and the plus button is the control that does that.
+     */
+    fun buttonName(spec: AgentSpec): String = if (spec.product) spec.label else "the session"
+
+    /** Why one send went to the clipboard, when the choice of the agent is the reason. */
+    fun sendReason(spec: AgentSpec): String =
+        if (spec.push == PushKind.NONE) noPush(spec) else "No ${spec.label} session reads this project"
+
+    /**
+     * What the settings page says about this machine, under the command field.
+     *
+     * A choice that names no product carries the hint alone. No search looks for such a
+     * choice, so no sentence may report that this machine holds it or misses it.
+     */
+    fun place(spec: AgentSpec, answer: AgentScan.Answer): String = when {
+        !spec.product -> spec.hint
+        !answer.scanned -> SEARCHING
+        answer.of(spec.id).found -> "This machine holds ${spec.label} at ${answer.of(spec.id).path}."
+        else -> "The plugin did not find ${spec.label} on this machine. ${spec.hint}"
     }
 }

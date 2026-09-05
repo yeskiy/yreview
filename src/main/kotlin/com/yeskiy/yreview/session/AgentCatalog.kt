@@ -94,6 +94,14 @@ data class AgentSpec(
     /** The command a fresh choice runs. Custom and None answer with an empty text. */
     val defaultCommand: String get() = commands.firstOrNull().orEmpty()
 
+    /**
+     * True while this choice names a product that a user can install.
+     *
+     * Another agent and No agent are entries of a menu. No search looks for them, and no
+     * sentence may put one of these two labels where the name of a product belongs.
+     */
+    val product: Boolean get() = commands.isNotEmpty()
+
     /** True while the session window can start this choice in a terminal. */
     val runnable: Boolean get() = id != AgentId.NONE
 

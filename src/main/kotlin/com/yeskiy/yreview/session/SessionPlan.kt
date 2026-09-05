@@ -101,8 +101,7 @@ data class SessionPlan(
         ): String = when {
             command.isBlank() -> NO_COMMAND
             agent.push == PushKind.NONE ->
-                "${agent.label} does not accept a message into a running session. " +
-                    "Use the Copy button, then paste the prompt in the session."
+                "${AgentRows.noPush(agent)}. Use the Copy button, then paste the prompt in the session."
             else -> channelStatus(bridge, server, javaPath)
         }
 

@@ -205,7 +205,7 @@ class SessionTabs(
         override fun update(event: AnActionEvent) {
             val panel = selected()
             val live = panel?.isRunning == true
-            event.presentation.text = if (live) "Stop ${agentLabel(panel)}" else "Start ${agentLabel(panel)}"
+            event.presentation.text = if (live) "Stop ${agentName(panel)}" else "Start ${agentName(panel)}"
             event.presentation.description = if (live) STOP_HINT else START_HINT
             event.presentation.icon = if (live) AllIcons.Actions.Suspend else AllIcons.Actions.Execute
             event.presentation.isEnabled = panel != null && (live || panel.startable)
@@ -216,8 +216,9 @@ class SessionTabs(
          * A running session keeps the agent it started with, so the button of that tab
          * names that agent and not the newer choice of the settings page.
          */
-        private fun agentLabel(panel: SessionPanel?): String =
-            (panel?.runningAgent ?: AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())).label
+        private fun agentName(panel: SessionPanel?): String = AgentRows.buttonName(
+            panel?.runningAgent ?: AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())
+        )
 
         override fun actionPerformed(event: AnActionEvent) {
             val panel = selected() ?: return
