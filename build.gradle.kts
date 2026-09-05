@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 
 plugins {
@@ -36,9 +37,17 @@ dependencies {
         // intellij.terminal.frontend holds TerminalToolWindowTabsManager and TerminalView,
         // the reworked terminal engine that the session window runs on.
         bundledModule("intellij.terminal.frontend")
+        // The platform fixtures build a project in memory, so a test reads a real tab.
+        testFramework(TestFrameworkType.Platform)
     }
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     testImplementation(kotlin("test"))
+    // The test framework of the platform brings no JUnit. BasePlatformTestCase extends
+    // junit.framework.TestCase, and this artifact holds that class.
+    testImplementation("junit:junit:4.13.2")
+    // The fixtures of the platform are JUnit 3 classes, and the rest of the suite is
+    // JUnit 5. This engine runs the older classes, so one run holds both kinds.
+    testRuntimeOnly("org.junit.vintage:junit-vintage-engine:5.10.1")
 }
 
 kotlin {
