@@ -15,7 +15,7 @@ import com.intellij.ui.content.ContentManagerListener
 import com.yeskiy.yreview.settings.ReviewSettings
 
 /** One tab of the window. The number names it, and the panel runs the session behind it. */
-private class SessionTab(val number: Int, val panel: ClaudeSessionPanel, val content: Content) {
+private class SessionTab(val number: Int, val panel: SessionPanel, val content: Content) {
 
     /** What the session behind this tab does now. The tab text carries it. */
     var state: SessionState = SessionState.NOT_STARTED
@@ -84,7 +84,7 @@ class SessionTabs(
     fun open(start: Boolean = true) {
         if (!SessionRules.canOpen(tabs.size)) return
         val number = SessionRules.freeNumber(tabs.map { it.number }.toSet())
-        val panel = ClaudeSessionPanel(project, number, start) { state -> onState(number, state) }
+        val panel = SessionPanel(project, number, start) { state -> onState(number, state) }
         val content = ContentFactory.getInstance().createContent(panel, "", false)
         content.isCloseable = true
         content.setDisposer(panel)
@@ -135,7 +135,7 @@ class SessionTabs(
         return tabs.firstOrNull { it.content === chosen }
     }
 
-    private fun selected(): ClaudeSessionPanel? = selectedTab()?.panel
+    private fun selected(): SessionPanel? = selectedTab()?.panel
 
     /**
      * Opens one more session. The bridge serves a fixed number of event streams, and a
@@ -215,7 +215,7 @@ class SessionTabs(
          * A running session keeps the agent it started with, so the button of that tab
          * names that agent and not the newer choice of the settings page.
          */
-        private fun agentLabel(panel: ClaudeSessionPanel?): String =
+        private fun agentLabel(panel: SessionPanel?): String =
             (panel?.runningAgent ?: AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())).label
 
         override fun actionPerformed(event: AnActionEvent) {

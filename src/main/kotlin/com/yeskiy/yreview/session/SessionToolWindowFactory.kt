@@ -1,12 +1,19 @@
 package com.yeskiy.yreview.session
 
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.yeskiy.yreview.settings.ReviewSettings
 
-class ClaudeSessionToolWindowFactory : ToolWindowFactory {
+/**
+ * Builds the session tool window.
+ *
+ * The window runs a terminal and it reads no project index, so it opens while the IDE
+ * builds that index. The bundled Terminal window opens the same way.
+ */
+class SessionToolWindowFactory : ToolWindowFactory, DumbAware {
 
     /** The stripe shows this name. */
     override fun init(toolWindow: ToolWindow) {

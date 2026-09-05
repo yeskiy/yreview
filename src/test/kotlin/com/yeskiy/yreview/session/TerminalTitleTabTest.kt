@@ -70,8 +70,8 @@ class TerminalTitleTabTest : BasePlatformTestCase() {
     /** The text that the platform wrote on the first tab. */
     private fun label(): String = window.contentManager.getContent(0)!!.displayName!!
 
-    private fun panel(): ClaudeSessionPanel =
-        window.contentManager.getContent(0)!!.component as ClaudeSessionPanel
+    private fun panel(): SessionPanel =
+        window.contentManager.getContent(0)!!.component as SessionPanel
 
     /**
      * Hands the window title of the terminal to the tab, as the mount of a session does.

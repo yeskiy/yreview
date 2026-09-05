@@ -31,7 +31,7 @@ import javax.swing.JPanel
 import javax.swing.JTextArea
 
 /**
- * The content of one tab of the Claude tool window. It holds a terminal that runs one
+ * The content of one tab of the session tool window. It holds a terminal that runs one
  * review session. The plugin owns the command line. It reads the command from the
  * settings, and it appends the channel flags itself, so no shell function of one machine
  * has to carry them.
@@ -47,7 +47,7 @@ import javax.swing.JTextArea
  * the view, which turns to Terminated when the process exits. The second path is a press
  * on Stop, which ends the session before that flow can report it.
  */
-class ClaudeSessionPanel(
+class SessionPanel(
     private val project: Project,
     private val number: Int,
     private val autoStart: Boolean,

@@ -56,8 +56,8 @@ class SessionTabsTest : BasePlatformTestCase() {
     /** The text that the platform shows when the pointer rests on the first tab. */
     private fun tooltip(): String = window.contentManager.getContent(0)!!.description!!
 
-    private fun panel(): ClaudeSessionPanel =
-        window.contentManager.getContent(0)!!.component as ClaudeSessionPanel
+    private fun panel(): SessionPanel =
+        window.contentManager.getContent(0)!!.component as SessionPanel
 
     /** The text of every title bar button, in the order of the bar. */
     private fun buttonTexts(tabs: SessionTabs): List<String?> = tabs.titleActions()
