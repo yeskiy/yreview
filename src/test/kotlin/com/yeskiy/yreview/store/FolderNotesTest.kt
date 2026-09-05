@@ -1,9 +1,12 @@
 package com.yeskiy.yreview.store
 
+import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -96,5 +99,60 @@ class FolderNotesTest {
     fun `a ref slug holds no path separator`() {
         assertEquals("refs-notes-y-review-local", FolderStore.slug(NoteRefs.LOCAL))
         assertEquals("refs-notes-devtools-discuss", FolderStore.slug(NoteRefs.DISCUSS))
+    }
+    @Test
+    fun `an append keeps the records of a file that the plugin cannot read`() {
+        withRoot { root ->
+            val store = FolderNotes(root)
+            val file = unreadable(store)
+            val before = Files.readAllBytes(file)
+
+            assertFailsWith<NotesWriteException> {
+                store.append(NoteRefs.LOCAL, FolderStore.WORKTREE, """{"b":2}""")
+            }
+
+            assertContentEquals(before, Files.readAllBytes(file), "a failed read must write nothing")
+        }
+    }
+
+    @Test
+    fun `the refusal names the file that the plugin cannot read`() {
+        withRoot { root ->
+            val store = FolderNotes(root)
+            val file = unreadable(store)
+
+            val failure = assertFailsWith<NotesWriteException> {
+                store.append(NoteRefs.LOCAL, FolderStore.WORKTREE, """{"b":2}""")
+            }
+
+            assertTrue(failure.message.orEmpty().contains(file.toString()), failure.message.orEmpty())
+        }
+    }
+
+    @Test
+    fun `a file that the plugin cannot read gives no line`() {
+        withRoot { root ->
+            val store = FolderNotes(root)
+            unreadable(store)
+            assertEquals(emptyList(), store.readLines(NoteRefs.LOCAL, FolderStore.WORKTREE))
+        }
+    }
+
+    /**
+     * Writes one record and a byte that no UTF-8 text holds. The reader of the file then
+     * fails, and the store must tell that failure from an empty file.
+     */
+    private fun unreadable(store: FolderNotes): Path {
+        val file = store.fileOf(NoteRefs.LOCAL, FolderStore.WORKTREE)
+        Files.createDirectories(file.parent)
+        Files.write(file, """{"a":1}""".toByteArray(StandardCharsets.UTF_8) + byteArrayOf(NEWLINE, BROKEN, NEWLINE))
+        return file
+    }
+
+    private companion object {
+        /** A byte that stands in no valid UTF-8 sequence. */
+        const val BROKEN: Byte = -1
+
+        const val NEWLINE: Byte = 10
     }
 }
