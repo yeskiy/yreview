@@ -456,14 +456,22 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
     }
 
-    /** A group change or a filter change needs no second read of git, so the tasks stay. */
+    /**
+     * A group change or a filter change needs no second read of git, so the tasks stay.
+     *
+     * A scope test reads the project index, and that read fails while the IDE builds the
+     * index. The work therefore runs inside [readScope], as the work of [reload] does. The
+     * tree then keeps the rows it holds, and the log keeps one line.
+     */
     private fun redraw() {
         val found = repositories
         val chosen = chosenScope()
         val changes = changeList
         ApplicationManager.getApplication().executeOnPooledThread {
             if (project.isDisposed) return@executeOnPooledThread
-            publish(TreeContent(found, layoutOf(found, chosen, changes), changes))
+            val outcome = readScope { TreeContent(found, layoutOf(found, chosen, changes), changes) }
+            outcome.failure?.let { logger.warn("the review tool window could not build the rows", it) }
+            outcome.rows?.let { publish(it) }
         }
     }
 
