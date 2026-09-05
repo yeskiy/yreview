@@ -9,6 +9,9 @@ import java.nio.charset.StandardCharsets
  * Every rule here is pure, so a test proves the whole shape without a browser and without
  * an IDE. [Redact] cleans the text, because the message of an exception can name a path or
  * a secret.
+ *
+ * The caller names the folder of the project. The home rule alone leaves a project of
+ * another drive whole, and a public form must carry no absolute project path.
  */
 object IssueForm {
 
@@ -26,14 +29,17 @@ object IssueForm {
     /** The address, and whether the form carries the text already. */
     data class Form(val url: String, val prefilled: Boolean)
 
-    fun title(type: String, message: String): String =
-        clean(if (message.isBlank()) type else "$type: ${message.take(TITLE_LENGTH)}").lines().first()
+    fun title(type: String, message: String, projectPath: String?): String =
+        clean(
+            if (message.isBlank()) type else "$type: ${message.take(TITLE_LENGTH)}",
+            projectPath,
+        ).lines().first()
 
     /**
      * The text of the issue. Every event of the dialog goes in, because the dialog groups
      * related failures into one report.
      */
-    fun body(details: String?, stacks: List<String>, machine: String): String = clean(
+    fun body(details: String?, stacks: List<String>, machine: String, projectPath: String?): String = clean(
         listOf(
             "### What happened",
             "",
@@ -50,7 +56,8 @@ object IssueForm {
             FENCE,
             "",
             "Paste the diagnostic report here. The report holds the switches and the last records.",
-        ).joinToString("\n")
+        ).joinToString("\n"),
+        projectPath,
     )
 
     /**
@@ -66,7 +73,8 @@ object IssueForm {
 
     private fun cut(stack: String): String = stack.lines().take(STACK_LINES).joinToString("\n")
 
-    private fun clean(value: String): String = Redact.text(value, Redact.homes(), null)
+    private fun clean(value: String, projectPath: String?): String =
+        Redact.text(value, Redact.homes(), projectPath)
 
     private fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 }

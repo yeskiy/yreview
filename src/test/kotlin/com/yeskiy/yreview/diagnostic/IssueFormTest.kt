@@ -13,6 +13,8 @@ class IssueFormTest {
 
     private val base = "https://github.com/yeskiy/yreview/issues/new"
 
+    private val project = "D:/Projects/client/app"
+
     private val stack = listOf(
         "java.io.IOException: the disk is full\n" +
             "\tat com.yeskiy.yreview.store.NotesGateway.append(NotesGateway.kt:41)\n" +
@@ -21,22 +23,25 @@ class IssueFormTest {
 
     @Test
     fun `the title names the type and the message`() {
-        assertEquals("IOException: the disk is full", IssueForm.title("IOException", "the disk is full"))
+        assertEquals(
+            "IOException: the disk is full",
+            IssueForm.title("IOException", "the disk is full", project),
+        )
     }
 
     @Test
     fun `the title of an empty message names the type alone`() {
-        assertEquals("IOException", IssueForm.title("IOException", ""))
+        assertEquals("IOException", IssueForm.title("IOException", "", project))
     }
 
     @Test
     fun `the title stays on one line`() {
-        assertEquals("IOException: first", IssueForm.title("IOException", "first\nsecond"))
+        assertEquals("IOException: first", IssueForm.title("IOException", "first\nsecond", project))
     }
 
     @Test
     fun `the body carries the words of the reporter and the stack`() {
-        val body = IssueForm.body("the send did nothing", stack, "Yreview diagnostic report")
+        val body = IssueForm.body("the send did nothing", stack, "Yreview diagnostic report", project)
 
         assertTrue(body.contains("the send did nothing"), body)
         assertTrue(body.contains("NotesGateway.append"), body)
@@ -45,14 +50,18 @@ class IssueFormTest {
 
     @Test
     fun `the body says that the reporter wrote nothing`() {
-        assertTrue(IssueForm.body(null, stack, "head").contains("The reporter wrote nothing here."))
+        assertTrue(
+            IssueForm.body(null, stack, "head", project).contains("The reporter wrote nothing here."),
+        )
     }
 
     @Test
     fun `the body cuts a long stack`() {
         val long = List(200) { "\tat com.yeskiy.yreview.Frame$it.run(Frame.kt:$it)" }.joinToString("\n")
 
-        val kept = IssueForm.body(null, listOf(long), "head").lines().count { it.startsWith("\tat ") }
+        val kept = IssueForm.body(null, listOf(long), "head", project)
+            .lines()
+            .count { it.startsWith("\tat ") }
 
         assertEquals(IssueForm.STACK_LINES, kept)
     }
@@ -63,6 +72,7 @@ class IssueFormTest {
             "it failed on git@github.com:alice-corp/app.git for alice@example.com",
             listOf("java.io.IOException: token=9f8e7d6c5b4a39281706f5e4d3c2b1a0"),
             "head",
+            project,
         )
 
         assertFalse(body.contains("alice"), body)
@@ -71,11 +81,31 @@ class IssueFormTest {
 
     @Test
     fun `a short form carries the text in the address`() {
-        val form = IssueForm.form(base, "IOException", IssueForm.body(null, stack, "head"))
+        val form = IssueForm.form(base, "IOException", IssueForm.body(null, stack, "head", project))
 
         assertTrue(form.prefilled)
         assertTrue(form.url.startsWith("$base?title="), form.url)
         assertTrue(form.url.length <= IssueForm.MAX_URL, "${form.url.length} characters")
+    }
+
+    @Test
+    fun `the body carries no absolute project path`() {
+        val body = IssueForm.body(
+            "the send failed",
+            listOf("java.io.IOException: $project/src/main/kotlin/Parser.kt is locked"),
+            "head",
+            project,
+        )
+
+        assertFalse(body.contains(project), body)
+        assertTrue(body.contains("${Redact.PROJECT_MARK}/src/main/kotlin/Parser.kt"), body)
+    }
+
+    @Test
+    fun `the title carries no absolute project path`() {
+        val title = IssueForm.title("IOException", "$project/build is locked", project)
+
+        assertFalse(title.contains(project), title)
     }
 
     @Test
