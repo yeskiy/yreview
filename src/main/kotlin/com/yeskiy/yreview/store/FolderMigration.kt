@@ -13,6 +13,16 @@ data class MigrationReport(val moved: Int, val problem: String?)
  */
 object FolderMigration {
 
+    /**
+     * True when this repository may take the records of the folder store at that root.
+     *
+     * A record names its file under the root of the folder store. A repository that is
+     * rooted above the folder gives every one of those names another meaning, and a record
+     * would then point at a file that is not the file of the record. Only a repository that
+     * is rooted at the folder itself may take the records.
+     */
+    fun maySettle(repositoryRoot: String, folderRoot: String): Boolean = repositoryRoot == folderRoot
+
     fun copy(from: NoteStore, to: NoteStore, refs: List<String>, target: String): MigrationReport =
         refs.fold(MigrationReport(0, null)) { report, ref ->
             if (report.problem != null) report else copyRef(from, to, ref, target, report)

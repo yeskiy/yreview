@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -157,5 +158,20 @@ class FolderMigrationTest {
                 assertNull(report.problem)
             }
         }
+    }
+
+    @Test
+    fun `a repository rooted at the folder may take the records`() {
+        assertTrue(FolderMigration.maySettle("E:/Projects/site", "E:/Projects/site"))
+    }
+
+    @Test
+    fun `a repository rooted above the folder may not take the records`() {
+        assertFalse(FolderMigration.maySettle("E:/Projects/site", "E:/Projects/site/api"))
+    }
+
+    @Test
+    fun `a repository beside the folder may not take the records`() {
+        assertFalse(FolderMigration.maySettle("E:/Projects/other", "E:/Projects/site"))
     }
 }

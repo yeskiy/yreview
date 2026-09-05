@@ -137,9 +137,14 @@ class ReviewService(private val project: Project) {
      *
      * [FolderOwnership] answers whether the folder belongs to the plugin at all. A folder
      * that git tracks came with the repository, so it stays where it is.
+     *
+     * [FolderMigration.maySettle] answers whether this repository is the right target. A
+     * repository that is rooted above the folder reads every record path from its own root,
+     * so the records stay in the folder and the tool window reads them there.
      */
     fun migrateFolderIfNeeded(root: VirtualFile) {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(root) ?: return
+        if (!FolderMigration.maySettle(repository.root.path, root.path)) return
         val head = repository.currentRevision ?: return
         val folder = folderNotesOf(root)
         if (NoteRefs.ALL.none { folder.commitsWithNotes(it).isNotEmpty() }) return
