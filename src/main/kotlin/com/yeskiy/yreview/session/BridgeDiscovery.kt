@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.session
 
+import com.yeskiy.yreview.bridge.DiscoveryFile
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.net.URI
@@ -32,18 +33,15 @@ object BridgeDiscovery {
     const val TOKEN_VARIABLE = "Y_REVIEW_BRIDGE_TOKEN"
     const val MINIMUM_TOKEN_LENGTH = 16
 
-    private val NOT_ALPHANUMERIC = Regex("[^A-Za-z0-9]")
     private val LOOPBACK_NAMES = setOf("localhost", "::1", "[::1]")
     private val JSON = Json { ignoreUnknownKeys = true }
 
     @Serializable
     private data class BridgeFile(val url: String? = null, val token: String? = null)
 
-    fun fileName(projectPath: String): String =
-        NOT_ALPHANUMERIC.replace(projectPath.replace('\\', '/'), "-") + ".json"
-
+    /** The writer states the rule for the name, and the reader follows it. */
     fun fileFor(home: Path, projectPath: String): Path =
-        home.resolve(".y-review").resolve("bridge").resolve(fileName(projectPath))
+        home.resolve(".y-review").resolve("bridge").resolve(DiscoveryFile.fileName(projectPath))
 
     fun homeDirectory(): Path =
         Paths.get(System.getenv("USERPROFILE") ?: System.getProperty("user.home"))

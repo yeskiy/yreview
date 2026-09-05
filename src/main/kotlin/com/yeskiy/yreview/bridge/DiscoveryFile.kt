@@ -8,6 +8,7 @@ import java.nio.file.Path
 import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.PosixFileAttributeView
 import java.nio.file.attribute.PosixFilePermissions
+import java.security.MessageDigest
 
 /** The values a session needs to reach the bridge of one project. */
 @Serializable
@@ -59,10 +60,35 @@ class DiscoveryFile(val path: Path) {
     companion object {
         private val json = Json { prettyPrint = false }
 
-        /** Every character that is not an ASCII letter or digit becomes a hyphen. */
-        fun fileName(projectPath: String): String =
-            projectPath.map { if (it in 'a'..'z' || it in 'A'..'Z' || it in '0'..'9') it else '-' }
-                .joinToString("") + ".json"
+        private val NOT_ALPHANUMERIC = Regex("[^A-Za-z0-9]")
+
+        /** The name keeps this many characters of the path for a person to read. */
+        private const val READABLE_LENGTH = 58
+
+        /** Eight bytes of the hash give sixteen hexadecimal characters. */
+        private const val HASH_BYTES = 8
+
+        /**
+         * Builds the name of the discovery file of one project.
+         *
+         * A backslash becomes a slash first, so one project keeps one name in both
+         * spellings of its path. The end of the path stays readable, because a person
+         * finds the project by the name of its folder. The hash reads the whole path
+         * before the plugin replaces any character. Two projects that differ only in a
+         * hyphen or an underscore therefore get two names. The name stays inside 80
+         * characters, and every file system accepts that length.
+         */
+        fun fileName(projectPath: String): String {
+            val path = projectPath.replace('\\', '/')
+            return NOT_ALPHANUMERIC.replace(path, "-").takeLast(READABLE_LENGTH) +
+                "-" + hashOf(path) + ".json"
+        }
+
+        private fun hashOf(path: String): String =
+            MessageDigest.getInstance("SHA-256")
+                .digest(path.toByteArray(Charsets.UTF_8))
+                .take(HASH_BYTES)
+                .joinToString("") { "%02x".format(it) }
 
         fun forProject(
             projectPath: String,

@@ -6,6 +6,7 @@ import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class DiscoveryFileTest {
@@ -27,20 +28,43 @@ class DiscoveryFileTest {
     )
 
     @Test
-    fun `replaces every character that is not a letter or a digit`() {
-        assertEquals("E--work-demo-repo.json", DiscoveryFile.fileName("E:/work/demo-repo"))
+    fun `keeps a readable part of the path and adds the hash of the path`() {
+        assertEquals("E--work-demo-repo-89e68f21e4cdb121.json", DiscoveryFile.fileName("E:/work/demo-repo"))
     }
 
     @Test
-    fun `keeps the letters and the digits of the path`() {
-        assertEquals("C--work-app2.json", DiscoveryFile.fileName("C:\\work\\app2"))
+    fun `hashes the path with the slashes of the backslash spelling`() {
+        assertEquals("C--work-app2-1ccc5d63b732c6b3.json", DiscoveryFile.fileName("C:\\work\\app2"))
+    }
+
+    @Test
+    fun `two paths that differ in one character that is not a letter get two names`() {
+        assertNotEquals(
+            DiscoveryFile.fileName("E:/work/my-repo"),
+            DiscoveryFile.fileName("E:/work/my_repo"),
+        )
+    }
+
+    @Test
+    fun `two spellings of one path get one name`() {
+        assertEquals(
+            DiscoveryFile.fileName("E:/work/repo"),
+            DiscoveryFile.fileName("E:\\work\\repo"),
+        )
+    }
+
+    @Test
+    fun `a deep path gives a name that every file system accepts`() {
+        val deep = "E:/" + (1..40).joinToString("/") { "folder-name-number-$it" }
+        assertTrue(deep.length > 200)
+        assertEquals(80, DiscoveryFile.fileName(deep).length)
     }
 
     @Test
     fun `puts the file in the bridge folder of the user profile`() {
         withHome { home ->
             assertEquals(
-                home.resolve(".y-review").resolve("bridge").resolve("E--code.json"),
+                home.resolve(".y-review").resolve("bridge").resolve("E--code-701ba83e04c904c1.json"),
                 DiscoveryFile.forProject("E:/code", home).path,
             )
         }

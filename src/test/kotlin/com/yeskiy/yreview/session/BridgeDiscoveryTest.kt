@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.session
 
+import com.yeskiy.yreview.bridge.DiscoveryFile
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -24,30 +25,37 @@ class BridgeDiscoveryTest {
     }
 
     private fun file(text: String): BridgeLookup = withHome { home ->
-        val directory = home.resolve(".y-review").resolve("bridge")
-        directory.createDirectories()
-        directory.resolve(BridgeDiscovery.fileName("E:/Project")).writeText(text)
+        val target = BridgeDiscovery.fileFor(home, "E:/Project")
+        target.parent.createDirectories()
+        target.writeText(text)
         BridgeDiscovery.find(home, "E:/Project")
     }
 
     @Test
-    fun `the file name replaces every character that is not a letter or a digit`() {
-        assertEquals("E--work-demo-repo.json", BridgeDiscovery.fileName("E:/work/demo-repo"))
+    fun `the reader looks for the file that the writer makes`() {
+        withHome { home ->
+            assertEquals(
+                DiscoveryFile.forProject("E:/work/demo-repo", home).path,
+                BridgeDiscovery.fileFor(home, "E:/work/demo-repo")
+            )
+        }
     }
 
     @Test
     fun `a backslash path gives the same file name as a slash path`() {
-        assertEquals(
-            BridgeDiscovery.fileName("E:/work/demo-repo"),
-            BridgeDiscovery.fileName("E:\\work\\demo-repo")
-        )
+        withHome { home ->
+            assertEquals(
+                BridgeDiscovery.fileFor(home, "E:/work/demo-repo"),
+                BridgeDiscovery.fileFor(home, "E:\\work\\demo-repo")
+            )
+        }
     }
 
     @Test
     fun `the file sits under the bridge directory of the home directory`() {
         withHome { home ->
             assertEquals(
-                home.resolve(".y-review").resolve("bridge").resolve("E--Project.json"),
+                home.resolve(".y-review").resolve("bridge").resolve("E--Project-89bc161a7e977083.json"),
                 BridgeDiscovery.fileFor(home, "E:/Project")
             )
         }
