@@ -2,7 +2,9 @@ package com.yeskiy.yreview.store
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class AnchorRulesTest {
 
@@ -54,6 +56,28 @@ class AnchorRulesTest {
     @Test
     fun `the root itself has no relative path`() {
         assertNull(AnchorRules.relative(base, base))
+    }
+
+    @Test
+    fun `the nearest repository owns a file of a nested repository`() {
+        val roots = listOf(base, "$base/inner")
+        assertFalse(AnchorRules.ownsFile(base, "$base/inner/x.kt", roots))
+        assertTrue(AnchorRules.ownsFile("$base/inner", "$base/inner/x.kt", roots))
+    }
+
+    @Test
+    fun `the only repository that holds a file owns it`() {
+        assertTrue(AnchorRules.ownsFile(base, "$base/src/Main.kt", listOf(base, "$base/inner")))
+    }
+
+    @Test
+    fun `a repository that does not hold the file owns nothing`() {
+        assertFalse(AnchorRules.ownsFile(base, "E:/Elsewhere/a.kt", listOf(base)))
+    }
+
+    @Test
+    fun `a sibling root with a longer name takes no file`() {
+        assertTrue(AnchorRules.ownsFile(base, "$base/a.kt", listOf(base, "${base}-two")))
     }
 }
 

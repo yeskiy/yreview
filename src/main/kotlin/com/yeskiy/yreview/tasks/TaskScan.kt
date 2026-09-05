@@ -15,6 +15,7 @@ import com.intellij.psi.search.PsiTodoSearchHelper
 import com.intellij.psi.search.TodoItem
 import com.intellij.util.Processor
 import com.yeskiy.yreview.settings.ShareLog
+import com.yeskiy.yreview.store.AnchorRules
 import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.NoteRefs
@@ -46,11 +47,18 @@ object TaskScan {
      *
      * [showResolved] comes from the toolbar switch of the tab that asks. The switch reaches
      * the scan, so the tab counts the rows it shows.
+     *
+     * Every repository root goes to every repository read, because a repository can stand
+     * inside another one. The nearest root owns a file, and [AnchorRules.ownsFile] applies
+     * that rule, so a TODO of an inner repository reaches the tree once.
      */
-    fun read(project: Project, onlyFile: VirtualFile?, showResolved: Boolean = false): List<RepositoryTasks> =
-        GitRepositoryManager.getInstance(project).repositories.mapNotNull { repository ->
-            repositoryTasks(project, repository, onlyFile, showResolved)
+    fun read(project: Project, onlyFile: VirtualFile?, showResolved: Boolean = false): List<RepositoryTasks> {
+        val repositories = GitRepositoryManager.getInstance(project).repositories
+        val roots = repositories.map { it.root.path }
+        return repositories.mapNotNull { repository ->
+            repositoryTasks(project, repository, roots, onlyFile, showResolved)
         } + folderTasks(project, onlyFile, showResolved)
+    }
 
     /** The identifiers of the TODO lines that are still in the source. */
     fun openTodoIds(project: Project): Set<String> =
@@ -62,18 +70,19 @@ object TaskScan {
     private fun repositoryTasks(
         project: Project,
         repository: GitRepository,
+        roots: List<String>,
         onlyFile: VirtualFile?,
         showResolved: Boolean,
     ): RepositoryTasks? {
-        val commit = repository.currentRevision ?: return null
         if (onlyFile != null && !VfsUtilCore.isAncestor(repository.root, onlyFile, false)) return null
+        val commit = TaskRevision.of(repository.currentRevision)
         return RepositoryTasks(
             repository.root,
             commit,
             withModules(
                 project,
                 comments(project, repository.root, onlyFile, showResolved) +
-                    todos(project, repository.root, commit, onlyFile),
+                    todos(project, repository.root, roots, commit, onlyFile),
             ),
         )
     }
@@ -181,6 +190,7 @@ object TaskScan {
     private fun todos(
         project: Project,
         root: VirtualFile,
+        roots: List<String>,
         commit: String,
         onlyFile: VirtualFile?,
     ): List<ReviewTask> =
@@ -189,11 +199,11 @@ object TaskScan {
             val found = mutableListOf<ReviewTask>()
             if (onlyFile != null) {
                 PsiManager.getInstance(project).findFile(onlyFile)
-                    ?.let { found += fileTodos(helper, it, root, commit) }
+                    ?.let { found += fileTodos(helper, it, root, roots, commit) }
             } else {
                 helper.processFilesWithTodoItems(
                     Processor { file ->
-                        found += fileTodos(helper, file, root, commit)
+                        found += fileTodos(helper, file, root, roots, commit)
                         true
                     }
                 )
@@ -205,11 +215,12 @@ object TaskScan {
         helper: PsiTodoSearchHelper,
         file: PsiFile,
         root: VirtualFile,
+        roots: List<String>,
         commit: String,
     ): List<ReviewTask> {
         if (helper.getTodoItemsCount(file) == 0) return emptyList()
         val source = file.virtualFile ?: return emptyList()
-        if (!VfsUtilCore.isAncestor(root, source, false)) return emptyList()
+        if (!AnchorRules.ownsFile(root.path, source.path, roots)) return emptyList()
         val path = VfsUtilCore.getRelativePath(source, root, '/') ?: return emptyList()
         val document = PsiDocumentManager.getInstance(file.project).getDocument(file) ?: return emptyList()
         return helper.findTodoItems(file)
@@ -243,6 +254,18 @@ object TaskScan {
 
     /** A multi-line TODO keeps its lines, so the tree can show the ones after the first. */
     private const val LINE_BREAK = "\n"
+}
+
+/**
+ * The revision that the tasks of one repository carry.
+ *
+ * A repository that the user just started has no commit, and it still holds TODO lines. The
+ * scan reads such a repository, and its tasks name the working tree, as the tasks of a
+ * folder store do.
+ */
+object TaskRevision {
+
+    fun of(head: String?): String = head ?: FolderStore.WORKTREE
 }
 
 /**

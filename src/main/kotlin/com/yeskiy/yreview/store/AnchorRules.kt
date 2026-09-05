@@ -52,6 +52,16 @@ object AnchorRules {
     fun holds(root: String, filePath: String): Boolean =
         filePath == root || filePath.startsWith("$root/")
 
+    /**
+     * True when this repository holds the file, and no repository inside it holds the file.
+     *
+     * A repository inside another repository owns its own files, and git reads them that
+     * way. A reader that walks every root therefore leaves such a file to the inner
+     * repository, so one file reaches one repository and its task appears once.
+     */
+    fun ownsFile(root: String, filePath: String, roots: List<String>): Boolean =
+        holds(root, filePath) && roots.none { it.length > root.length && holds(it, filePath) }
+
     /** The path of the file under the root, or null when the root does not hold the file. */
     fun relative(filePath: String, root: String): String? {
         if (!filePath.startsWith("$root/")) return null
