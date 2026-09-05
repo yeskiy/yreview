@@ -366,27 +366,50 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         val spec = selectedAgent()
         val java = javaPath() ?: return
         val server = serverPath() ?: return
-        val problem = when (val route = spec.mcp) {
-            McpRoute.AddCommand -> runCommand(AgentMcp.addCommand(spec, java, server).orEmpty())
-            is McpRoute.UserFile -> writeFile(route.path, AgentMcp.userFile(spec, java, server).orEmpty())
-            else -> "This agent needs no write."
+        when (val route = spec.mcp) {
+            McpRoute.AddCommand -> startCommand(spec, AgentMcp.addCommand(spec, java, server).orEmpty())
+            is McpRoute.UserFile -> finishAdd(spec, writeFile(route.path, AgentMcp.userFile(spec, java, server).orEmpty()))
+            else -> finishAdd(spec, "This agent needs no write.")
         }
-        if (problem == null) {
-            settings().markMcpAdded(spec.id)
-            addState.text = "The plugin registered the review server for ${spec.label}."
-        } else {
-            addState.text = problem
+    }
+
+    /**
+     * Runs the command on a pooled thread, because a command can ask for input.
+     *
+     * The button goes off for the whole run, so one press starts one command. The line
+     * under the button says that the page waits.
+     */
+    private fun startCommand(spec: AgentSpec, parts: List<String>) {
+        if (parts.isEmpty()) return finishAdd(spec, "The plugin holds no command for this agent.")
+        addServer.isEnabled = false
+        addState.text = "The plugin runs the command now. The page waits for the answer."
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val problem = commandProblem(parts)
+            ApplicationManager.getApplication().invokeLater({ finishAdd(spec, problem) }, project.disposed)
         }
     }
 
     /** Null after a good run, or the text of the problem. */
-    private fun runCommand(parts: List<String>): String? {
-        if (parts.isEmpty()) return "The plugin holds no command for this agent."
-        return runCatching {
-            val process = ProcessBuilder(parts).redirectErrorStream(true).start()
-            val output = process.inputStream.readBytes().toString(Charsets.UTF_8).trim()
-            if (process.waitFor() == 0) null else "The command answered: $output"
-        }.getOrElse { "The command did not run. ${it.message.orEmpty()}" }
+    private fun commandProblem(parts: List<String>): String? = runCatching {
+        val answer = CommandRun.run(parts)
+        when {
+            answer.timedOut -> "The command gave no answer in time, so the plugin stopped it. It may ask for input."
+            answer.ok -> null
+            else -> "The command answered: ${answer.output}"
+        }
+    }.getOrElse { "The command did not run. ${it.message.orEmpty()}" }
+
+    /**
+     * Writes what one press on Add gave, and brings the button back.
+     *
+     * A page that shows another agent now keeps the state of that agent, so a late answer
+     * never lands on the line of the wrong agent.
+     */
+    private fun finishAdd(spec: AgentSpec, problem: String?) {
+        if (problem == null) settings().markMcpAdded(spec.id)
+        showAdd(selectedAgent())
+        if (selectedAgent().id != spec.id) return
+        addState.text = problem ?: "The plugin registered the review server for ${spec.label}."
     }
 
     /** Null after a good write, or the text of the problem. */
