@@ -24,9 +24,12 @@ object BridgeToken {
     /**
      * Compares the two values in constant time. The check runs over the digests, so the
      * time it takes tells a caller nothing about the token or about its length.
+     *
+     * An empty value is no token, and it matches nothing. A server that holds no token
+     * would otherwise accept a caller that sends no token.
      */
     fun matches(expected: String, given: String?): Boolean {
-        if (given == null) return false
+        if (expected.isEmpty() || given.isNullOrEmpty()) return false
         return MessageDigest.isEqual(digestOf(expected), digestOf(given))
     }
 

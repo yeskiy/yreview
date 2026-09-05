@@ -45,4 +45,15 @@ class BridgeTokenTest {
     fun `refuses an empty token`() {
         assertFalse(BridgeToken.matches(BridgeToken.newToken(), ""))
     }
+
+    @Test
+    fun `an empty token matches no empty token`() {
+        assertFalse(BridgeToken.matches("", ""))
+    }
+
+    @Test
+    fun `an empty token matches nothing at all`() {
+        assertFalse(BridgeToken.matches("", "abc"))
+        assertFalse(BridgeToken.matches("", null))
+    }
 }
