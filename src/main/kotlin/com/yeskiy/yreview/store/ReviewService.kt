@@ -134,12 +134,16 @@ class ReviewService(private val project: Project) {
      *
      * The copy and the check run first. The move runs last. A crash between them leaves both
      * copies, and the next read repeats the copy without a duplicate.
+     *
+     * [FolderOwnership] answers whether the folder belongs to the plugin at all. A folder
+     * that git tracks came with the repository, so it stays where it is.
      */
     fun migrateFolderIfNeeded(root: VirtualFile) {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(root) ?: return
         val head = repository.currentRevision ?: return
         val folder = folderNotesOf(root)
         if (NoteRefs.ALL.none { folder.commitsWithNotes(it).isNotEmpty() }) return
+        if (!FolderOwnership.mayMigrate(ideGitRunner(project, root))) return
         if (!migrating.add(root.path)) return
         try {
             val runner = ideGitRunner(project, repository.root)
