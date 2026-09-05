@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.store.CommentBook
@@ -15,6 +16,37 @@ data class CloseReport(val closed: Int, val problems: List<String> = emptyList()
     val problem: String? get() = problems.joinToString(" ").ifEmpty { null }
 
     val quiet: Boolean get() = closed == 0 && problems.isEmpty()
+}
+
+/**
+ * How one batch of reported identifiers splits before the plugin reads anything.
+ *
+ * A comment identifier needs the git notes only. A TODO identifier needs the index of the
+ * IDE, because the plugin reads the source to see whether the line is still there. That
+ * read waits for the whole index build, and the caller waits with it.
+ *
+ * The plugin therefore holds the TODO identifiers back while the IDE builds its index. The
+ * comments still close, and the agent reads one sentence and reports the TODO items again.
+ */
+data class ClosePlan(val comments: List<String>, val todos: List<String>, val deferred: List<String>) {
+
+    /** The sentence the agent reads about the identifiers this plan held back. */
+    val deferralProblem: String?
+        get() = if (deferred.isEmpty()) null else "$INDEX_BUSY ${deferred.joinToString(" ")}"
+
+    companion object {
+
+        const val INDEX_BUSY = "The IDE builds its index, so it cannot read the TODO lines yet. Report these again:"
+
+        fun of(ids: List<String>, indexReady: Boolean): ClosePlan {
+            val (todos, comments) = ids.distinct().partition { TaskIds.isTodo(it) }
+            return ClosePlan(
+                comments = comments,
+                todos = if (indexReady) todos else emptyList(),
+                deferred = if (indexReady) emptyList() else todos,
+            )
+        }
+    }
 }
 
 private sealed interface CommentOutcome {
@@ -43,13 +75,14 @@ private sealed interface CommentOutcome {
 class TaskCompletion(private val project: Project) {
 
     fun close(ids: List<String>): CloseReport {
-        val (todos, comments) = ids.distinct().partition { TaskIds.isTodo(it) }
-        val outcomes = closeComments(comments)
-        val stillOpen = openTodoIds(todos)
+        val plan = ClosePlan.of(ids, indexReady = !DumbService.getInstance(project).isDumb)
+        val outcomes = closeComments(plan.comments)
+        val stillOpen = openTodoIds(plan.todos)
         return CloseReport(
-            closed = outcomes.count { it is CommentOutcome.Closed } + todos.size - stillOpen.size,
+            closed = outcomes.count { it is CommentOutcome.Closed } + plan.todos.size - stillOpen.size,
             problems = outcomes.filterIsInstance<CommentOutcome.Problem>().map { it.text } +
-                stillOpen.map { "The line of the task $it is still in the source." },
+                stillOpen.map { "The line of the task $it is still in the source." } +
+                listOfNotNull(plan.deferralProblem),
         )
     }
 

@@ -33,6 +33,10 @@ data class Drained(val events: List<String>, val rest: String)
  * The bridge writes Server-Sent Events, and each event carries one batch of comments. A
  * closed stream opens again after a short wait, because the IDE restarts the bridge with
  * the project. The token travels in a header, and it never reaches a log or a command line.
+ *
+ * [resolveTimeoutMs] bounds the report of the fixed comments. The IDE can be busy, and a
+ * report with no bound would hold the agent for as long as the IDE takes. The event stream
+ * carries no such bound, because that connection stays open by design.
  */
 class BridgeClient(
     private val bridgeUrl: String,
@@ -40,6 +44,7 @@ class BridgeClient(
     private val sessionKey: String? = null,
     private val onError: (Throwable) -> Unit,
     private val retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
+    private val resolveTimeoutMs: Long = DEFAULT_RESOLVE_TIMEOUT_MS,
 ) {
 
     private val running = AtomicBoolean(false)
@@ -74,6 +79,7 @@ class BridgeClient(
             .header("content-type", "application/json")
             .header(TOKEN_HEADER, token)
             .apply { sessionKey?.let { header(SESSION_HEADER, it) } }
+            .timeout(Duration.ofMillis(resolveTimeoutMs))
             .POST(HttpRequest.BodyPublishers.ofString(Json.encodeToString(ResolveBody(ids))))
             .build()
         val status = withContext(Dispatchers.IO) {
@@ -190,6 +196,15 @@ class BridgeClient(
         const val RESOLVE_PATH = "/resolve"
 
         const val DEFAULT_RETRY_DELAY_MS = 1000L
+
+        /**
+         * How long the report of the fixed comments may take.
+         *
+         * The IDE reads the git notes of the project, and a large repository makes that
+         * read slow. The bound is therefore generous. It only has to stop a wait that never
+         * ends, so the agent reads a reason and can report the comments again.
+         */
+        const val DEFAULT_RESOLVE_TIMEOUT_MS = 60_000L
 
         const val MAX_EVENT_CHARS = 4_000_000
 

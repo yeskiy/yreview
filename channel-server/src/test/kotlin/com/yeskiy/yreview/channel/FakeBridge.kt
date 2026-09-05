@@ -10,7 +10,9 @@ import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.nio.charset.StandardCharsets
 import java.util.Collections
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 /**
  * The bridge of the IDE, small enough for a test.
@@ -33,6 +35,12 @@ class FakeBridge(fixedToken: String? = null) {
     val streamKeys: MutableList<String> = Collections.synchronizedList(mutableListOf())
 
     val resolveKeys: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
+    /** True while the resolve path holds its answer, so a client must give up by itself. */
+    @Volatile
+    var stallResolve: Boolean = false
+
+    private val stalled = CountDownLatch(1)
 
     private val pool = Executors.newCachedThreadPool { runnable ->
         Thread(runnable, "fake-bridge").apply { isDaemon = true }
@@ -72,6 +80,7 @@ class FakeBridge(fixedToken: String? = null) {
     fun waitForStream() = waitFor("the event stream") { streams.isNotEmpty() }
 
     fun close() {
+        stalled.countDown()
         dropStreams()
         http.stop(0)
         pool.shutdownNow()
@@ -92,6 +101,7 @@ class FakeBridge(fixedToken: String? = null) {
 
     private fun resolve(exchange: HttpExchange) {
         exchange.use {
+            if (stallResolve) stalled.await(STALL_SECONDS, TimeUnit.SECONDS)
             resolveTokens.add(exchange.requestHeaders.getFirst(BridgeClient.TOKEN_HEADER).orEmpty())
             resolveKeys.add(exchange.requestHeaders.getFirst(BridgeClient.SESSION_HEADER).orEmpty())
             if (exchange.requestHeaders.getFirst(BridgeClient.TOKEN_HEADER) != token) {
@@ -114,6 +124,9 @@ class FakeBridge(fixedToken: String? = null) {
     }
 
     companion object {
+
+        /** How long a stalled answer waits. A client with a bound gives up long before it. */
+        private const val STALL_SECONDS = 5L
 
         private const val DEADLINE_MS = 10_000L
 

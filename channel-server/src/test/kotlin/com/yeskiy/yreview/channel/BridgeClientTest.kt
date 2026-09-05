@@ -11,6 +11,7 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class BridgeClientTest {
@@ -49,6 +50,7 @@ class BridgeClientTest {
         sessionKey = sessionKey,
         onError = { errors.add(it) },
         retryDelayMs = 20,
+        resolveTimeoutMs = RESOLVE_TIMEOUT_MS,
     ).also {
         client = it
         it.start(scope) { pushed -> batches.add(pushed) }
@@ -177,7 +179,36 @@ class BridgeClientTest {
         assertEquals(listOf(""), bridge.resolveKeys.toList())
     }
 
+    @Test
+    fun `gives up the resolve call when the bridge takes the report and never answers`() {
+        bridge.stallResolve = true
+        val client = connect()
+        val started = System.currentTimeMillis()
+
+        val failure = assertFailsWith<Exception> { runBlocking { client.resolve(listOf(fullId)) } }
+        val waited = System.currentTimeMillis() - started
+
+        assertContains(failure.message.orEmpty(), "did not answer")
+        assertTrue(waited < GIVE_UP_MS, "the client waited $waited ms, and it must give up much sooner")
+    }
+
+    @Test
+    fun `the reason of a resolve call that gave up carries no token`() {
+        bridge.stallResolve = true
+        val client = connect()
+
+        val failure = assertFailsWith<Exception> { runBlocking { client.resolve(listOf(fullId)) } }
+
+        assertFalse(failure.message.orEmpty().contains(bridge.token), "a message must never carry the token")
+    }
+
     private companion object {
         const val SESSION_KEY = "aaaaaaaaaaaaaaaa"
+
+        /** The bound this test gives the client. The stalled bridge holds its answer far longer. */
+        const val RESOLVE_TIMEOUT_MS = 400L
+
+        /** A client that never gave up would wait for the stalled bridge, which takes seconds. */
+        const val GIVE_UP_MS = 3_000L
     }
 }
