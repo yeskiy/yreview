@@ -126,6 +126,23 @@ class OpenCodeTitleTest {
     }
 
     @Test
+    fun `two tabs of one directory read one name`() {
+        // A known limit, and no feature. The pick reads the directory alone, so it cannot
+        // tell two sessions of one directory apart. Two tabs of one project therefore show
+        // the name of the newest session, and the older session names no tab.
+        val rows = listOf(
+            session("ses_a", "the first talk", "C:/work/app", 100),
+            session("ses_b", "the second talk", "C:/work/app", 300),
+        )
+
+        val first = OpenCodeTitle.pick(rows, "C:/work/app")
+        val second = OpenCodeTitle.pick(rows, "C:/work/app")
+
+        assertEquals("the second talk", first)
+        assertEquals(first, second)
+    }
+
+    @Test
     fun `a long title is cut`() {
         val rows = listOf(session("ses_a", "z".repeat(250), "C:/work/app", 100))
 
