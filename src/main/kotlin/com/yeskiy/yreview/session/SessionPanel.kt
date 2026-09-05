@@ -327,8 +327,8 @@ class SessionPanel(
     /**
      * Keeps what this start did, so a report can explain a session that went wrong.
      *
-     * The record reads the address of the bridge from the plan, and it reads no other value
-     * of the environment. The token therefore never reaches it.
+     * The record reads the address of the bridge from the plan, and the plan holds no
+     * token. The token therefore never reaches it.
      */
     private fun record(
         plan: SessionPlan,

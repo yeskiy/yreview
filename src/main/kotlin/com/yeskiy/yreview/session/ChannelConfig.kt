@@ -22,8 +22,8 @@ import kotlin.io.path.readText
  * The file stands at a path that outlives the session, and [ConfigFile] holds that path
  * and the rule of the write.
  *
- * The file holds no secret. The session hands the bridge address and the bridge token to
- * the server through the environment, and never through this file or a command line.
+ * The file holds no secret. The environment of the session names the bridge file of the
+ * project, and the server reads the address and the token from that file.
  */
 object ChannelConfig {
 

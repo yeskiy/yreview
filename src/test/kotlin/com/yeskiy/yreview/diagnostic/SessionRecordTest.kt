@@ -2,6 +2,7 @@ package com.yeskiy.yreview.diagnostic
 
 import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
+import com.yeskiy.yreview.session.BridgeFixture
 import com.yeskiy.yreview.session.BridgeLookup
 import com.yeskiy.yreview.session.ChannelServer
 import com.yeskiy.yreview.session.SessionPlan
@@ -23,7 +24,7 @@ class SessionRecordTest {
 
     private val project = "E:/work/demo-repo"
 
-    private val token = "9f8e7d6c5b4a39281706f5e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0"
+    private val bridgeFile = "C:/Users/alice/.y-review/bridge/E--work-demo-repo-89bc161a7e977083.json"
 
     private val server = ChannelServer.Answer.Found("C:/Users/alice/plugins/y-review/channel/y-review-channel.jar")
 
@@ -33,7 +34,7 @@ class SessionRecordTest {
 
     private val at = LocalDateTime.of(2026, 9, 4, 10, 11, 12)
 
-    private val ready = BridgeLookup.Available("http://127.0.0.1:64343", token)
+    private val ready = BridgeLookup.Available("http://127.0.0.1:64343", bridgeFile)
 
     private fun session(bridge: BridgeLookup) = SessionRecord.Session.of(
         plan = SessionPlan.of(
@@ -54,7 +55,12 @@ class SessionRecordTest {
 
     @Test
     fun `the session record never carries the bridge token`() {
-        assertFalse(session(ready).text().contains(token), "the token guards the port and must stay off a report")
+        BridgeFixture.withLookup(project) { bridge ->
+            assertFalse(
+                session(bridge).text().contains(BridgeFixture.TOKEN),
+                "the token guards the port and must stay off a report",
+            )
+        }
     }
 
     @Test

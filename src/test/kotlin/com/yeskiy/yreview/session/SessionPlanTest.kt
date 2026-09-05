@@ -2,6 +2,8 @@ package com.yeskiy.yreview.session
 
 import com.yeskiy.yreview.bridge.OpenCodeClient
 import com.yeskiy.yreview.bridge.SessionKey
+import java.nio.file.Path
+import kotlin.io.path.readText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -10,8 +12,9 @@ import kotlin.test.assertTrue
 class SessionPlanTest {
 
     private val project = "E:/work/demo-repo"
-    private val token = "0123456789abcdef0123"
-    private val ready = BridgeLookup.Available("http://127.0.0.1:52431", token)
+    private val token = BridgeFixture.TOKEN
+    private val bridgeFile = "C:/Users/one/.y-review/bridge/E--work-demo-repo-89bc161a7e977083.json"
+    private val ready = BridgeLookup.Available(BridgeFixture.URL, bridgeFile)
     private val serverPath = "C:/Users/one/plugins/y-review/channel/y-review-channel.jar"
     private val found = ChannelServer.Answer.Found(serverPath)
     private val javaPath = "C:/Program Files/JetBrains/jbr/bin/java.exe"
@@ -30,6 +33,31 @@ class SessionPlanTest {
     private fun shell(configFile: String? = null) = ShellCommand.shellCommand(
         AgentLaunch.arguments(AgentCatalog.of(AgentId.CLAUDE), "claude", configFile)
     )
+
+    /** The lookup reads a real bridge file, so the token is really in play. */
+    private fun <T> withBridgeFile(body: (BridgeLookup) -> T): T =
+        BridgeFixture.withLookup(project, body)
+
+    @Test
+    fun `no variable of the session holds the bridge token`() {
+        withBridgeFile { bridge ->
+            val plan = plan(bridge = bridge)
+
+            assertTrue(plan.environment.isNotEmpty(), "the session must still reach the bridge")
+            plan.environment.forEach { (name, value) ->
+                assertFalse(value.contains(token), "the variable $name holds the bridge token")
+            }
+        }
+    }
+
+    @Test
+    fun `the file that the variable names holds the token of the bridge`() {
+        withBridgeFile { bridge ->
+            val named = Path.of(plan(bridge = bridge).environment.getValue(BridgeDiscovery.FILE_VARIABLE))
+
+            assertTrue(named.readText().contains(token), "the session must find the token in that file")
+        }
+    }
 
     @Test
     fun `the plan runs the command in the project directory`() {
@@ -55,21 +83,18 @@ class SessionPlanTest {
     }
 
     @Test
-    fun `the plan hands the bridge to the session as two variables`() {
-        assertEquals(
-            mapOf(
-                BridgeDiscovery.URL_VARIABLE to "http://127.0.0.1:52431",
-                BridgeDiscovery.TOKEN_VARIABLE to token
-            ),
-            plan().environment
-        )
+    fun `the plan hands the bridge to the session as the path of the bridge file`() {
+        assertEquals(mapOf(BridgeDiscovery.FILE_VARIABLE to bridgeFile), plan().environment)
     }
 
     @Test
-    fun `the token never reaches the command line`() {
-        val plan = plan()
-        assertFalse(plan.command.any { it.contains(token) })
-        assertFalse(plan.status.contains(token))
+    fun `the token never reaches the command line or the status text`() {
+        withBridgeFile { bridge ->
+            val plan = plan(bridge = bridge)
+
+            assertFalse(plan.command.any { it.contains(token) }, "the command line must hold no token")
+            assertFalse(plan.status.contains(token), "the status text must hold no token")
+        }
     }
 
     @Test
@@ -274,11 +299,10 @@ class SessionPlanTest {
 
     @Test
     fun `an agent without a channel still reaches the bridge through the environment`() {
-        // The IDE server carries the review tools, so the address still travels.
+        // The IDE server carries the review tools, so the bridge file still travels.
         val opencode = plan(agent = AgentCatalog.of(AgentId.OPENCODE), command = "opencode")
 
-        assertEquals(ready.url, opencode.environment[BridgeDiscovery.URL_VARIABLE])
-        assertEquals(token, opencode.environment[BridgeDiscovery.TOKEN_VARIABLE])
+        assertEquals(bridgeFile, opencode.environment[BridgeDiscovery.FILE_VARIABLE])
     }
 
     @Test

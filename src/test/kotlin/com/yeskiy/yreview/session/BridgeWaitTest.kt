@@ -7,7 +7,8 @@ import kotlin.test.assertTrue
 
 class BridgeWaitTest {
 
-    private val ready = BridgeLookup.Available("http://127.0.0.1:52431", "0123456789abcdef0123")
+    private val ready =
+        BridgeLookup.Available("http://127.0.0.1:52431", "/home/one/.y-review/bridge/demo-repo.json")
 
     private val missing = BridgeLookup.Unavailable("The bridge server did not write a file for this project.")
 

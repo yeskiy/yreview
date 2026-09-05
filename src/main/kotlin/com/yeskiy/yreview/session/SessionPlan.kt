@@ -4,13 +4,19 @@ import com.yeskiy.yreview.bridge.OpenCodeClient
 import com.yeskiy.yreview.bridge.SessionKey
 
 /**
- * Everything the terminal needs to start one review session. The bridge token travels in
- * the environment only. A command line is readable by every process on the machine.
+ * Everything the terminal needs to start one review session.
+ *
+ * The bridge token travels in no variable and on no command line. The environment carries
+ * the path of the bridge file, and the session reads the token from that file. The
+ * platform writes the environment of a terminal into the log of the IDE, and a path there
+ * tells a reader nothing that a bearer token would tell.
  */
 data class SessionPlan(
     val command: List<String>,
     val workingDirectory: String,
     val environment: Map<String, String>,
+    /** The address of the bridge, for the status text and for the diagnostic report. */
+    val bridgeUrl: String,
     val status: String,
     /** True while this session carries the channel. An agent with no channel reads false. */
     val bridgeReady: Boolean
@@ -35,7 +41,8 @@ data class SessionPlan(
          *
          * [sessionKey] is the address of this session on the bridge. The channel server
          * reads it from the environment and sends it back in a header, so the IDE can send
-         * a batch to this session alone.
+         * a batch to this session alone. The key names a session and guards nothing, so it
+         * stays a plain variable.
          *
          * [httpPort] and [httpPassword] belong to an agent that runs an HTTP server of its
          * own. The password travels in the environment, and never on the command line.
@@ -68,6 +75,7 @@ data class SessionPlan(
                     )
                 ),
                 workingDirectory = ShellCommand.windowsPath(projectPath),
+                bridgeUrl = (bridge as? BridgeLookup.Available)?.url.orEmpty(),
                 environment = bridgeVariables(bridge, sessionKey) +
                     AgentLaunch.variables(agent, configFile.takeIf { registered }) +
                     httpPassword?.let { mapOf(OpenCodeClient.PASSWORD_VARIABLE to it) }.orEmpty(),
@@ -76,12 +84,11 @@ data class SessionPlan(
             )
         }
 
-        /** The address and the token of the bridge, and the address of this session on it. */
+        /** The path of the bridge file, and the address of this session on the bridge. */
         private fun bridgeVariables(bridge: BridgeLookup, sessionKey: String?): Map<String, String> =
             when (bridge) {
                 is BridgeLookup.Available -> buildMap {
-                    put(BridgeDiscovery.URL_VARIABLE, bridge.url)
-                    put(BridgeDiscovery.TOKEN_VARIABLE, bridge.token)
+                    put(BridgeDiscovery.FILE_VARIABLE, bridge.path)
                     sessionKey?.let { put(SessionKey.VARIABLE, it) }
                 }
                 is BridgeLookup.Unavailable, BridgeLookup.ChannelOff -> emptyMap()

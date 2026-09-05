@@ -32,9 +32,10 @@ private fun claimProtocolStream(): OutputStream {
 /**
  * Starts one channel server on standard input and standard output.
  *
- * Claude Code starts this process, hands the bridge address and the bridge token to it
- * through the environment, and reads the Model Context Protocol on standard output. Every
- * message of this server goes to standard error, so the protocol stream stays clean.
+ * Claude Code starts this process, names the bridge file of the project in the
+ * environment, and reads the Model Context Protocol on standard output. The server opens
+ * that file and takes the address and the token from it. Every message of this server goes
+ * to standard error, so the protocol stream stays clean.
  */
 fun main() {
     val protocol = claimProtocolStream()
@@ -42,7 +43,7 @@ fun main() {
         Config.parse(System.getenv())
     } catch (bad: ConfigError) {
         log(bad.message.orEmpty())
-        log("set ${Config.URL_VARIABLE} and ${Config.TOKEN_VARIABLE}, then start the server again")
+        log("set ${Config.FILE_VARIABLE}, then start the server again")
         exitProcess(BAD_CONFIG_EXIT)
     }
 

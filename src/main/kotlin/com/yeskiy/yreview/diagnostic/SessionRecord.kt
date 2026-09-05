@@ -1,7 +1,6 @@
 package com.yeskiy.yreview.diagnostic
 
 import com.yeskiy.yreview.bridge.SendReport
-import com.yeskiy.yreview.session.BridgeDiscovery
 import com.yeskiy.yreview.session.ChannelServer
 import com.yeskiy.yreview.session.SessionPlan
 import com.yeskiy.yreview.store.StoreKind
@@ -33,8 +32,8 @@ sealed interface SessionRecord {
     /**
      * One start of a review session.
      *
-     * The bridge token never reaches this record. The plan carries the token in the
-     * environment map, and [of] reads the address of that map and no other value.
+     * The bridge token never reaches this record. The plan holds no token at all, and the
+     * address of the bridge is the only value of the bridge that [of] reads.
      */
     data class Session(
         override val at: String,
@@ -79,7 +78,7 @@ sealed interface SessionRecord {
                 command = plan.command.joinToString(" "),
                 workingDirectory = plan.workingDirectory,
                 bridgeReady = plan.bridgeReady,
-                bridgeUrl = plan.environment[BridgeDiscovery.URL_VARIABLE].orEmpty(),
+                bridgeUrl = plan.bridgeUrl,
                 status = plan.status,
                 channelServer = when (server) {
                     is ChannelServer.Answer.Found -> "found at ${server.path}"

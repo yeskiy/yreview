@@ -68,8 +68,8 @@ class ChannelConfigTest {
 
     @Test
     fun `the file carries no environment block`() {
-        // The session hands the bridge address and the bridge token to the server through
-        // the environment of the terminal. A token in a file outlives the session.
+        // The environment of the terminal names the bridge file, and the server reads the
+        // address and the token from that file. This file outlives the session.
         val entry = entry(text())
 
         assertFalse(entry.containsKey("env"))

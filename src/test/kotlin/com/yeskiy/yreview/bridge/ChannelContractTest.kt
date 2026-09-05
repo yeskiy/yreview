@@ -9,6 +9,7 @@ import com.yeskiy.yreview.session.JavaRuntime
 import org.junit.jupiter.api.Assumptions
 import java.io.BufferedReader
 import java.io.File
+import java.nio.file.Files
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.TimeUnit
 import kotlin.test.AfterTest
@@ -21,8 +22,9 @@ import kotlin.test.assertTrue
  * Runs the real channel server against the real bridge.
  *
  * The channel is a Java process that Claude Code starts. The test starts it the same way,
- * points it at the bridge with the two environment variables, and reads the Model Context
- * Protocol messages on its standard output.
+ * names a real bridge file in its environment, and reads the Model Context Protocol
+ * messages on its standard output. The file comes from the writer of the plugin, so one
+ * run proves the whole route from the plugin to the server.
  *
  * The file under test is the jar that the plugin ships. The Gradle test task builds that
  * jar first and names it in the y.review.channel.jar property.
@@ -42,6 +44,12 @@ class ChannelContractTest {
 
     private val address = server.start()
 
+    private val home = Files.createTempDirectory("y-review-contract")
+
+    private val bridgeFile = DiscoveryFile.forProject(PROJECT, home).also {
+        it.write(BridgeEntry(address.url, address.token, PROJECT, ProcessHandle.current().pid()))
+    }
+
     private val lines = LinkedBlockingQueue<String>()
 
     private val channels = mutableListOf<Process>()
@@ -50,6 +58,7 @@ class ChannelContractTest {
     fun tearDown() {
         channels.forEach { it.destroyForcibly() }
         server.stop()
+        home.toFile().deleteRecursively()
     }
 
     private val batch = ReviewBatch(
@@ -74,8 +83,7 @@ class ChannelContractTest {
         val java = JavaRuntime.locate()
         Assumptions.assumeTrue(java != null, "this runtime names no java launcher")
         val builder = ProcessBuilder(java, "-cp", jar.absolutePath, ChannelServer.MAIN_CLASS)
-        builder.environment()["Y_REVIEW_BRIDGE_URL"] = address.url
-        builder.environment()["Y_REVIEW_BRIDGE_TOKEN"] = address.token
+        builder.environment()["Y_REVIEW_BRIDGE_FILE"] = bridgeFile.path.toString()
         key?.let { builder.environment()[SessionKey.VARIABLE] = it }
         val process = builder.start()
         channels.add(process)
@@ -208,6 +216,7 @@ class ChannelContractTest {
     }
 
     private companion object {
+        const val PROJECT = "E:/work/demo-repo"
         const val FIRST_KEY = "aaaaaaaaaaaaaaaa"
         const val SECOND_KEY = "bbbbbbbbbbbbbbbb"
         const val CHANNEL_NOTIFICATION = "notifications/claude/channel"

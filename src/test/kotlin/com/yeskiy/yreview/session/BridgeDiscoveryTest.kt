@@ -32,6 +32,11 @@ class BridgeDiscoveryTest {
     }
 
     @Test
+    fun `carries the same variable name as the channel server`() {
+        assertEquals("Y_REVIEW_BRIDGE_FILE", BridgeDiscovery.FILE_VARIABLE)
+    }
+
+    @Test
     fun `the reader looks for the file that the writer makes`() {
         withHome { home ->
             assertEquals(
@@ -62,9 +67,24 @@ class BridgeDiscoveryTest {
     }
 
     @Test
-    fun `a good file gives the address and the token`() {
+    fun `a good file gives the address and the path of the file`() {
+        withHome { home ->
+            val target = BridgeDiscovery.fileFor(home, "E:/Project")
+            target.parent.createDirectories()
+            target.writeText("{\"url\":\"http://127.0.0.1:52431\",\"token\":\"$token\",\"pid\":1234}")
+
+            assertEquals(
+                BridgeLookup.Available("http://127.0.0.1:52431", target.toString()),
+                BridgeDiscovery.find(home, "E:/Project"),
+            )
+        }
+    }
+
+    @Test
+    fun `the lookup hands no token to its caller`() {
         val found = file("{\"url\":\"http://127.0.0.1:52431\",\"token\":\"$token\",\"pid\":1234}")
-        assertEquals(BridgeLookup.Available("http://127.0.0.1:52431", token), found)
+
+        assertFalse(found.toString().contains(token), "the answer of the lookup must hold no token")
     }
 
     @Test

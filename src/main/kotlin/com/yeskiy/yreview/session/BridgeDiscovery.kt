@@ -11,7 +11,8 @@ import kotlin.io.path.readText
 
 sealed interface BridgeLookup {
 
-    data class Available(val url: String, val token: String) : BridgeLookup
+    /** The address of the bridge, and the file that holds that address and the token. */
+    data class Available(val url: String, val path: String) : BridgeLookup
 
     /** The bridge is not there, and the reason says what the lookup found instead. */
     data class Unavailable(val reason: String) : BridgeLookup
@@ -24,13 +25,17 @@ sealed interface BridgeLookup {
 }
 
 /**
- * Reads the file that the plugin bridge writes when it starts. The file holds a bearer
- * token, so nothing here ever writes the token to a log or to a command line.
+ * Reads the file that the plugin bridge writes when it starts.
+ *
+ * The file holds a bearer token. The token stays inside this object, and a caller reads
+ * the path of the file instead. A session opens that path and takes the token from it, so
+ * the token reaches no log, no command line and no variable.
  */
 object BridgeDiscovery {
 
-    const val URL_VARIABLE = "Y_REVIEW_BRIDGE_URL"
-    const val TOKEN_VARIABLE = "Y_REVIEW_BRIDGE_TOKEN"
+    /** The variable that carries the path of the bridge file to one session. */
+    const val FILE_VARIABLE = "Y_REVIEW_BRIDGE_FILE"
+
     const val MINIMUM_TOKEN_LENGTH = 16
 
     private val LOOPBACK_NAMES = setOf("localhost", "::1", "[::1]")
@@ -53,11 +58,17 @@ object BridgeDiscovery {
         if (!file.isRegularFile()) {
             return BridgeLookup.Unavailable("The bridge server did not write a file for this project.")
         }
-        return runCatching { parse(file.readText()) }
+        return runCatching { parse(file.readText(), file.toString()) }
             .getOrElse { BridgeLookup.Unavailable("The bridge file cannot be read.") }
     }
 
-    fun parse(text: String): BridgeLookup {
+    /**
+     * Answers what the text of one bridge file holds.
+     *
+     * The token never leaves this function. The check proves that the file names a live
+     * bridge, and the answer then carries the address and [path] alone.
+     */
+    private fun parse(text: String, path: String): BridgeLookup {
         val file = runCatching { JSON.decodeFromString<BridgeFile>(text) }.getOrNull()
             ?: return BridgeLookup.Unavailable("The bridge file does not hold valid JSON.")
         val token = file.token
@@ -67,7 +78,7 @@ object BridgeDiscovery {
         val url = checkUrl(file.url) ?: return BridgeLookup.Unavailable(
             "The bridge file holds an address that is not a loopback http address."
         )
-        return BridgeLookup.Available(url, token)
+        return BridgeLookup.Available(url, path)
     }
 
     private fun checkUrl(raw: String?): String? {
