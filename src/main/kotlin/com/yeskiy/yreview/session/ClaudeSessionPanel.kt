@@ -81,6 +81,12 @@ class ClaudeSessionPanel(
     /** The poll that reads the name of an OpenCode session. Null while none runs. */
     private var namePoll: ScheduledFuture<*>? = null
 
+    /** The moment the terminal of the running session mounted. The life counts from it. */
+    private var mountedAt = 0L
+
+    /** The number of starts that the last press on Start made. A new press clears it. */
+    private var tries = 0
+
     /**
      * The agent the running session started with. A change of the setting never moves a
      * running session, so the buttons of that tab keep naming this agent.
@@ -145,20 +151,30 @@ class ClaudeSessionPanel(
      * every later session of the tab, and it calls it whatever the size is, because the
      * user looks at a window that is on screen.
      *
+     * A press on Start sets the count of starts back to zero.
+     */
+    fun start() = start(again = false)
+
+    /**
      * The bridge opens a port and writes a file, so the wait for it stays off this thread.
      * The terminal mounts on this thread again, after the bridge answers or after the wait
      * ends. A second press during the wait does nothing.
+     *
+     * [again] is true for the start that follows a lost port. Such a start keeps the count
+     * of the press that opened the chain. The status line then names the reason.
      */
-    fun start() {
+    private fun start(again: Boolean) {
         if (isRunning || starting || !startable) return
         val basePath = project.basePath ?: return failed(NO_SESSION)
+        if (!again) tries = 0
         starting = true
         agentName = null
         onState(SessionState.STARTING)
         if (terminal == null) status.text = BRIDGE_WAIT
         ApplicationManager.getApplication().executeOnPooledThread {
             val bridge = awaitBridge(basePath)
-            ApplicationManager.getApplication().invokeLater({ mount(basePath, bridge) }, project.disposed)
+            ApplicationManager.getApplication()
+                .invokeLater({ mount(basePath, bridge, again) }, project.disposed)
         }
     }
 
@@ -217,7 +233,7 @@ class ClaudeSessionPanel(
             .getOrNull()
     }
 
-    private fun mount(basePath: String, bridge: BridgeLookup) {
+    private fun mount(basePath: String, bridge: BridgeLookup, again: Boolean) {
         starting = false
         if (isRunning) return
         val server = channelServer()
@@ -250,6 +266,8 @@ class ClaudeSessionPanel(
         remove(idle)
         terminal = started
         session = started
+        mountedAt = System.currentTimeMillis()
+        tries += 1
         runningAgent = agent
         lastAgent = agent
         watch(started)
@@ -259,7 +277,7 @@ class ClaudeSessionPanel(
         }
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)
-        status.text = plan.status
+        status.text = if (again) "$PORT_TAKEN ${plan.status}" else plan.status
         record(plan, server, javaPath, written, terminalStarted = true)
         watchName(agent, plan.workingDirectory)
         revalidate()
@@ -360,9 +378,19 @@ class ClaudeSessionPanel(
      * The end of the process arrives here, and it does not run on the user interface
      * thread. A report that finds no session of [ended] changes nothing, so a press on
      * Stop can end the session first, and a new start can outrun a late report.
+     *
+     * A session that ended inside the limit of [PortRetry] lost its port to another
+     * process. This tab then starts again, and the mount picks a new port. A session that
+     * lived longer sets the count back to zero.
      */
     private fun onTermination(ended: ReviewSession) = ApplicationManager.getApplication().invokeLater {
-        if (session === ended) endSession()
+        if (session !== ended) return@invokeLater
+        val push = runningAgent?.push ?: PushKind.NONE
+        val lived = System.currentTimeMillis() - mountedAt
+        val again = PortRetry.again(push, lived, tries)
+        endSession()
+        if (lived >= PortRetry.SHORT_MILLIS) tries = 0
+        if (again) start(again = true)
     }
 
     private fun endSession() {
@@ -507,5 +535,6 @@ class ClaudeSessionPanel(
         const val PRESS_START = "Press Start in the title bar to open a session with the comment channel."
         const val AUTO_START = "The session opens by itself with the comment channel."
         const val BRIDGE_WAIT = "The review bridge starts now. The session opens after the bridge answers."
+        const val PORT_TAKEN = "The session ended at once, so the plugin started it again."
     }
 }
