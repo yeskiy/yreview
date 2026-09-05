@@ -5,6 +5,7 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.options.ShowSettingsUtil
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.util.Condition
 import com.intellij.openapi.wm.IdeFocusManager
 import com.intellij.terminal.frontend.view.TerminalViewSessionState
 import com.intellij.ui.SimpleTextAttributes
@@ -88,6 +89,25 @@ class SessionPanel(
     private var tries = 0
 
     /**
+     * True after [dispose] ran.
+     *
+     * Two paths reach [dispose]. A close of the tab disposes the content, and the content
+     * disposes this panel. A close of the project calls the method itself. This flag holds
+     * for both paths, and no other state of the panel answers this question.
+     */
+    @Volatile
+    private var disposed = false
+
+    /**
+     * True after the project closed, or after the tab of this panel closed.
+     *
+     * Every job that leaves this panel for another thread carries it. The user interface
+     * thread then drops a job that comes back to a tab which is gone. A dropped job opens
+     * no terminal, so nothing runs that nobody can close.
+     */
+    private val gone = Condition<Any?> { disposed || project.isDisposed }
+
+    /**
      * The agent the running session started with. A change of the setting never moves a
      * running session, so the buttons of that tab keep naming this agent.
      */
@@ -126,6 +146,7 @@ class SessionPanel(
     }
 
     override fun dispose() {
+        disposed = true
         namePoll?.cancel(false)
         namePoll = null
         SessionRegistry.getInstance(project).remove(sessionKey)
@@ -174,7 +195,7 @@ class SessionPanel(
         ApplicationManager.getApplication().executeOnPooledThread {
             val bridge = awaitBridge(basePath)
             ApplicationManager.getApplication()
-                .invokeLater({ mount(basePath, bridge, again) }, project.disposed)
+                .invokeLater({ mount(basePath, bridge, again) }, gone)
         }
     }
 
@@ -273,7 +294,7 @@ class SessionPanel(
         watch(started)
         started.watchTitle { raw ->
             ApplicationManager.getApplication()
-                .invokeLater({ nameFromAgent(AgentTitle.of(agent, raw)) }, project.disposed)
+                .invokeLater({ nameFromAgent(AgentTitle.of(agent, raw)) }, gone)
         }
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)
@@ -367,11 +388,11 @@ class SessionPanel(
      * then holds another port or none.
      */
     private fun readName(port: Int, password: String, directory: String) {
-        if (project.isDisposed) return
+        if (gone.value(null)) return
         val rows = OpenCodeClient.sessions(port, password) ?: return
         val found = OpenCodeTitle.pick(rows, directory)
         ApplicationManager.getApplication()
-            .invokeLater({ if (httpPort == port) nameFromAgent(found) }, project.disposed)
+            .invokeLater({ if (httpPort == port) nameFromAgent(found) }, gone)
     }
 
     /**
@@ -383,15 +404,18 @@ class SessionPanel(
      * process. This tab then starts again, and the mount picks a new port. A session that
      * lived longer sets the count back to zero.
      */
-    private fun onTermination(ended: ReviewSession) = ApplicationManager.getApplication().invokeLater {
-        if (session !== ended) return@invokeLater
-        val push = runningAgent?.push ?: PushKind.NONE
-        val lived = System.currentTimeMillis() - mountedAt
-        val again = PortRetry.again(push, lived, tries)
-        endSession()
-        if (lived >= PortRetry.SHORT_MILLIS) tries = 0
-        if (again) start(again = true)
-    }
+    private fun onTermination(ended: ReviewSession) = ApplicationManager.getApplication().invokeLater(
+        {
+            if (session !== ended) return@invokeLater
+            val push = runningAgent?.push ?: PushKind.NONE
+            val lived = System.currentTimeMillis() - mountedAt
+            val again = PortRetry.again(push, lived, tries)
+            endSession()
+            if (lived >= PortRetry.SHORT_MILLIS) tries = 0
+            if (again) start(again = true)
+        },
+        gone,
+    )
 
     private fun endSession() {
         session = null
@@ -472,7 +496,7 @@ class SessionPanel(
 
     /** The answer arrives on a pooled thread, so the redraw moves to the other thread. */
     private fun onScan() = ApplicationManager.getApplication()
-        .invokeLater({ if (!settings().agentChosen) showSelector() }, project.disposed)
+        .invokeLater({ if (!settings().agentChosen) showSelector() }, gone)
 
     /** True while a name is stored that this build does not know. */
     private fun chosenBefore(): Boolean = !settings().state.agent.isNullOrBlank()
