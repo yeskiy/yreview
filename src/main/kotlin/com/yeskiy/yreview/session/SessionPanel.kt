@@ -43,16 +43,20 @@ import javax.swing.JTextArea
  * and mounts a new one. The empty state with the bridge status shows before the first
  * session of the tab only.
  *
- * The state follows the session behind the terminal, not the component on screen. Two
+ * The state follows the session behind the terminal, not the component on screen. Three
  * paths report the end, and each one alone is enough. The first path is the state flow of
- * the view, which turns to Terminated when the process exits. The second path is a press
- * on Stop, which ends the session before that flow can report it.
+ * the view, which turns to Terminated when the process exits. That flow runs on a scope
+ * that the terminal owns, so a report of it can be lost. The second path therefore reads
+ * the state that the terminal holds now, every time somebody asks whether this session
+ * runs. The third path is a press on Stop, which ends the session before any report.
  */
 class SessionPanel(
     private val project: Project,
     private val number: Int,
     private val autoStart: Boolean,
-    private val onState: (SessionState) -> Unit
+    /** The source of the terminal of one session. The panel owns every other start step. */
+    private val openTerminal: (SessionPlan) -> ReviewSession? = { ReviewTerminal.open(project, it) },
+    private val onState: (SessionState) -> Unit,
 ) : JPanel(BorderLayout()), Disposable {
 
     /**
@@ -153,8 +157,22 @@ class SessionPanel(
         terminal?.close()
     }
 
+    /**
+     * True while a review session runs behind this tab.
+     *
+     * The terminal holds the state of its own process, and this property reads that state.
+     * A session whose process is gone ends here, so one lost report costs nothing and the
+     * tab still gains the mark of a session that ended.
+     */
     val isRunning: Boolean
-        get() = session != null
+        get() {
+            if (stopped()) endSession()
+            return session != null
+        }
+
+    /** True while a session stands in this tab and the process behind it already exited. */
+    private fun stopped(): Boolean =
+        session?.view?.sessionState?.value == TerminalViewSessionState.Terminated
 
     /** True while the window may run something. No agent is a choice, and it runs nothing. */
     val startable: Boolean
@@ -277,7 +295,7 @@ class SessionPanel(
             httpPort,
             httpPassword,
         )
-        val started = ReviewTerminal.open(project, plan)
+        val started = openTerminal(plan)
         if (started == null) {
             forget()
             record(plan, server, javaPath, written, terminalStarted = false)
@@ -347,7 +365,7 @@ class SessionPanel(
     fun stop() {
         val live = session ?: return
         live.close()
-        endSession()
+        endSession(PLAIN_END)
     }
 
     /**
@@ -417,11 +435,27 @@ class SessionPanel(
         gone,
     )
 
-    private fun endSession() {
+    /**
+     * Ends one run of this tab and tells the user that the session is over.
+     *
+     * The status line carries the sentence of the mount while a session runs, and that
+     * sentence describes a session that started. A session that ended needs another one.
+     */
+    private fun endSession(text: String = endText()) {
         session = null
         forget()
+        status.text = text
         onState(SessionState.ENDED)
     }
+
+    /**
+     * What the status line says about a session that ended by itself.
+     *
+     * A session that ends inside [QUICK_MILLIS] ran no work of the user. The terminal then
+     * holds the whole output of the command, and that output names the reason.
+     */
+    private fun endText(): String =
+        if (System.currentTimeMillis() - mountedAt < QUICK_MILLIS) QUICK_END else PLAIN_END
 
     /**
      * Drops everything that belonged to one run. Nothing may reach a session that ended,
@@ -552,7 +586,14 @@ class SessionPanel(
 
     private companion object {
         const val NAME_DELAY_SECONDS = 3L
+
+        /** The longest life of a session that carried no work of the user. */
+        const val QUICK_MILLIS = 2_000L
+
         const val CONFIG_WORK = "write the server configuration file"
+        const val PLAIN_END = "The review session ended. The last output stays above."
+        const val QUICK_END = "The review session ended at once. The terminal above holds the reason. " +
+            "A command that the shell cannot find ends a session this way."
         const val NO_SESSION = "No review session runs."
         const val NO_TERMINAL = "The terminal did not start. The IDE log holds the reason."
         const val NO_DIRECTORY = "This project has no directory, so a session cannot start here."
