@@ -40,6 +40,28 @@ class RedactTest {
     }
 
     @Test
+    fun `a posix project path becomes a placeholder`() {
+        assertEquals(
+            "<project>/src/main",
+            Redact.text("/srv/work/demo-repo/src/main", home, "/srv/work/demo-repo"),
+        )
+    }
+
+    /**
+     * The IDE inside WSL answers a base path such as /mnt/e/work/demo-repo. A session plan
+     * writes the same folder as E:/work/demo-repo, because the IDE server refuses a WSL
+     * path. A report holds both spellings, and both name the folder of the user.
+     */
+    @Test
+    fun `both spellings of a project path inside wsl become a placeholder`() {
+        val wsl = "/mnt/e/work/demo-repo"
+
+        val text = Redact.text("the plan reads $wsl and starts in E:/work/demo-repo/src", home, wsl)
+
+        assertEquals("the plan reads <project> and starts in <project>/src", text)
+    }
+
+    @Test
     fun `a loopback address stays as it is`() {
         assertEquals("http://127.0.0.1:64343", Redact.text("http://127.0.0.1:64343", home, project))
     }

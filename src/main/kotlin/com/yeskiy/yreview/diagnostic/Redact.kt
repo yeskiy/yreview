@@ -1,5 +1,7 @@
 package com.yeskiy.yreview.diagnostic
 
+import com.yeskiy.yreview.session.ShellCommand
+
 /**
  * Takes the machine of the user out of a diagnostic text.
  *
@@ -58,13 +60,26 @@ object Redact {
 
     /** Both slash forms reach this function, and Windows compares a path without case. */
     fun text(value: String, homes: List<String>, projectPath: String?): String {
-        val slashes = value.replace('\\', '/')
-        val withProject = projectPath?.let { replace(slashes, it.replace('\\', '/'), PROJECT_MARK) } ?: slashes
+        val withProject = projectPaths(projectPath).fold(value.replace('\\', '/')) { text, path ->
+            replace(text, path, PROJECT_MARK)
+        }
         val withHome = homes.fold(withProject) { text, home ->
             replace(text, home.replace('\\', '/'), HOME_MARK)
         }
         return secrets(addresses(withHome))
     }
+
+    /**
+     * Every spelling one project folder has in a report.
+     *
+     * The IDE inside WSL answers a base path such as /mnt/e/work/demo-repo. A session plan
+     * writes the same folder as E:/work/demo-repo, because the IDE server refuses a WSL
+     * path. A record therefore holds a spelling that the base path does not match, and both
+     * spellings name the folder of the user. A path that is already a Windows path or a
+     * plain POSIX path keeps one spelling.
+     */
+    private fun projectPaths(projectPath: String?): List<String> =
+        projectPath?.let { listOf(it.replace('\\', '/'), ShellCommand.windowsPath(it)).distinct() }.orEmpty()
 
     /**
      * The same failure, with the same reason, and without the path it failed on.

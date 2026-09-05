@@ -2,6 +2,8 @@ package com.yeskiy.yreview.diagnostic
 
 import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
+import com.yeskiy.yreview.session.BridgeLookup
+import com.yeskiy.yreview.session.SessionPlan
 import com.yeskiy.yreview.settings.ProductName
 import com.yeskiy.yreview.store.StoreKind
 import java.io.IOException
@@ -153,6 +155,26 @@ class DiagnosticReportTest {
     fun `the report never carries the electronic mail address of the user`() {
         assertFalse(report.contains(email), report)
         assertFalse(report.contains("example.com"), report)
+    }
+
+    /**
+     * The IDE inside WSL answers a base path such as /mnt/e/work/demo-repo. A session plan
+     * converts that path to E:/work/demo-repo, because the IDE server refuses a WSL path.
+     * The record then carries a spelling that the base path does not match.
+     */
+    @Test
+    fun `a project path inside wsl goes out under both spellings`() {
+        val wsl = "/mnt/e/work/demo-repo"
+        val record = SessionRecord.Session.of(
+            plan = SessionPlan.of(wsl, BridgeLookup.ChannelOff, command = "claude"),
+            now = at,
+        )
+
+        val text = DiagnosticReport.text(facts, listOf(record), listOf(home), wsl)
+
+        assertFalse(text.contains("E:/work/demo-repo"), text)
+        assertFalse(text.contains("demo-repo"), text)
+        assertTrue(text.contains(Redact.PROJECT_MARK), text)
     }
 
     @Test
