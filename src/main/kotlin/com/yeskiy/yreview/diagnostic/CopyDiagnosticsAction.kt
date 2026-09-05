@@ -4,6 +4,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.ide.CopyPasteManager
+import com.intellij.openapi.project.DumbAware
 import com.yeskiy.yreview.settings.ProductName
 import com.yeskiy.yreview.ui.ReviewNotice
 
@@ -13,7 +14,7 @@ import com.yeskiy.yreview.ui.ReviewNotice
  * The user reads the text before the user pastes it into an issue, so the balloon says
  * what the report holds and asks the user to read it.
  */
-class CopyDiagnosticsAction : AnAction() {
+class CopyDiagnosticsAction : AnAction(), DumbAware {
 
     override fun getActionUpdateThread() = ActionUpdateThread.BGT
 

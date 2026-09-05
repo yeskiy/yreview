@@ -6,6 +6,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.gutter.CommentGutter
@@ -37,7 +38,7 @@ object CommentTarget {
     }
 }
 
-class AddCommentAction : AnAction() {
+class AddCommentAction : AnAction(), DumbAware {
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 

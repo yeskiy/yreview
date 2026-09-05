@@ -5,6 +5,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.wm.ToolWindow
@@ -141,7 +142,7 @@ class SessionTabs(
      * Opens one more session. The bridge serves a fixed number of event streams, and a
      * session over that number would read no comment, so the button stops there.
      */
-    private inner class NewSessionAction : AnAction() {
+    private inner class NewSessionAction : AnAction(), DumbAware {
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
@@ -163,7 +164,7 @@ class SessionTabs(
      * builds the menu of a content tab itself. It is off for an agent that names its own
      * sessions, and the reason then stands in the hint of the button.
      */
-    private inner class RenameAction : AnAction() {
+    private inner class RenameAction : AnAction(), DumbAware {
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 
@@ -197,7 +198,7 @@ class SessionTabs(
      * user interface thread, because the state of a session lives there and no data call
      * reads it.
      */
-    private inner class StateAction : AnAction() {
+    private inner class StateAction : AnAction(), DumbAware {
 
         override fun getActionUpdateThread() = ActionUpdateThread.EDT
 

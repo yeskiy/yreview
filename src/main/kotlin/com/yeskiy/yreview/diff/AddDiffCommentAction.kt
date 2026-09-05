@@ -5,6 +5,7 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.action.CommentTarget
@@ -17,7 +18,7 @@ import com.yeskiy.yreview.ui.CommentText
 val REVIEW_ANCHOR: Key<DiffAnchor> = Key.create("com.yeskiy.yreview.anchor")
 val REVIEW_ROOT: Key<VirtualFile> = Key.create("com.yeskiy.yreview.root")
 
-class AddDiffCommentAction : AnAction() {
+class AddDiffCommentAction : AnAction(), DumbAware {
 
     override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 

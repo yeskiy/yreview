@@ -39,6 +39,7 @@ import com.intellij.openapi.fileTypes.FileTypeListener
 import com.intellij.openapi.fileTypes.FileTypeManager
 import com.intellij.openapi.ide.CopyPasteManager
 import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
@@ -1226,7 +1227,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     private inner class RefreshAction :
-        AnAction("Refresh", "Read the tasks of this scope again.", AllIcons.Actions.Refresh) {
+        AnAction("Refresh", "Read the tasks of this scope again.", AllIcons.Actions.Refresh), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1239,7 +1240,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      * The kind filter stands above the TODO filters of Settings, Editor, TODO. The two are
      * free of each other, and the button names both choices.
      */
-    private inner class FilterGroup : ActionGroup("Filter", true) {
+    private inner class FilterGroup : ActionGroup("Filter", true), DumbAware {
 
         init {
             templatePresentation.icon = AllIcons.General.Filter
@@ -1269,7 +1270,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
 
     private inner class KindAction(private val kind: TaskKindFilter) :
-        ToggleAction(kind.label, kind.summary, null) {
+        ToggleAction(kind.label, kind.summary, null), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1292,7 +1293,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Show Resolved Comments",
         "List the review comments that somebody already resolved.",
         AllIcons.Actions.Show,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1305,7 +1306,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     private inner class FilterAction(private val name: String) :
-        ToggleAction(if (name.isEmpty()) "Show All TODO Items" else name) {
+        ToggleAction(if (name.isEmpty()) "Show All TODO Items" else name), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1317,7 +1318,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
     }
 
-    private inner class GroupByGroup : ActionGroup("Group By", true) {
+    private inner class GroupByGroup : ActionGroup("Group By", true), DumbAware {
 
         init {
             templatePresentation.icon = AllIcons.Actions.GroupBy
@@ -1334,7 +1335,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Group by Module",
         "Group the files under the module that holds them.",
         AllIcons.Actions.GroupByModule,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1350,7 +1351,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Group by Directory",
         "Show the directory tree above the files.",
         AllIcons.Actions.GroupByPackage,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1366,7 +1367,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Flatten Directories",
         "Put the whole directory path on one row.",
         AllIcons.ObjectBrowser.FlattenPackages,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1387,7 +1388,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Preview Source",
         "Show the source of the selected task beside the tree.",
         AllIcons.Actions.PreviewDetails,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1400,7 +1401,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     private inner class CheckAllAction :
-        AnAction("Check All", "Check every task of the tree.", AllIcons.Actions.Selectall) {
+        AnAction("Check All", "Check every task of the tree.", AllIcons.Actions.Selectall), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1415,7 +1416,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     private inner class ClearChecksAction :
-        AnAction("Clear Checks", "Clear every check box.", AllIcons.Actions.Unselectall) {
+        AnAction("Clear Checks", "Clear every check box.", AllIcons.Actions.Unselectall), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1430,7 +1431,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     private inner class ResolveAction :
-        AnAction("Resolve", "Mark the checked review comments as resolved.", AllIcons.Actions.Commit) {
+        AnAction("Resolve", "Mark the checked review comments as resolved.", AllIcons.Actions.Commit), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1445,7 +1446,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Delete",
         "Remove the checked review comments from the git notes, and the checked TODO items from the source.",
         AllIcons.General.Delete,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1460,7 +1461,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Send to the Agent",
         "Send the checked tasks to the agent.",
         AllIcons.Actions.Upload,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
@@ -1485,7 +1486,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         "Copy for an Agent",
         "Copy the checked tasks to the clipboard, as a prompt for an agent.",
         AllIcons.Actions.Copy,
-    ) {
+    ), DumbAware {
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 

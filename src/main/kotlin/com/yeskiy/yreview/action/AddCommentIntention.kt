@@ -2,6 +2,7 @@ package com.yeskiy.yreview.action
 
 import com.intellij.codeInsight.intention.IntentionAction
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.Project
 import com.intellij.psi.PsiFile
 import com.yeskiy.yreview.gutter.CommentGutter
@@ -11,7 +12,7 @@ import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.ui.CommentText
 
-class AddCommentIntention : IntentionAction {
+class AddCommentIntention : IntentionAction, DumbAware {
 
     override fun getText(): String = "Add review comment"
 
