@@ -27,9 +27,19 @@ object FolderOwnership {
 
     /** True when git tracks at least one file under this folder. */
     fun tracked(runner: GitRunner, folder: String = FolderStore.FOLDER): Boolean =
-        runner.run("ls-files", "--error-unmatch", "--", LITERAL + folder).ok
+        answer(runner, folder).ok
 
-    /** True when the plugin may move the records of this folder into the git notes. */
-    fun mayMigrate(runner: GitRunner, folder: String = FolderStore.FOLDER): Boolean =
-        !tracked(runner, folder)
+    /**
+     * True when the plugin may move the records of this folder into the git notes.
+     *
+     * A git that did not start states nothing about the folder. The plugin then knows no
+     * owner, so it moves no record.
+     */
+    fun mayMigrate(runner: GitRunner, folder: String = FolderStore.FOLDER): Boolean {
+        val answer = answer(runner, folder)
+        return answer.ran && !answer.ok
+    }
+
+    private fun answer(runner: GitRunner, folder: String): GitResult =
+        runner.run("ls-files", "--error-unmatch", "--", LITERAL + folder)
 }

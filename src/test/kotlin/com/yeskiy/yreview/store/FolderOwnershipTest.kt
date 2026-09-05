@@ -76,4 +76,17 @@ class FolderOwnershipTest {
             assertTrue(FolderOwnership.mayMigrate(repo.git, name))
         }
     }
+
+    /**
+     * A git that does not start answers nothing about the folder. The plugin then knows
+     * neither owner, so it moves no record.
+     */
+    @Test
+    fun `a git that does not start refuses the migration`() {
+        withPlainFolder { root ->
+            File(root, FolderStore.FOLDER).mkdirs()
+
+            assertFalse(FolderOwnership.mayMigrate(ProcessGitRunner(root, "y-review-no-such-git")))
+        }
+    }
 }

@@ -50,5 +50,31 @@ class GitRunnerTest {
     private companion object {
         const val OVERSHOOT = 1024 * 1024
         const val FILLER = 'a'.code.toByte()
+        const val MISSING_GIT = "y-review-no-such-git"
+    }
+
+    /**
+     * A git that does not start gives a failed answer, and the answer says that no process
+     * ran. The message names no path, because a user reads it.
+     */
+    @Test
+    fun `a git that does not start gives a failed answer`() {
+        TempRepo().use { repo ->
+            val result = ProcessGitRunner(repo.dir, MISSING_GIT).run("status")
+
+            assertFalse(result.ok, "a git that does not start must give a failed result")
+            assertFalse(result.ran, "the answer must state that no git process ran")
+            assertEquals("", result.stdout)
+            assertTrue(result.stderr.isNotBlank(), "the answer must name the problem")
+            assertFalse(result.stderr.contains(MISSING_GIT), "a message a user reads carries no path")
+        }
+    }
+
+    @Test
+    fun `a git that ran says that it ran`() {
+        TempRepo().use { repo ->
+            assertTrue(repo.git.run("rev-parse", "--is-inside-work-tree").ran)
+            assertTrue(repo.git.run("rev-parse", "HEAD").ran, "a failed git command still ran")
+        }
     }
 }

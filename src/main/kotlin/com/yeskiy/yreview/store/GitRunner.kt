@@ -2,11 +2,27 @@ package com.yeskiy.yreview.store
 
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.IOException
 import java.io.InputStream
 import java.util.concurrent.CompletableFuture
 
 data class GitResult(val exitCode: Int, val stdout: String, val stderr: String) {
+
     val ok: Boolean get() = exitCode == 0
+
+    /**
+     * True when a git process ran and gave this exit code.
+     *
+     * A false answer means that git never started, so the answer states nothing about the
+     * repository. A caller that reads a fact out of a failed run tests this first.
+     */
+    val ran: Boolean get() = exitCode != DID_NOT_START
+
+    companion object {
+
+        /** The exit code of an answer that no git process made. A git exit code is not negative. */
+        const val DID_NOT_START = -2
+    }
 }
 
 interface GitRunner {
@@ -23,9 +39,13 @@ class ProcessGitRunner(
 ) : GitRunner {
 
     override fun run(vararg args: String): GitResult {
-        val process = ProcessBuilder(listOf(exePath) + args)
-            .directory(workingDir)
-            .start()
+        val process = try {
+            ProcessBuilder(listOf(exePath) + args).directory(workingDir).start()
+        } catch (failure: IOException) {
+            return NO_GIT
+        } catch (failure: SecurityException) {
+            return NO_GIT
+        }
         // Both pipes are drained at the same time. Reading one to the end while the other
         // fills its buffer deadlocks the child process.
         val errors = CompletableFuture.supplyAsync { read(process, process.errorStream) }
@@ -70,6 +90,18 @@ class ProcessGitRunner(
         private const val CHUNK_BYTES = 64 * 1024
 
         private const val TOO_MUCH_OUTPUT_CODE = -1
+
+        /**
+         * The answer of a run that never started. Git is missing, or the system refused it.
+         *
+         * The message names no path, because the user reads it. The caller still gets a
+         * failed answer, so a write refuses and states the reason.
+         */
+        private val NO_GIT = GitResult(
+            GitResult.DID_NOT_START,
+            "",
+            "The plugin could not start git. Set the path to git under Settings, Version Control, Git.",
+        )
 
         private val TOO_MUCH_OUTPUT = GitResult(
             TOO_MUCH_OUTPUT_CODE,
