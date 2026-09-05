@@ -6,6 +6,14 @@ data class ShareResult(val ok: Boolean, val message: String)
  * Pushes a shared note ref to the remote and adds the fetch refspec once, so the notes
  * other people write come back with the next fetch. A failure leaves the note where it is.
  *
+ * The refspec carries no plus, because a refspec with a plus makes every fetch of that ref
+ * forced. Git then replaces the local note ref with the value of the remote, and a comment
+ * that no push carried becomes unreachable. Without the plus git refuses a fetch that is not
+ * a fast forward, the local ref stays, and git names the ref that it refused.
+ *
+ * The push runs first and the refspec follows it. A push that failed therefore writes no
+ * line into the git configuration file of the user.
+ *
  * The settings name the remote, because not every repository calls it origin. The settings
  * also hold the refspec switch. A user who keeps the git configuration file by hand clears
  * that switch, and the plugin then writes nothing into that file.
@@ -17,28 +25,44 @@ class NotesSharing(
 ) {
 
     fun share(ref: String): ShareResult {
-        if (writeRefspec) {
-            val configured = addFetchRefspec()
-            if (!configured.ok) return failure(configured, "The fetch refspec was not added.")
-        }
         val pushed = git.run("push", remote, ref)
-        return if (pushed.ok) ShareResult(true, "") else failure(pushed, "The push failed.")
+        if (!pushed.ok) return failure(pushed, "The push failed.")
+        if (!writeRefspec) return ShareResult(true, "")
+        val configured = addFetchRefspec()
+        return if (configured.ok) ShareResult(true, "") else failure(configured, "The fetch refspec was not added.")
     }
 
+    /**
+     * Writes the safe refspec and drops the forced one that an older version wrote.
+     *
+     * Git reads the fetch list in order, and the first refspec that matches a ref decides the
+     * update. A forced refspec that stands over the safe one therefore still overwrites the
+     * local note ref, so the forced one goes first.
+     */
     private fun addFetchRefspec(): GitResult {
-        val current = git.run("config", "--get-all", "remote.$remote.fetch")
+        val dropped = git.run("config", "--unset-all", key(), GitValuePattern.exactly(FORCED_REFSPEC))
+        if (!dropped.ok && dropped.exitCode != NOTHING_TO_UNSET) return dropped
+        val current = git.run("config", "--get-all", key())
         if (current.ok && current.stdout.lineSequence().any { it.trim() == FETCH_REFSPEC }) return current
-        return git.run("config", "--add", "remote.$remote.fetch", FETCH_REFSPEC)
+        return git.run("config", "--add", key(), FETCH_REFSPEC)
     }
+
+    private fun key(): String = "remote.$remote.fetch"
 
     private fun failure(result: GitResult, fallback: String) =
         ShareResult(false, result.stderr.trim().ifEmpty { fallback })
 
     companion object {
 
-        const val FETCH_REFSPEC = "+refs/notes/devtools/*:refs/notes/devtools/*"
+        const val FETCH_REFSPEC = "refs/notes/devtools/*:refs/notes/devtools/*"
+
+        /** The refspec that an older version of the plugin wrote. Every fetch of it is forced. */
+        const val FORCED_REFSPEC = "+$FETCH_REFSPEC"
 
         /** The name that git gives the first remote of a clone. */
         const val DEFAULT_REMOTE = "origin"
+
+        /** What `git config --unset-all` answers when no value matches. That is no failure. */
+        private const val NOTHING_TO_UNSET = 5
     }
 }
