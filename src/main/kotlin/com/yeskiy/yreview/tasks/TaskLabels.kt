@@ -69,11 +69,13 @@ object TaskLabels {
     /**
      * One task for the clipboard. The identifier stays whole, because an agent copies it back.
      *
-     * A person pastes this text into a terminal, so the text of the task follows the rule
-     * of [TaskText] first.
+     * A person pastes this text into a terminal, so the text and the path of the task both
+     * follow the rule of [TaskText] first. The path comes from the same record as the text,
+     * and it holds no line, so it keeps no control character at all.
      */
     fun plainText(task: ReviewTask): String =
-        "${task.id} ${kindWord(task)} ${task.path}:${lines(task)}\n${TaskText.of(task.text).trim()}"
+        "${task.id} ${kindWord(task)} ${TaskText.path(task.path)}:${lines(task)}\n" +
+            TaskText.of(task.text).trim()
 
     fun count(value: Int, name: String): String = "$value $name${if (value == 1) "" else "s"}"
 

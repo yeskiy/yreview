@@ -15,6 +15,7 @@ import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.usages.UsageViewPresentation
 import com.intellij.usages.impl.UsagePreviewPanel
+import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.gutter.CommentIndex
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewCommentListener
@@ -104,7 +105,10 @@ class CommentPreviewPanel(
             shown,
         ).map { it.stored }
     } catch (failure: Exception) {
-        logger.warn("the review preview pane could not read the comments again", failure)
+        logger.warn(
+            "the review preview pane could not read the comments again",
+            Redact.failure(failure, Redact.homes(), project.basePath),
+        )
         null
     }
 

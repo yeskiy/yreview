@@ -11,6 +11,7 @@ import com.intellij.terminal.frontend.toolwindow.TerminalToolWindowTabsManager
 import com.intellij.terminal.frontend.view.TerminalView
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.content.ContentManager
+import com.yeskiy.yreview.diagnostic.Redact
 import org.jetbrains.plugins.terminal.TerminalToolWindowFactory
 import org.jetbrains.plugins.terminal.startup.TerminalProcessType
 
@@ -90,7 +91,12 @@ object ReviewTerminal {
             Disposer.dispose(contents)
             throw failure
         }
-    }.onFailure { thisLogger().warn("The review session terminal did not start.", it) }.getOrNull()
+    }.onFailure {
+        thisLogger().warn(
+            "The review session terminal did not start.",
+            Redact.failure(it, Redact.homes(), project.basePath),
+        )
+    }.getOrNull()
 
     /**
      * A tab with a content manager of its own stays out of the Terminal tool window, and

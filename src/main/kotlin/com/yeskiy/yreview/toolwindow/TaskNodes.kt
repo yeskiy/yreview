@@ -20,6 +20,7 @@ import com.yeskiy.yreview.tasks.TaskGroup
 import com.yeskiy.yreview.tasks.TaskKind
 import com.yeskiy.yreview.tasks.TaskLabels
 import com.yeskiy.yreview.tasks.TaskLayout
+import com.yeskiy.yreview.tasks.TaskPath
 import com.yeskiy.yreview.tasks.TaskTree
 import javax.swing.Icon
 
@@ -149,8 +150,17 @@ object TaskNodes {
     fun children(project: Project, layout: TaskLayout): List<AbstractTreeNode<*>> =
         layout.folders.map { FolderNode(project, it) } + layout.files.map { FileNode(project, it) }
 
-    fun find(task: ReviewTask): VirtualFile? =
-        if (task.filePath.isEmpty()) null else LocalFileSystem.getInstance().findFileByPath(task.filePath)
+    /**
+     * The file of one task, while that file stands under the root of its repository.
+     *
+     * The file system of the IDE follows a step of two dots. A note record of another
+     * person could therefore open a file of the machine, so [TaskPath] settles that first.
+     */
+    fun find(task: ReviewTask): VirtualFile? {
+        if (task.filePath.isEmpty()) return null
+        if (!TaskPath.isUnder(task.rootPath, task.filePath)) return null
+        return LocalFileSystem.getInstance().findFileByPath(task.filePath)
+    }
 
     fun descriptor(project: Project, task: ReviewTask): OpenFileDescriptor? {
         val file = find(task) ?: return null

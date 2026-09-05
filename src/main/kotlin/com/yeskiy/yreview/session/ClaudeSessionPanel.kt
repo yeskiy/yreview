@@ -16,6 +16,7 @@ import com.yeskiy.yreview.bridge.BridgeToken
 import com.yeskiy.yreview.bridge.OpenCodeClient
 import com.yeskiy.yreview.bridge.OpenCodeTitle
 import com.yeskiy.yreview.bridge.SessionKey
+import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.diagnostic.SessionLog
 import com.yeskiy.yreview.diagnostic.SessionRecord
 import com.yeskiy.yreview.settings.ReviewConfigurable
@@ -207,7 +208,10 @@ class ClaudeSessionPanel(
         javaPath ?: return null
         return runCatching { ChannelConfig.write(agent.id, javaPath, server.path) }
             .onFailure {
-                thisLogger().warn("The review session wrote no server configuration file.", it)
+                thisLogger().warn(
+                    "The review session wrote no server configuration file.",
+                    Redact.failure(it, Redact.homes(), project.basePath),
+                )
                 SessionLog.getInstance(project).record(SessionRecord.Failure.of(CONFIG_WORK, it))
             }
             .getOrNull()

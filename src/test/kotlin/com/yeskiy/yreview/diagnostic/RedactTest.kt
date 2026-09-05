@@ -103,4 +103,54 @@ class RedactTest {
     fun `a text without a private value stays as it is`() {
         assertEquals("the review bridge is not running", Redact.text("the review bridge is not running", home, project))
     }
+
+    @Test
+    fun `the message of a failure follows the same rules`() {
+        val failure = java.nio.file.AccessDeniedException("E:/work/demo-repo/.git/yreview/tasks.json")
+
+        val clean = Redact.failure(failure, listOf(home), project)
+
+        assertEquals("java.nio.file.AccessDeniedException: <project>/.git/yreview/tasks.json", clean.toString())
+        assertFalse(clean.toString().contains("demo-repo"), clean.toString())
+    }
+
+    @Test
+    fun `a clean failure keeps the stack trace of the original`() {
+        val failure = runCatching { error("no store at C:/Users/alice/store") }.exceptionOrNull()!!
+
+        val clean = Redact.failure(failure, listOf(home), project)
+
+        assertEquals(failure.stackTrace.toList(), clean.stackTrace.toList())
+        assertTrue(clean.toString().contains("~/store"), clean.toString())
+    }
+
+    @Test
+    fun `the cause of a failure is clean as well`() {
+        val cause = java.io.IOException("E:/work/demo-repo/notes")
+        val failure = RuntimeException("the read failed", cause)
+
+        val clean = Redact.failure(failure, listOf(home), project)
+
+        assertEquals("java.io.IOException: <project>/notes", clean.cause?.toString())
+    }
+
+    @Test
+    fun `a failure without a message keeps its name`() {
+        assertEquals(
+            "java.lang.IllegalStateException",
+            Redact.failure(IllegalStateException(), listOf(home), project).toString(),
+        )
+    }
+
+    @Test
+    fun `a ring of causes ends`() {
+        val first = RuntimeException("first")
+        val second = RuntimeException("second", first)
+        first.initCause(second)
+
+        assertEquals(Redact.CAUSES, depth(Redact.failure(first, listOf(home), project)))
+    }
+
+    private fun depth(failure: Throwable): Int =
+        failure.cause?.let { 1 + depth(it) } ?: 0
 }

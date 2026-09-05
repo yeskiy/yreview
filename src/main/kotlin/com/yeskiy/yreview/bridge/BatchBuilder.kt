@@ -43,7 +43,7 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
     private fun problemOf(task: ReviewTask): String? = when {
         !ID.matches(task.id) -> ID_REASON
         !isRevision(task.revision) -> REVISION_REASON
-        task.path.isEmpty() || task.path.length > MAX_PATH || task.path.any { isControl(it) } -> PATH_REASON
+        task.path.isEmpty() || task.path.length > MAX_PATH || task.path.any { TaskText.isAnyControl(it) } -> PATH_REASON
         task.text.isBlank() -> TEXT_REASON
         else -> null
     }
@@ -58,7 +58,7 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
     )
 
     private fun branchName(branch: String): String =
-        branch.filterNot { isControl(it) }.take(MAX_BRANCH).ifEmpty { "HEAD" }
+        branch.filterNot { TaskText.isAnyControl(it) }.take(MAX_BRANCH).ifEmpty { "HEAD" }
 
     companion object {
         const val MAX_COMMENTS = 200
@@ -82,9 +82,6 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
         private val random = SecureRandom()
 
         fun isRevision(text: String): Boolean = REVISION.matches(text)
-
-        /** The characters the channel refuses in a path and in a branch name. */
-        private fun isControl(value: Char): Boolean = value.code < 0x20 || value.code == 0x7f
 
         private fun randomBatchId(): String {
             val bytes = ByteArray(BATCH_ID_BYTES)

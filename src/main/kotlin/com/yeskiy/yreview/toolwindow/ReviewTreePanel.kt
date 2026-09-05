@@ -96,6 +96,7 @@ import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
 import com.yeskiy.yreview.bridge.SendRoutes
 import com.yeskiy.yreview.bridge.SessionChoice
+import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.diagnostic.SessionLog
 import com.yeskiy.yreview.diagnostic.SessionRecord
 import com.yeskiy.yreview.handoff.CopyPrompt
@@ -775,7 +776,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             DoneWatch.getInstance(project).watch(files)
             files
         } catch (failure: IOException) {
-            logger.warn("the review plugin did not write the task files", failure)
+            logger.warn(
+                "the review plugin did not write the task files",
+                Redact.failure(failure, Redact.homes(), project.basePath),
+            )
             SessionLog.getInstance(project).record(SessionRecord.Failure.of("write the task files", failure))
             null
         }

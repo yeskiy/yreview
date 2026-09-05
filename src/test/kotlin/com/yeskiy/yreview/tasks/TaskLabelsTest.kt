@@ -185,4 +185,18 @@ class TaskLabelsTest {
     fun `the clipboard text keeps the lines of the comment`() {
         assertTrue(TaskLabels.plainText(comment).contains("first line\nsecond line"))
     }
+
+    @Test
+    fun `the clipboard text carries no control character in the path`() {
+        // The path comes from the note record, exactly as the text does.
+        val tricky = comment.copy(path = "src/Parser.kt" + escape + "[31m\r\nrm -rf /")
+
+        val text = TaskLabels.plainText(tricky)
+
+        assertFalse(text.contains(escape), text)
+        assertEquals(
+            "a1b2c3 comment src/Parser.kt[31mrm -rf /:88-94\nfirst line\nsecond line",
+            text,
+        )
+    }
 }

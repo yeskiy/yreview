@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.bridge
 
+import com.yeskiy.yreview.ui.PlainText
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -43,13 +44,22 @@ object OpenCodeTitle {
     fun parse(body: String): List<OpenCodeSession> =
         runCatching { JSON.decodeFromString<List<OpenCodeSession>>(body) }.getOrDefault(emptyList())
 
-    /** Null while this directory holds no named session. */
+    /**
+     * Null while this directory holds no named session.
+     *
+     * The title comes from the person who talks to the agent, and it reaches a tab, a
+     * tooltip and a notice. It therefore follows the rule of [PlainText], as the title of
+     * every other agent does in [com.yeskiy.yreview.session.AgentTitle]. A title that
+     * starts with the markup tag names nothing, and a long title ends after the cap.
+     */
     fun pick(sessions: List<OpenCodeSession>, directory: String): String? = sessions
         .filter { same(it.directory, directory) }
         .maxByOrNull { it.time.updated }
         ?.title
         ?.trim()
         ?.takeIf { it.isNotEmpty() }
+        ?.takeUnless { PlainText.isMarkup(it) }
+        ?.let { PlainText.of(it) }
 
     /** One directory, two spellings. The plugin writes a slash, and the server a backslash. */
     fun same(left: String, right: String): Boolean = plain(left) == plain(right)

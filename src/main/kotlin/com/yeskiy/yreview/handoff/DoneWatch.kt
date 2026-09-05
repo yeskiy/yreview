@@ -7,6 +7,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.project.Project
 import com.intellij.util.concurrency.AppExecutorUtil
+import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.tasks.CloseReport
 import com.yeskiy.yreview.tasks.TaskCompletion
 import com.yeskiy.yreview.tasks.TaskLabels
@@ -58,7 +59,10 @@ class DoneWatch(private val project: Project) : Disposable {
             try {
                 collect()
             } catch (failure: RuntimeException) {
-                logger.warn("the review plugin could not read a done file", failure)
+                logger.warn(
+                    "the review plugin could not read a done file",
+                    Redact.failure(failure, Redact.homes(), project.basePath),
+                )
             } finally {
                 busy.set(false)
             }

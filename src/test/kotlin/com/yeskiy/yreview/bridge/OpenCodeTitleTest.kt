@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.bridge
 
+import com.yeskiy.yreview.ui.PlainText
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -114,5 +115,22 @@ class OpenCodeTitleTest {
         )
 
         assertNull(OpenCodeTitle.pick(rows, "C:/work/app"))
+    }
+
+    @Test
+    fun `a title that starts with the markup tag names nothing`() {
+        // Swing draws such a text as markup, so the tab and the notice must not carry it.
+        val rows = listOf(session("ses_a", "<html><b>owned</b>", "C:/work/app", 100))
+
+        assertNull(OpenCodeTitle.pick(rows, "C:/work/app"))
+    }
+
+    @Test
+    fun `a long title is cut`() {
+        val rows = listOf(session("ses_a", "z".repeat(250), "C:/work/app", 100))
+
+        val name = OpenCodeTitle.pick(rows, "C:/work/app")
+
+        assertEquals("z".repeat(PlainText.LONGEST) + PlainText.MORE, name)
     }
 }

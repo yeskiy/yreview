@@ -9,6 +9,10 @@ package com.yeskiy.yreview.diagnostic
  *
  * The rules run over plain text, so one call cleans a whole report, whatever field the
  * text came from. Every route that shows a record calls this object last.
+ *
+ * The log of the IDE reaches a maintainer as well, and the message of an exception holds
+ * the path that the work failed on. [failure] therefore cleans a throwable before a log
+ * line carries it.
  */
 object Redact {
 
@@ -21,6 +25,9 @@ object Redact {
     const val EMAIL_MARK = "<email>"
 
     const val SECRET_MARK = "<secret>"
+
+    /** The longest chain of causes a clean copy keeps. A ring of causes ends here. */
+    const val CAUSES = 10
 
     /** The names of the loopback interface. A report keeps an address of this machine. */
     private val LOOPBACK = setOf("localhost", "::1", "[::1]")
@@ -57,6 +64,34 @@ object Redact {
             replace(text, home.replace('\\', '/'), HOME_MARK)
         }
         return secrets(addresses(withHome))
+    }
+
+    /**
+     * The same failure, with the same reason, and without the path it failed on.
+     *
+     * A log line prints the message of the throwable, so a clean text beside it is not
+     * enough. The copy carries the name of the original class, the clean message, the
+     * stack trace and the clean cause. A stack trace names classes and no path, so the
+     * copy keeps it whole and the reader still sees where the work stopped.
+     */
+    fun failure(value: Throwable, homes: List<String>, projectPath: String?): Throwable =
+        failure(value, homes, projectPath, CAUSES)
+
+    private fun failure(value: Throwable, homes: List<String>, projectPath: String?, left: Int): Throwable =
+        Clean(
+            value.javaClass.name,
+            value.message?.let { text(it, homes, projectPath) },
+            value.cause?.takeIf { left > 0 }?.let { failure(it, homes, projectPath, left - 1) },
+        ).also { it.stackTrace = value.stackTrace }
+
+    /**
+     * A copy of one failure. It answers the name of the original, so a log line still says
+     * what went wrong, and a chain of causes that points back at itself still ends.
+     */
+    private class Clean(private val name: String, message: String?, cause: Throwable?) :
+        Throwable(message, cause) {
+
+        override fun toString(): String = message?.let { "$name: $it" } ?: name
     }
 
     /**

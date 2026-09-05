@@ -49,4 +49,21 @@ class TaskTextTest {
         assertFalse(TaskText.isControl('\t'))
         assertFalse(TaskText.isControl('a'))
     }
+
+    @Test
+    fun `a path keeps no control character at all`() {
+        assertEquals("src/Parser.kt", TaskText.path("src/\tParser\r\n.kt"))
+        assertEquals("srcab", TaskText.path("src" + escape + "a" + bell + delete + "b"))
+    }
+
+    @Test
+    fun `the strict rule names every control character`() {
+        assertTrue(TaskText.isAnyControl(escape))
+        assertTrue(TaskText.isAnyControl(Char(0)))
+        assertTrue(TaskText.isAnyControl(delete))
+        assertTrue(TaskText.isAnyControl('\n'))
+        assertTrue(TaskText.isAnyControl('\r'))
+        assertTrue(TaskText.isAnyControl('\t'))
+        assertFalse(TaskText.isAnyControl('a'))
+    }
 }
