@@ -83,11 +83,19 @@ jobs:
           PRIVATE_KEY_PASSWORD: ${{ secrets.PRIVATE_KEY_PASSWORD }}
         run: ./gradlew buildPlugin signPlugin --console=plain
 
-      # The signPlugin task skips itself without a key, and a skipped task is not an
-      # error. This step fails when the signed archive is missing, so an unsigned build
-      # can never reach the Marketplace.
+      # Without a key the signPlugin task skips itself, and Gradle then reports
+      # verifyPluginSignature as NO-SOURCE and passes. That task alone therefore lets
+      # an unsigned build through. The archive is counted first, so a missing
+      # signature stops the run here.
       - name: Check the signature
-        run: ./gradlew verifyPluginSignature --console=plain
+        run: |
+          count=$(ls build/distributions/*-signed.zip 2>/dev/null | wc -l)
+          if [ "$count" -ne 1 ]; then
+            echo "Expected one signed archive under build/distributions, and found $count."
+            echo "The signing step did not run, so this build must not reach the Marketplace."
+            exit 1
+          fi
+          ./gradlew verifyPluginSignature --console=plain
 
       # This task updates a listing that already exists. The first version of a plugin
       # goes through the web form at https://plugins.jetbrains.com/plugin/add .
@@ -114,4 +122,4 @@ jobs:
           gh release create "${{ github.ref_name }}" \
             --title "${{ github.ref_name }}" \
             --notes-file build/tmp/release-notes.md \
-            build/distributions/*.zip
+            build/distributions/*-signed.zip
