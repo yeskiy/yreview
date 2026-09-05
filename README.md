@@ -3,8 +3,9 @@
 Yreview writes code review comments on any line of the editor and on any line of a diff,
 inside IntelliJ IDEA. It stores each comment as a git note in your own repository, in the
 git-appraise format, so a comment travels with the code and needs no server and no account.
-It also lists every open comment and every TODO item of the project in one tool window, and
-it can hand those tasks to a Claude Code session that runs inside the IDE.
+It also lists every open comment and every TODO item of the project in one tool window. It
+hands those tasks to a command line agent that runs in a tool window of the IDE. The plugin
+knows nine agents, and it also runs a command that you type.
 
 Nothing leaves your machine. The plugin has no server, and the author receives no data. See
 [Privacy](#privacy).
@@ -31,8 +32,11 @@ The tool window lists every open comment and every TODO item of the project. It 
 tabs, Project, Current File, Scope Based, and Changelist. Each tab groups by module or by
 directory, filters by kind, and opens a preview beside the tree.
 
-One button sends the open tasks to a Claude Code session. The session runs in a tool window
-of the IDE. When the agent reports that a task is done, the plugin marks the comment
+One button hands the open tasks to a command line agent. The agent runs in a tool window of
+the IDE, and the settings page names it. Claude Code takes the tasks while the session runs,
+through a channel of the plugin. OpenCode takes them over a loopback port of its own. Every
+other agent reads them from the clipboard, and from the two files that each send writes in
+the git directory. When the agent reports that a task is done, the plugin marks the comment
 resolved.
 
 <!-- SCREENSHOT: the tool window with the four tabs and the task tree. -->
@@ -130,7 +134,9 @@ git notes --ref refs/notes/devtools/discuss show <commit>
 | `<git directory>/y-review/tasks.json` | The open tasks of the repository | Every send |
 | `<git directory>/y-review/done.txt` | Read only. An agent appends the tasks it finished. The plugin never writes this file. | Never |
 | `~/.y-review/bridge/<mangled project path>.json` | The loopback address of the bridge and a fresh secret. Owner rights only, where the file system knows them. | The project opens and the channel switch stands on |
-| A temporary file `claude-y-review-mcp-*.json` | The configuration of one review session. It holds no secret. | A session starts |
+| `~/.y-review/mcp/<agent>.json` | The Model Context Protocol configuration of one agent. It holds no secret. | A session of Claude Code, OpenCode, Gemini CLI, or GitHub Copilot CLI starts, and the file there does not hold that text already |
+| `<project>/.cursor/mcp.json` | The review server, in the file that Cursor CLI reads | You press Add on the settings page while Cursor CLI is the chosen agent |
+| The Model Context Protocol file of Antigravity CLI | The review server. The plugin runs `agy mcp add`, and Antigravity CLI writes the file. | You press Add on the settings page while Antigravity CLI is the chosen agent |
 | `<project>/.idea/y-review.xml` | The settings of this plugin for this project | You change a setting |
 | `<IDE configuration>/options/y-review.xml` | The maximize switch and the editor size it replaced. The switch belongs to the whole IDE, so it stands beside the IDE and not beside a project. | You move the maximize switch |
 | The IDE registry key `ide.mainSplitter.min.size` | The value `0` | Only while the maximize switch stands on |
@@ -140,32 +146,44 @@ review file reaches a commit.
 
 ## What the plugin runs
 
-The plugin starts one process that you can see, and one that the agent starts.
+The plugin starts one process that you can see, the agent. That agent starts a second
+process, the review server, when the plugin registered the server for it.
 
-**Claude Code.** The Claude tool window runs the command from the settings, `claude` by
-default, through a shell. The plugin appends two flags to that command.
+**The command line agent.** The session tool window runs the command from the settings,
+through a shell. The page holds one command for each agent, and `claude` is the default
+command of Claude Code. The plugin then appends the arguments of the chosen agent.
+
+Claude Code takes these two flags.
 
 ```
---mcp-config <the configuration file of the session>
+--mcp-config <the configuration file of the agent>
 --dangerously-load-development-channels server:y-review
 ```
+
+OpenCode takes `--hostname 127.0.0.1` and `--port <the port of this session>`. OpenCode
+binds a port only when both flags stand in its arguments. The plugin reads that port to push
+a task, and to read the name of the session.
 
 The flag `--dangerously-load-development-channels` belongs to Claude Code and not to the
 IDE. Claude Code channels are a research preview, so a channel server that Anthropic does
 not list needs that flag before the session loads it. Without the flag the session starts,
-but the comments never arrive in the open turn. The settings page prints both flags as
-plain text, so you read what the session runs before it runs.
+but the comments never arrive in the open turn. Claude Code is the only agent that reads a
+channel, so no other agent takes this flag. The settings page prints the arguments of every
+agent as plain text, so you read what the session runs before it runs.
 
-**The channel server.** Claude Code starts a small Java process that ships inside the
-plugin, `channel/y-review-channel.jar`. The Java runtime of your IDE runs it. The process
-holds no IDE class. It reads the bridge address and the bridge secret from its environment,
-it refuses any address that is not a loopback address, and it drops every log record so no
-file can hold the secret.
+**The channel server.** The agent starts a small Java process that ships inside the plugin,
+`channel/y-review-channel.jar`. The Java runtime of your IDE runs it. The process holds no
+IDE class. It reads the bridge address and the bridge secret from its environment, it
+refuses any address that is not a loopback address, and it drops every log record so no file
+can hold the secret.
 
 **The bridge.** The plugin opens one HTTP server on `127.0.0.1`, on a port the operating
 system picks. It holds two paths. `GET /events` carries the tasks out to the session.
 `POST /resolve` carries the finished task identifiers back. Every request must carry a
 bearer secret of 32 random bytes that the IDE makes new for each run.
+
+Only a session of this tool window takes a send. An agent can start a session of its own,
+and that session can hold the review tools. It holds no channel, so a send never reaches it.
 
 You can switch all of this off. Clear the box **Send the review tasks through the channel**
 in the settings, and the plugin opens no port and starts no server.
@@ -176,7 +194,11 @@ in the settings, and the plugin opens no port and starts no server.
 |---|---|---|
 | IntelliJ IDEA | 2026.2 or newer, build 262 or newer | Yes. The plugin declares no upper build limit. |
 | Git | Any current version, on the PATH | Yes. The plugin runs the `git` program of your machine. |
-| Claude Code | Any current version | No. Without it every comment feature works, and only the review session stays out. |
+| A command line agent | Any current version | No. Without one every comment feature works, and only the review session stays out. |
+
+The settings page lists nine agents: Claude Code, OpenCode, OpenAI Codex CLI, Antigravity
+CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Aider, and Amp. The page also runs a
+command that you type, and it runs nothing at all after you choose No agent.
 
 The plugin depends on the bundled Git plugin. It needs no Node.js and no account.
 
@@ -203,15 +225,20 @@ Open Settings, Tools, Yreview.
 
 | Setting | Default | What it does |
 |---|---|---|
-| New comments | Local only | Where a new comment goes. `Local only` writes `refs/notes/y-review/local`. `Shared` writes `refs/notes/devtools/discuss` and pushes that ref. The add-comment box can change the choice for one comment. |
-| Remote for shared comments | `origin` | The remote that a shared note goes to. Not every repository names its remote `origin`. A blank field falls back to `origin`. |
+| New comments: | Local only | Where a new comment goes. `Local only` writes `refs/notes/y-review/local`. `Shared` writes `refs/notes/devtools/discuss` and pushes that ref. The add-comment box can change the choice for one comment. |
+| Remote for shared comments: | `origin` | The remote that a shared note goes to. Not every repository names its remote `origin`. A blank field falls back to `origin`. |
 | Add the notes refspec to the git configuration | On | The plugin adds `+refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch` once, so the notes other people write come back with the next fetch. With the box clear the plugin writes no git configuration, and you add that line by hand. |
 | Send the review tasks through the channel | On | With the box clear, the plugin opens no port and starts no channel server. Every send then writes `AGENT.md` and `tasks.json` in the git directory, and it copies the prompt to the clipboard. |
-| Show the Claude tool window | Follows the search for a Claude Code installation | Whether the review session window appears. The window appears and disappears at once, so you need no restart. |
-| Claude command | `claude` | The one command a shell runs to start the session. Paste a full path when the command is not on the PATH. |
-| Start a session when the session tool window opens | On | Opening the window starts one session with no press. With the box clear the window opens empty, and the button in the title bar starts the session. |
+| Show the session tool window | On | Whether the review session window appears. The window appears and disappears at once, so you need no restart. |
+| Command line agent: | Claude Code | The agent that the session window runs. A running session keeps the agent it started with, and the next session uses the new choice. |
+| Command: | The default command of the chosen agent, `claude` for Claude Code | The one command a shell runs to start the session. The page keeps one command for each agent. Paste a full path when the command is not on the PATH. |
+| Start a session when the session tool window opens | On | Opening the window starts the session of its first tab with no press. With the box clear that tab opens and waits, and the Start button in the title bar starts it. The plus button always starts the session of the tab it opens. |
 | Show comment marks in the editor | On | An open editor shows one icon for each comment range, and a quiet background over the lines of that range. With the box clear the editor stays plain, and the tool window still lists every comment. |
 | Hide the editor beside a maximized tool window | Off | A maximized tool window always leaves a strip of editor. This box writes the IDE registry key `ide.mainSplitter.min.size`, which belongs to the whole IDE and not to this plugin alone. The plugin writes the earlier value again when you clear the box. |
+
+Two agents keep their servers in a file of their own, so the page shows an **Add** button
+for them. Antigravity CLI gets a command that the plugin runs once, and Cursor CLI gets the
+file `.cursor/mcp.json` in the project. The plugin writes nothing there until you press Add.
 
 Two more pages carry settings of this plugin.
 
@@ -244,9 +271,9 @@ and you start both.
 
 1. The git push of a shared comment. It goes to your own git remote, and it carries the
    note ref only.
-2. Claude Code, when you start a review session. Claude Code talks to Anthropic under its
-   own settings and its own account. The plugin starts the program and adds no data of its
-   own to that traffic.
+2. The command line agent, when you start a review session. That agent talks to its own
+   service under its own settings and its own account. The plugin starts the program and
+   adds no data of its own to that traffic.
 
 The bridge secret lives in memory and in one file under your user profile, never in a
 repository, a log file, or a command line. Read [SECURITY.md](SECURITY.md) for the full
