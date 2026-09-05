@@ -1,5 +1,7 @@
 package com.yeskiy.yreview.session
 
+import com.yeskiy.yreview.ui.PlainText
+
 /**
  * The name that a terminal window title carries.
  *
@@ -32,14 +34,11 @@ object AgentTitle {
     /** The longest title that can still be a name. A longer one is a status line. */
     const val LONGEST = 80
 
-    /** What Swing draws as markup. A tab shows the text of a title, and never markup. */
-    const val MARKUP = "<html"
-
     /** Null while the title of this agent carries no name. */
     fun of(agent: AgentSpec, raw: String?): String? {
         val text = raw.orEmpty().replace(WHITESPACE, " ").trim()
         if (text.isEmpty() || text.length > LONGEST) return null
-        if (text.startsWith(MARKUP, ignoreCase = true)) return null
+        if (PlainText.isMarkup(text)) return null
         return when (agent.id) {
             AgentId.CLAUDE -> claude(text)
             AgentId.COPILOT -> copilot(text)

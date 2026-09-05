@@ -10,6 +10,7 @@ import com.yeskiy.yreview.store.id
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 private const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
 
@@ -20,14 +21,16 @@ class CommentTextTest {
         text: String,
         startLine: Int? = 88,
         commit: String = COMMIT,
+        author: String = "a@b.c",
+        path: String = "src/main/kotlin/Parser.kt",
     ): StoredComment {
         val comment = Comment(
             timestamp = "1787194427",
-            author = "a@b.c",
+            author = author,
             description = text,
             location = Location(
                 commit = commit,
-                path = "src/main/kotlin/Parser.kt",
+                path = path,
                 range = startLine?.let { Range(startLine = it, endLine = it + 6) },
             ),
         )
@@ -127,5 +130,38 @@ class CommentTextTest {
     @Test
     fun `the summary keeps only the first line of the text`() {
         assertEquals("88-94: first line", CommentText.summary(stored(NoteRefs.LOCAL, "first line\nsecond line")))
+    }
+
+    @Test
+    fun `an author that starts with the markup tag reads as unknown`() {
+        assertEquals(
+            "unknown, local",
+            CommentText.signature(stored(NoteRefs.LOCAL, "x", author = "<html><b>alice")),
+        )
+    }
+
+    @Test
+    fun `a path that starts with the markup tag reads as unknown`() {
+        assertEquals(
+            "unknown:88-94 @0123456",
+            CommentText.location(stored(NoteRefs.LOCAL, "x", path = "<html><img src=x>")),
+        )
+    }
+
+    @Test
+    fun `a path without a range that starts with the markup tag reads as unknown`() {
+        assertEquals(
+            "unknown @0123456",
+            CommentText.location(
+                stored(NoteRefs.LOCAL, "x", startLine = null, path = "<html><img src=x>"),
+            ),
+        )
+    }
+
+    @Test
+    fun `a header cuts a path that is longer than the cap`() {
+        val header = CommentText.header("y".repeat(400), 1, 2)
+
+        assertTrue(header.startsWith("y".repeat(200) + "..."), header)
     }
 }

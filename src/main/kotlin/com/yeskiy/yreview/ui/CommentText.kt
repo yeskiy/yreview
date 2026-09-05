@@ -5,13 +5,19 @@ import com.yeskiy.yreview.store.Location
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.StoredComment
 
-/** Every line of text that a comment popup shows. The popups keep no text rule of their own. */
+/**
+ * Every line of text that a comment popup shows. The popups keep no text rule of their own.
+ *
+ * A label of the platform draws markup, and the author and the path of a record come from
+ * the person who wrote the record. Both therefore go through [PlainText] first.
+ */
 object CommentText {
 
     const val EMPTY_MESSAGE = "Write the comment first."
 
     /** The header of the popup. It names the file and the line range. */
-    fun header(path: String, startLine: Int, endLine: Int): String = "$path:$startLine-$endLine"
+    fun header(path: String, startLine: Int, endLine: Int): String =
+        "${PlainText.of(path)}:$startLine-$endLine"
 
     /** The same header for one side of a diff, with the revision that the comment anchors to. */
     fun diffHeader(path: String, startLine: Int, endLine: Int, commit: String, dirty: Boolean): String =
@@ -41,7 +47,7 @@ object CommentText {
 
     /** The author of a stored comment, and the ref that holds it. */
     fun signature(stored: StoredComment): String =
-        "${stored.comment.author}, ${if (NoteRefs.isShared(stored.ref)) "shared" else "local"}"
+        "${PlainText.of(stored.comment.author)}, ${if (NoteRefs.isShared(stored.ref)) "shared" else "local"}"
 
     /** One line for a tooltip or for a list row. */
     fun summary(stored: StoredComment): String {
@@ -50,7 +56,7 @@ object CommentText {
     }
 
     private fun range(place: Location): String =
-        place.range?.let { header(place.path, it.startLine, it.endLine) } ?: place.path
+        place.range?.let { header(place.path, it.startLine, it.endLine) } ?: PlainText.of(place.path)
 
     private fun firstLine(stored: StoredComment): String =
         stored.comment.description?.lineSequence()?.firstOrNull().orEmpty()

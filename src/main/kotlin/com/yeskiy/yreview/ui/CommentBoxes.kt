@@ -136,7 +136,7 @@ object ReadBox {
     private fun nameLine(stored: StoredComment): JComponent =
         JPanel(FlowLayout(FlowLayout.LEFT, JBUI.scale(8), 0)).also {
             it.isOpaque = false
-            it.add(JBLabel(stored.comment.author).also { name -> name.font = JBFont.label().asBold() })
+            it.add(JBLabel(PlainText.of(stored.comment.author)).also { name -> name.font = JBFont.label().asBold() })
             it.add(BoxParts.small(CommentTime.label(stored.comment)))
         }
 }
