@@ -10,23 +10,34 @@ import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewAnchor
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
+import com.yeskiy.yreview.store.StoreWrite
 import com.yeskiy.yreview.ui.ReviewNotice
 import com.yeskiy.yreview.ui.ShareFailure
 import java.nio.file.Path
 
-/** Writes one comment of the popup, and tells the user when the write or the push fails. */
+/**
+ * Writes one comment of the popup, and tells the user when the write or the push fails.
+ *
+ * Every caller presses a button, so every caller stands on the thread that draws the
+ * window. Git therefore runs under a progress window, and the answer comes back before the
+ * notice, so the tree and the messages keep their order.
+ */
 object CommentWriter {
 
     const val TITLE = "Add Review Comment"
+
+    /** The words of the progress window that runs git while the comment reaches the store. */
+    const val PROGRESS = "Writing the Review Comment"
 
     /** Returns true after the comment reaches the store. A write that fails tells the user. */
     fun write(project: Project, anchor: ReviewAnchor, target: Target, text: String, share: Boolean): Boolean {
         val firstFolderWrite = anchor.kind == StoreKind.FOLDER &&
             !FolderNoticeLog.getInstance(project).told(anchor.root.path)
         try {
-            ReviewService.getInstance(project)
-                .addComment(anchor, NoteRefs.refFor(share), target.startLine, target.endLine, text)
-                .shareError?.let { ShareFailure.report(project, TITLE, it) }
+            StoreWrite.run(project, PROGRESS) {
+                ReviewService.getInstance(project)
+                    .addComment(anchor, NoteRefs.refFor(share), target.startLine, target.endLine, text)
+            }.shareError?.let { ShareFailure.report(project, TITLE, it) }
         } catch (failure: NotesWriteException) {
             Messages.showErrorDialog(project, failure.message ?: "The comment was not written.", TITLE)
             return false
