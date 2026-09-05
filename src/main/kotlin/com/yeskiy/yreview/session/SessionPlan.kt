@@ -6,10 +6,12 @@ import com.yeskiy.yreview.bridge.SessionKey
 /**
  * Everything the terminal needs to start one review session.
  *
- * The bridge token travels in no variable and on no command line. The environment carries
- * the path of the bridge file, and the session reads the token from that file. The
- * platform writes the environment of a terminal into the log of the IDE, and a path there
- * tells a reader nothing that a bearer token would tell.
+ * No secret of a session travels in a variable or on a command line. The environment
+ * carries the path of the bridge file, and the session reads the token from that file. The
+ * command line names the password file of an agent that runs a server of its own, and the
+ * shell reads the password from that file. The platform writes both the environment and
+ * the command line of a terminal into the log of the IDE, and a path there tells a reader
+ * nothing that a secret would tell.
  */
 data class SessionPlan(
     val command: List<String>,
@@ -44,8 +46,9 @@ data class SessionPlan(
          * a batch to this session alone. The key names a session and guards nothing, so it
          * stays a plain variable.
          *
-         * [httpPort] and [httpPassword] belong to an agent that runs an HTTP server of its
-         * own. The password travels in the environment, and never on the command line.
+         * [httpPort] and [passwordFile] belong to an agent that runs an HTTP server of its
+         * own. The plugin wrote the password of that server into [passwordFile], and the
+         * shell reads it there. The password itself never reaches this function.
          */
         fun of(
             projectPath: String,
@@ -57,7 +60,7 @@ data class SessionPlan(
             configFile: String? = null,
             sessionKey: String? = null,
             httpPort: Int? = null,
-            httpPassword: String? = null,
+            passwordFile: String? = null,
         ): SessionPlan {
             val serverPath = (server as? ChannelServer.Answer.Found)?.path
             /** A registration reaches the agent only when all three parts of the server stand. */
@@ -72,13 +75,13 @@ data class SessionPlan(
                         javaPath.takeIf { registered },
                         serverPath.takeIf { registered },
                         httpPort,
-                    )
+                    ),
+                    passwordFile?.let { SecretVariable(OpenCodeClient.PASSWORD_VARIABLE, it) },
                 ),
                 workingDirectory = ShellCommand.windowsPath(projectPath),
                 bridgeUrl = (bridge as? BridgeLookup.Available)?.url.orEmpty(),
                 environment = bridgeVariables(bridge, sessionKey) +
-                    AgentLaunch.variables(agent, configFile.takeIf { registered }) +
-                    httpPassword?.let { mapOf(OpenCodeClient.PASSWORD_VARIABLE to it) }.orEmpty(),
+                    AgentLaunch.variables(agent, configFile.takeIf { registered }),
                 status = status(agent, command, bridge, server, javaPath),
                 bridgeReady = ready
             )

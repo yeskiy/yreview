@@ -80,7 +80,7 @@ class SessionPanel(
     /** The loopback port of a session that runs its own HTTP server. Null for every other. */
     private var httpPort: Int? = null
 
-    /** The password of that server. It travels in the environment only. */
+    /** The password of that server. It travels in a file that the shell reads and removes. */
     private var httpPassword: String? = null
 
     /** The poll that reads the name of an OpenCode session. Null while none runs. */
@@ -153,8 +153,20 @@ class SessionPanel(
         disposed = true
         namePoll?.cancel(false)
         namePoll = null
+        dropSecret()
         SessionRegistry.getInstance(project).remove(sessionKey)
         terminal?.close()
+    }
+
+    /**
+     * Takes the password of this tab off the disk.
+     *
+     * The shell of a session that started already removed the file. This call answers for
+     * every other path, such as a terminal that never started, and a tab that closes while
+     * the shell still waits for its first paint.
+     */
+    private fun dropSecret() {
+        runCatching { secretFile().delete() }
     }
 
     /**
@@ -272,6 +284,26 @@ class SessionPanel(
             .getOrNull()
     }
 
+    /**
+     * Puts the password of the session on disk, and answers the path of that file.
+     *
+     * Null after a failed write. The session then opens no port of its own, because a
+     * server that starts without a password answers every request of this machine.
+     */
+    private fun writePassword(password: String): String? =
+        runCatching {
+            secretFile().also { it.write(password) }.path.toString()
+        }.onFailure {
+            thisLogger().warn(
+                "The review session wrote no password file, so it opens no port of its own.",
+                Redact.failure(it, Redact.homes(), project.basePath),
+            )
+            SessionLog.getInstance(project).record(SessionRecord.Failure.of(PASSWORD_WORK, it))
+        }.getOrNull()
+
+    /** The file of this tab. One session owns one file, and a new start replaces it. */
+    private fun secretFile() = SecretFile.forSession(sessionKey)
+
     private fun mount(basePath: String, bridge: BridgeLookup, again: Boolean) {
         starting = false
         if (isRunning) return
@@ -280,7 +312,10 @@ class SessionPanel(
         val agent = AgentCatalog.of(settings().agentOrDefault())
         val written = writeConfig(agent, bridge, server, javaPath)
         httpPort = if (agent.push == PushKind.LOCAL_HTTP) FreePort.pick() else null
-        httpPassword = httpPort?.let { BridgeToken.newToken() }
+        val password = httpPort?.let { BridgeToken.newToken() }
+        val passwordFile = password?.let { writePassword(it) }
+        if (passwordFile == null) httpPort = null
+        httpPassword = password.takeIf { passwordFile != null }
         SessionRegistry.getInstance(project)
             .setReach(sessionKey, SessionReach.of(agent, httpPort, httpPassword))
         val plan = SessionPlan.of(
@@ -293,7 +328,7 @@ class SessionPanel(
             written?.toString(),
             sessionKey,
             httpPort,
-            httpPassword,
+            passwordFile,
         )
         val started = openTerminal(plan)
         if (started == null) {
@@ -467,6 +502,7 @@ class SessionPanel(
         httpPort = null
         httpPassword = null
         runningAgent = null
+        dropSecret()
         SessionRegistry.getInstance(project).setReach(sessionKey, SessionReach.None)
     }
 
@@ -591,6 +627,7 @@ class SessionPanel(
         const val QUICK_MILLIS = 2_000L
 
         const val CONFIG_WORK = "write the server configuration file"
+        const val PASSWORD_WORK = "write the password file of the session"
         const val PLAIN_END = "The review session ended. The last output stays above."
         const val QUICK_END = "The review session ended at once. The terminal above holds the reason. " +
             "A command that the shell cannot find ends a session this way."

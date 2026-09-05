@@ -326,11 +326,35 @@ class SessionPlanTest {
     }
 
     @Test
-    fun `the opencode password travels in the environment only`() {
-        val opencode = openCode()
+    fun `no variable of an opencode session holds the server password`() {
+        SecretFixture.withFile { file ->
+            val opencode = openCode(file.path.toString())
 
-        assertEquals("s3cret", opencode.environment[OpenCodeClient.PASSWORD_VARIABLE])
-        assertFalse(opencode.command.last().contains("s3cret"), opencode.command.last())
+            assertTrue(opencode.environment.isNotEmpty(), "the session must still reach the bridge")
+            opencode.environment.forEach { (name, value) ->
+                assertFalse(value.contains(SecretFixture.PASSWORD), "the variable $name holds the password")
+            }
+        }
+    }
+
+    @Test
+    fun `no part of the command line of an opencode session holds the server password`() {
+        SecretFixture.withFile { file ->
+            openCode(file.path.toString()).command.forEach {
+                assertFalse(it.contains(SecretFixture.PASSWORD), "a part of the command holds the password")
+            }
+        }
+    }
+
+    @Test
+    fun `the file that the shell line names holds the password of the server`() {
+        SecretFixture.withFile { file ->
+            val line = openCode(file.path.toString()).command.last()
+
+            assertTrue(line.contains(file.path.toString()), line)
+            assertTrue(line.contains(OpenCodeClient.PASSWORD_VARIABLE), line)
+            assertTrue(file.path.readText().contains(SecretFixture.PASSWORD), "the shell must find the password")
+        }
     }
 
     @Test
@@ -339,8 +363,9 @@ class SessionPlanTest {
     }
 
     @Test
-    fun `a session with no port carries no password variable`() {
+    fun `a session with no password file sets no password anywhere`() {
         assertFalse(plan().environment.containsKey(OpenCodeClient.PASSWORD_VARIABLE))
+        assertFalse(openCode().command.last().contains(OpenCodeClient.PASSWORD_VARIABLE))
     }
 
     @Test
@@ -356,8 +381,8 @@ class SessionPlanTest {
         assertFalse(noBridge.contains("mcp_servers.y-review"), noBridge)
     }
 
-    private fun openCode() = SessionPlan.of(
+    private fun openCode(passwordFile: String? = null) = SessionPlan.of(
         project, ready, AgentCatalog.of(AgentId.OPENCODE), "opencode",
-        found, javaPath, config, null, 47821, "s3cret",
+        found, javaPath, config, null, 47821, passwordFile,
     )
 }
