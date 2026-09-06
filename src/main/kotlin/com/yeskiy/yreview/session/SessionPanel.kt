@@ -109,6 +109,16 @@ class SessionPanel(
     private var tries = 0
 
     /**
+     * How many sentences the status line took.
+     *
+     * The idle sentence reads the disk, so it arrives from another thread. The count tells
+     * that answer whether the line still waits for it. An answer of an earlier read writes
+     * nothing, and the newest sentence stays. Every write of the line runs on the thread
+     * that draws the window, so the count needs no lock.
+     */
+    private var statusWrites = 0
+
+    /**
      * True after [dispose] ran.
      *
      * Two paths reach [dispose]. A close of the tab disposes the content, and the content
@@ -242,7 +252,7 @@ class SessionPanel(
         starting = true
         agentName = null
         onState(SessionState.STARTING)
-        if (terminal == null) status.text = BRIDGE_WAIT
+        if (terminal == null) setStatus(BRIDGE_WAIT)
         ApplicationManager.getApplication().executeOnPooledThread {
             val setup = prepare(awaitBridge(basePath))
             if (gone.value(null)) {
@@ -401,7 +411,7 @@ class SessionPanel(
         }
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)
-        status.text = if (again) "$PORT_TAKEN ${plan.status}" else plan.status
+        setStatus(if (again) "$PORT_TAKEN ${plan.status}" else plan.status)
         record(plan, setup.server, setup.javaPath, setup.configFile, terminalStarted = true)
         watchName(setup.agent, plan.workingDirectory)
         revalidate()
@@ -529,7 +539,7 @@ class SessionPanel(
     private fun endSession(text: String = endText()) {
         session = null
         forget()
-        status.text = text
+        setStatus(text)
         onState(SessionState.ENDED)
     }
 
@@ -573,10 +583,38 @@ class SessionPanel(
 
     private fun showIdle(headline: String, hint: String) {
         idle.emptyText.setText(headline).appendLine(hint)
-        status.text = bridgeState()
+        setStatus("")
         add(idle, BorderLayout.CENTER)
         revalidate()
         repaint()
+        askBridgeState()
+    }
+
+    /**
+     * Writes the status line, and drops every answer that an earlier read still owes.
+     *
+     * The line therefore carries the newest sentence, and a slow read of the disk can
+     * never write over the sentence of a session that started after it.
+     */
+    private fun setStatus(text: String) {
+        statusWrites += 1
+        status.text = text
+    }
+
+    /**
+     * Reads the idle sentence away from the thread that draws the window.
+     *
+     * [bridgeState] looks for the file of the bridge, for the channel server and for the
+     * Java runtime, and each one of those asks the disk. The window therefore draws first
+     * and takes the sentence when it arrives.
+     */
+    private fun askBridgeState() {
+        val ask = statusWrites
+        ApplicationManager.getApplication().executeOnPooledThread {
+            val text = bridgeState()
+            ApplicationManager.getApplication()
+                .invokeLater({ if (statusWrites == ask) status.text = text }, gone)
+        }
     }
 
     /** The idle state that the stored choice asks for. A project with no choice gets the selector. */
@@ -608,7 +646,7 @@ class SessionPanel(
             }
             if (answer.anyFound) idle.emptyText.appendLine(AgentRows.OTHER_AGENTS)
         }
-        status.text = ""
+        setStatus("")
         add(idle, BorderLayout.CENTER)
         revalidate()
         repaint()
@@ -644,7 +682,12 @@ class SessionPanel(
     private fun openSettings() =
         ShowSettingsUtil.getInstance().showSettingsDialog(project, ReviewConfigurable::class.java)
 
-    /** An agent that runs nothing needs no line about the bridge, and it must not be nagged. */
+    /**
+     * The idle sentence about the bridge. It runs on a pooled thread, because it reads the
+     * disk three times.
+     *
+     * An agent that runs nothing needs no line about the bridge, and it must not be nagged.
+     */
     private fun bridgeState(): String {
         val agent = AgentCatalog.of(settings().agentOrDefault())
         if (!agent.runnable) return ""

@@ -262,10 +262,24 @@ class ReviewService(private val project: Project) {
         }
         val errors = records.map { it.ref }.distinct()
             .filter { NoteRefs.isShared(it) }
-            .mapNotNull { runShare(root, it).takeIf { result -> !result.ok }?.message }
+            .mapNotNull { pushRef(root, it) }
         BridgeService.getInstance(project).startLater()
         notifyChanged()
         return CommentDeleteResult(removed, errors.joinToString(" ").ifEmpty { null })
+    }
+
+    /**
+     * Pushes one shared ref, and drops the marks that this push carried.
+     *
+     * One push carries every note of one ref of one root, so a comment that waited for
+     * such a push is shared the moment it works. Null after a good push, and the reason
+     * after a bad one.
+     */
+    private fun pushRef(root: VirtualFile, ref: String): String? {
+        val result = runShare(root, ref)
+        if (!result.ok) return result.message
+        ShareLog.getInstance(project).clear(root.path, ref)
+        return null
     }
 
     private fun finish(root: VirtualFile, stored: StoredComment): CommentWriteResult {
@@ -281,14 +295,9 @@ class ReviewService(private val project: Project) {
      */
     private fun share(root: VirtualFile, stored: StoredComment): String? {
         if (!NoteRefs.isShared(stored.ref)) return null
-        val result = runShare(root, stored.ref)
-        val log = ShareLog.getInstance(project)
-        if (result.ok) {
-            log.clear(root.path, stored.ref)
-            return null
-        }
-        log.markUnshared(stored.id, root.path, stored.ref)
-        return result.message
+        val problem = pushRef(root, stored.ref) ?: return null
+        ShareLog.getInstance(project).markUnshared(stored.id, root.path, stored.ref)
+        return problem
     }
 
     private fun runShare(root: VirtualFile, ref: String): ShareResult {

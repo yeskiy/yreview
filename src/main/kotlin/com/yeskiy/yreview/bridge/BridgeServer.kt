@@ -2,6 +2,7 @@ package com.yeskiy.yreview.bridge
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import com.yeskiy.yreview.tasks.TaskLabels
 import java.io.IOException
 import java.io.OutputStream
 import java.net.InetAddress
@@ -14,6 +15,7 @@ import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadFactory
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Where the bridge listens, and the secret a session must send to reach it. */
 data class BridgeAddress(val url: String, val token: String, val port: Int)
@@ -28,9 +30,19 @@ data class BridgeAddress(val url: String, val token: String, val port: Int)
  */
 class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
 
-    /** One open event stream. [key] names the session, and null means a session with no key. */
+    /**
+     * One open event stream. [key] names the session, and null means a session with no key.
+     *
+     * The queue holds [MAX_QUEUED] events. An item leaves it only while the thread of the
+     * reader runs, and that thread stands inside its write for as long as the client reads
+     * nothing. A queue with no bound would therefore grow with every send.
+     */
     private class Reader(val key: String?) {
-        val queue = LinkedBlockingQueue<String>()
+
+        val queue = LinkedBlockingQueue<String>(MAX_QUEUED)
+
+        /** How many events this stream lost since the last line that named them. */
+        val lost = AtomicInteger(0)
     }
 
     private val streams = CopyOnWriteArrayList<Reader>()
@@ -62,7 +74,10 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
 
     fun stop() {
         running.set(false)
-        streams.forEach { it.queue.offer(STOP) }
+        streams.forEach {
+            it.queue.clear()
+            it.queue.offer(STOP)
+        }
         streams.clear()
         http?.stop(0)
         http = null
@@ -75,11 +90,15 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
      * Writes the batch to the stream of [target], or to every open stream when [target] is
      * null. Returns the number of streams it reached, so a target that already left the
      * bridge gives zero and the caller can say so.
+     *
+     * A stream whose queue is full loses this batch and keeps the batches it already holds.
+     * The count of the loss goes to that stream, and the reader of it then reads one line
+     * that names the number.
      */
     fun send(batch: ReviewBatch, target: String? = null): Int {
         val data = BatchJson.encode(batch)
         val open = streams.toList().filter { target == null || it.key == target }
-        open.forEach { it.queue.offer(data) }
+        open.forEach { if (!it.queue.offer(data)) it.lost.incrementAndGet() }
         return open.size
     }
 
@@ -163,6 +182,7 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
             write(body, ": open\n\n")
             while (running.get()) {
                 val next = reader.queue.poll(KEEPALIVE_SECONDS, TimeUnit.SECONDS)
+                reportLoss(body, reader)
                 when {
                     next == null -> write(body, ": keep-alive\n\n")
                     next == STOP -> return
@@ -179,6 +199,19 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
     }
 
     // --- The helpers ---
+
+    /**
+     * Names the events one stream lost, and sets the count back to zero.
+     *
+     * The line is a Server-Sent Events comment. It can never look like a batch, so a
+     * client that reads the events keeps its contract, and a person who reads the raw
+     * stream sees how many events went. A stream that lost nothing gets no line.
+     */
+    private fun reportLoss(body: OutputStream, reader: Reader) {
+        val lost = reader.lost.getAndSet(0)
+        if (lost == 0) return
+        write(body, ": $DROPPED ${TaskLabels.count(lost, "event")} for this session, because it read none\n\n")
+    }
 
     private fun authorized(exchange: HttpExchange): Boolean =
         BridgeToken.matches(token, exchange.requestHeaders.getFirst(TOKEN_HEADER))
@@ -211,6 +244,18 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
 
         /** The number of event streams the bridge serves at once. The window reads it too. */
         const val MAX_STREAMS = 16
+
+        /**
+         * How many events one stream holds while its client reads none.
+         *
+         * One send of the user makes one batch for each 200 comments, so this bound takes
+         * several whole sends. A client that is still behind after that reads nothing at
+         * all, and the plugin then keeps the events it already holds.
+         */
+        const val MAX_QUEUED = 64
+
+        /** The start of the line that names the events one stream lost. */
+        const val DROPPED = "the bridge dropped"
 
         private const val LOOPBACK = "127.0.0.1"
         private const val EPHEMERAL_PORT = 0

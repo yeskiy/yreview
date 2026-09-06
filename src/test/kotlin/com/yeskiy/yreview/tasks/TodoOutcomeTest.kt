@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 /**
  * What one batch of reported TODO identifiers proves.
@@ -17,6 +18,13 @@ class TodoOutcomeTest {
     private val handle = TaskHandles.of(todo)
 
     private val other = TaskIds.forTodo("src/Other.kt", 40)
+
+    /** Two TODO lines that carry the same key and the same line, so one handle names both. */
+    private val twin = "${TaskIds.TODO_PREFIX}c3f9a12a${"0".repeat(32)}-12"
+
+    private val otherTwin = "${TaskIds.TODO_PREFIX}c3f9a12a${"f".repeat(32)}-12"
+
+    private val twinHandle = TaskHandles.of(twin)
 
     @Test
     fun `an identifier this window handed out and no longer finds closed`() {
@@ -49,6 +57,22 @@ class TodoOutcomeTest {
         // The task file holds the handle, and an agent reports either form.
         assertEquals(listOf(handle), TodoOutcome.of(listOf(handle), emptyList(), setOf(handle)).closed)
         assertEquals(listOf(todo), TodoOutcome.of(listOf(todo), emptyList(), setOf(handle)).closed)
+    }
+
+    @Test
+    fun `a handle that names two tasks closes nothing`() {
+        val outcome = TodoOutcome.of(listOf(twinHandle), open = listOf(twin, otherTwin), sent = setOf(twinHandle))
+
+        assertEquals(emptyList(), outcome.closed)
+        assertEquals(emptyList(), outcome.stillOpen)
+    }
+
+    @Test
+    fun `a handle that names two tasks tells the agent what a comment id tells it`() {
+        val outcome = TodoOutcome.of(listOf(twinHandle), open = listOf(twin, otherTwin), sent = setOf(twinHandle))
+
+        assertEquals(listOf(TaskCompletion.ambiguous(twinHandle, 2)), outcome.problems)
+        assertTrue(outcome.problems.single().contains(TaskCompletion.AMBIGUOUS))
     }
 
     @Test

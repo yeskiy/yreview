@@ -8,8 +8,20 @@ import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.store.id
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 private const val COMMIT = "0123456789abcdef0123456789abcdef01234567"
+
+/** How many spans the cost guard builds. A file can hold one comment for every line. */
+private const val MANY_SPANS = 100_000
+
+/**
+ * How long the merge of [MANY_SPANS] spans may take.
+ *
+ * The bound is far above the real time of one pass, so a slow machine still passes. A
+ * merge that builds a new list for each step needs several times longer than this.
+ */
+private const val MERGE_LIMIT_MILLIS = 2_000L
 
 class CommentIndexTest {
 
@@ -131,6 +143,18 @@ class CommentIndexTest {
     @Test
     fun `a comment without a range covers no line`() {
         assertEquals(emptyList(), CommentIndex.lineSpans(listOf(stored("a.kt", null, "no anchor")), "a.kt"))
+    }
+
+    @Test
+    fun `a file with a mark on many lines merges in one pass`() {
+        val many = (0 until MANY_SPANS).map { stored("a.kt", it * 3 + 1, "note", endLine = it * 3 + 1) }
+
+        val started = System.nanoTime()
+        val spans = CommentIndex.lineSpans(many, "a.kt")
+        val took = (System.nanoTime() - started) / 1_000_000
+
+        assertEquals(MANY_SPANS, spans.size)
+        assertTrue(took < MERGE_LIMIT_MILLIS, "the merge of $MANY_SPANS spans took $took ms")
     }
 
     @Test

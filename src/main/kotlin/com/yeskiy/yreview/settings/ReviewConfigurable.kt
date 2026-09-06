@@ -327,23 +327,27 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         shown = spec.id
         command.text = typed.getOrPut(spec.id) { settings().command(spec.id) }
         refreshHelp()
-        appended.text = AgentLaunch.appendedText(
-            spec.id,
-            javaPath() ?: AgentLaunch.JAVA_PLACE,
-            serverPath() ?: AgentLaunch.SERVER_PLACE,
-        )
         tools.text = AgentMcp.help(spec)
         showAdd(spec)
     }
 
     /**
-     * The two lines that read this machine. A late answer of the search lands here as
+     * The three lines that read this machine. A late answer of the search lands here as
      * well, and the command field keeps what the user typed.
+     *
+     * The preview box names the launcher that a press on Add really starts, so the box and
+     * the button never disagree about the program.
      */
     private fun refreshHelp() {
         val spec = selectedAgent()
         agentHelp.text = AgentRows.row(spec, AgentScan.getInstance().latest().of(spec.id).found)
         commandHelp.text = commandHelp(spec)
+        appended.text = AgentLaunch.appendedText(
+            spec.id,
+            javaPath() ?: AgentLaunch.JAVA_PLACE,
+            serverPath() ?: AgentLaunch.SERVER_PLACE,
+            addProgram(spec),
+        )
     }
 
     private fun selectedAgent(): AgentSpec = agents.selectedItem as? AgentSpec ?: AgentCatalog.of(AgentCatalog.DEFAULT)

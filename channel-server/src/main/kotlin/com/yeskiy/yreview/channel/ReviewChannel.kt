@@ -42,6 +42,13 @@ class ReviewChannel(private val sink: ResolveSink) {
 
     private val lock = Any()
 
+    /**
+     * The open session, or null while none stands.
+     *
+     * A coroutine can run [connect], [close] and [push] on three different threads, so a
+     * plain field would let one thread read a session that another thread already closed.
+     */
+    @Volatile
     private var session: ServerSession? = null
 
     private val server = Server(

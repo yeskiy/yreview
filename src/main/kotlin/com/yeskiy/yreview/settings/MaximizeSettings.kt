@@ -73,6 +73,21 @@ class MaximizeSettings : PersistentStateComponent<MaximizeSettings.State> {
         if (current.full) hide(strip)
     }
 
+    /**
+     * Puts the size of the IDE back before the plugin leaves the running IDE.
+     *
+     * The key belongs to the whole IDE, so a user who turns this plugin off, or removes
+     * it, must not keep a layout rule that no plugin explains any more.
+     *
+     * The switch itself stays where the user left it, and so does the earlier size of the
+     * user. A load of the plugin again therefore writes the size of the switch once more,
+     * and a later move of the switch to off still brings the size of the user back.
+     */
+    fun unload(strip: EditorStrip = RegistryStrip) {
+        if (!current.full) return
+        if (current.previous.isEmpty()) strip.reset() else strip.set(current.previous)
+    }
+
     private fun hide(strip: EditorStrip) {
         if (strip.size() != EditorStrip.NONE) strip.set(EditorStrip.NONE)
     }

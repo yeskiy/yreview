@@ -104,19 +104,40 @@ data class ClosePlan(
  * window handed out and the scan no longer finds closed, because the agent removed that
  * line. An identifier that this window never handed out belongs to another window, so it
  * proves nothing and it reaches neither list.
+ *
+ * A short handle can name several TODO lines. Such a handle proves nothing about any one
+ * of them, so it closes nothing and it reaches [problems] instead. The comment path says
+ * the same sentence for the same case.
  */
-data class TodoOutcome(val closed: List<String>, val stillOpen: List<String>) {
+data class TodoOutcome(
+    val closed: List<String>,
+    val stillOpen: List<String>,
+    val problems: List<String> = emptyList(),
+) {
 
     companion object {
 
         fun of(given: List<String>, open: List<String>, sent: Set<String>): TodoOutcome {
-            val (stillOpen, gone) = given.partition { namesOne(it, open) }
-            return TodoOutcome(gone.filter { TaskHandles.of(it) in sent }, stillOpen)
+            val matched = given.map { it to matchOf(it, open) }
+            return TodoOutcome(
+                closed = matched.filter { it.second is HandleMatch.None && TaskHandles.of(it.first) in sent }
+                    .map { it.first },
+                stillOpen = matched.filter { it.second is HandleMatch.One }.map { it.first },
+                problems = matched.mapNotNull { (text, match) ->
+                    (match as? HandleMatch.Many)?.let { TaskCompletion.ambiguous(text, it.count) }
+                },
+            )
         }
 
-        private fun namesOne(text: String, ids: List<String>): Boolean {
-            val key = TaskHandles.keyOf(text) ?: return false
-            return TaskHandles.match(key, ids) is HandleMatch.One
+        /**
+         * What the scan of this project holds for one reported value.
+         *
+         * A value that the plugin could never have written names nothing, and so does a
+         * value whose line the scan no longer finds. Both answer [HandleMatch.None].
+         */
+        private fun matchOf(text: String, ids: List<String>): HandleMatch {
+            val key = TaskHandles.keyOf(text) ?: return HandleMatch.None
+            return TaskHandles.match(key, ids)
         }
     }
 }
@@ -164,6 +185,7 @@ class TaskCompletion(private val project: Project) {
             closed = outcomes.count { it is CommentOutcome.Closed } + todos.closed.size,
             problems = outcomes.filterIsInstance<CommentOutcome.Problem>().map { it.text } +
                 todos.stillOpen.map { "The line of the task $it is still in the source." } +
+                todos.problems +
                 listOfNotNull(plan.deferralProblem, plan.overflowProblem),
         )
     }
@@ -195,7 +217,7 @@ class TaskCompletion(private val project: Project) {
         val key = TaskHandles.keyOf(given) ?: return CommentOutcome.Problem("$UNKNOWN $given.")
         return when (val match = TaskHandles.match(key, ids)) {
             is HandleMatch.None -> CommentOutcome.Problem("$UNKNOWN $given.")
-            is HandleMatch.Many -> CommentOutcome.Problem("The id $given names ${match.count} tasks. $AMBIGUOUS")
+            is HandleMatch.Many -> CommentOutcome.Problem(ambiguous(given, match.count))
             is HandleMatch.One -> resolveOne(service, found.first { it.second.id == match.id }, given)
         }
     }
@@ -234,6 +256,14 @@ class TaskCompletion(private val project: Project) {
         const val UNKNOWN = "The IDE holds no open task with the id"
 
         const val AMBIGUOUS = "Send the whole 40 character id instead."
+
+        /**
+         * What an agent reads when one reported value names more than one task.
+         *
+         * A comment value and a TODO value both reach this sentence, so the agent reads
+         * one rule for both kinds.
+         */
+        fun ambiguous(given: String, count: Int): String = "The id $given names $count tasks. $AMBIGUOUS"
 
         fun getInstance(project: Project): TaskCompletion = project.service()
     }

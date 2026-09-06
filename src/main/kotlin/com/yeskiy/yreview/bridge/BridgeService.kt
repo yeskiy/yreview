@@ -32,6 +32,17 @@ class BridgeService(private val project: Project) : Disposable {
 
     private var discovery: DiscoveryFile? = null
 
+    /**
+     * True after the project closed.
+     *
+     * A start runs on a pooled thread, so a start that a caller queued before the close can
+     * run after it. Such a start would bind a port and write a file that names a project
+     * which is gone, and both would stay until the IDE exits. This flag stops it. The flag
+     * never goes back, because a project service serves one project only.
+     */
+    @Volatile
+    private var disposed = false
+
     /** Where the server listens now. Null means that no server runs. */
     @Volatile
     var address: BridgeAddress? = null
@@ -41,11 +52,13 @@ class BridgeService(private val project: Project) : Disposable {
      * Starts the server once. Returns where it listens, or null when it cannot start.
      *
      * The switch of the settings page comes first, so a closed channel opens no port at
-     * all. Every caller of the bridge reaches the port through this one method.
+     * all. Every caller of the bridge reaches the port through this one method. A project
+     * that already closed opens nothing at all.
      */
     fun start(): BridgeAddress? {
         if (!ReviewSettings.getInstance(project).channel) return null
         synchronized(lock) {
+            if (disposed) return null
             address?.let { return it }
             val basePath = project.basePath ?: return null
             val started = BridgeServer(::resolveIds)
@@ -119,7 +132,18 @@ class BridgeService(private val project: Project) : Disposable {
         }
     }
 
-    override fun dispose() = stop()
+    /**
+     * The close of the project gives the port back for good.
+     *
+     * The flag and the stop stand under one lock, so no start can slip between them. A
+     * start that waits for the lock reads the flag and opens nothing.
+     */
+    override fun dispose() {
+        synchronized(lock) {
+            disposed = true
+            stop()
+        }
+    }
 
     /**
      * Pushes the given tasks of one repository to the session named by [target], or to

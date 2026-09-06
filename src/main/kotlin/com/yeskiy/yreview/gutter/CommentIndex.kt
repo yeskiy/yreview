@@ -12,17 +12,22 @@ object CommentIndex {
     /**
      * The line spans that the comments of one file cover. Two spans that touch or overlap become
      * one span, so no line ever carries two marks. Line numbers are 1-based.
+     *
+     * The merge keeps one list and writes the last entry again, so the cost grows with the
+     * number of spans and not with the square of it. A file can hold one comment for every
+     * line of it, and a new list for each step would copy the whole answer every time.
      */
     fun lineSpans(comments: List<StoredComment>, path: String): List<IntRange> =
         comments.mapNotNull { spanOf(it, path) }
             .sortedWith(compareBy({ it.first }, { it.last }))
-            .fold(emptyList<IntRange>()) { merged, span ->
+            .fold(mutableListOf<IntRange>()) { merged, span ->
                 val open = merged.lastOrNull()
                 if (open != null && span.first <= open.last + 1) {
-                    merged.dropLast(1) + listOf(IntRange(open.first, maxOf(open.last, span.last)))
+                    merged[merged.lastIndex] = IntRange(open.first, maxOf(open.last, span.last))
                 } else {
-                    merged + listOf(span)
+                    merged.add(span)
                 }
+                merged
             }
 
     /**

@@ -64,14 +64,20 @@ object AgentLaunch {
      * A stored route appends nothing at a session start. It shows the command that a press
      * on Add runs, or the document that a press on Add writes. The page passes the paths
      * of this machine, and a placeholder stands where a path is not known yet.
+     *
+     * [program] is the launcher that a press on Add really starts. The page reads it from
+     * [AgentMcp.program], which can answer the path that the search found. A page that
+     * printed the bare name instead would show one command and run another.
      */
     fun appendedText(
         id: AgentId,
         javaPath: String = JAVA_PLACE,
         serverPath: String = SERVER_PLACE,
+        program: String? = null,
     ): String {
         val agent = AgentCatalog.of(id)
-        AgentMcp.addCommand(agent, javaPath, serverPath)?.let { return it.joinToString(" ") }
+        AgentMcp.addCommand(agent, javaPath, serverPath, program ?: agent.defaultCommand)
+            ?.let { return it.joinToString(" ") }
         AgentMcp.userFile(agent, javaPath, serverPath)?.let { return it }
         val channel = if (id == AgentId.CLAUDE) listOf(CHANNEL_FLAG, CHANNEL_VALUE) else emptyList()
         return (AgentMcp.arguments(agent, javaPath, serverPath, FILE_PLACE) + channel)

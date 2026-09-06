@@ -13,6 +13,9 @@ class AgentLaunchTest {
 
     private val jar = "C:\\Users\\dev\\plugins\\y-review\\channel\\y-review-channel.jar"
 
+    /** The launcher of an agent, as the search of the plugin finds it on this machine. */
+    private val found = "C:\\Users\\dev\\AppData\\Local\\Programs\\agy\\agy.exe"
+
     private val claude = AgentCatalog.of(AgentId.CLAUDE)
 
     private val opencode = AgentCatalog.of(AgentId.OPENCODE)
@@ -135,6 +138,29 @@ class AgentLaunchTest {
 
         assertTrue(text.contains("mcpServers"), text)
         assertTrue(text.contains("com.yeskiy.yreview.channel.MainKt"), text)
+    }
+
+    @Test
+    fun `the settings page prints the launcher that a press on add really starts`() {
+        // The button runs the path that the agent search found, so the box must print it.
+        val spec = AgentCatalog.of(AgentId.ANTIGRAVITY)
+        val program = AgentMcp.program(spec, typed = "", found = found)
+
+        assertEquals(
+            "$found mcp add y-review -- $java -cp $jar com.yeskiy.yreview.channel.MainKt",
+            AgentLaunch.appendedText(AgentId.ANTIGRAVITY, java, jar, program),
+        )
+    }
+
+    @Test
+    fun `the settings page prints the whole command that a press on add runs`() {
+        val spec = AgentCatalog.of(AgentId.ANTIGRAVITY)
+        val program = AgentMcp.program(spec, typed = "", found = found)
+
+        assertEquals(
+            AgentMcp.addCommand(spec, java, jar, program).orEmpty().joinToString(" "),
+            AgentLaunch.appendedText(AgentId.ANTIGRAVITY, java, jar, program),
+        )
     }
 
     @Test

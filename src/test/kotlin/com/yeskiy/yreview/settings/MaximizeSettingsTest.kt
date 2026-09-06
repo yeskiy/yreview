@@ -150,6 +150,63 @@ class MaximizeSettingsTest {
     }
 
     @Test
+    fun `an unload writes the value of the user again`() {
+        val strip = FakeStrip("45", changed = true)
+        val settings = settings()
+        settings.switch(true, strip)
+
+        settings.unload(strip)
+
+        assertEquals(listOf("0", "45"), strip.writes)
+    }
+
+    @Test
+    fun `an unload drops the value of the plugin when the user held no value`() {
+        val strip = FakeStrip()
+        val settings = settings()
+        settings.switch(true, strip)
+
+        settings.unload(strip)
+
+        assertEquals(1, strip.resets)
+        assertEquals(DEFAULT_SIZE, strip.size())
+    }
+
+    @Test
+    fun `an unload with the switch off writes nothing`() {
+        val strip = FakeStrip()
+
+        settings().unload(strip)
+
+        assertEquals(emptyList(), strip.writes)
+        assertEquals(0, strip.resets)
+    }
+
+    @Test
+    fun `a load after an unload writes the size of the switch again`() {
+        val settings = settings()
+        settings.switch(true, FakeStrip("45", changed = true))
+        settings.unload(FakeStrip("0", changed = true))
+
+        val strip = FakeStrip("45", changed = true)
+        settings.start(strip)
+
+        assertEquals(listOf("0"), strip.writes)
+    }
+
+    @Test
+    fun `an unload keeps the value of the user for the next move of the switch`() {
+        val settings = settings()
+        settings.switch(true, FakeStrip("45", changed = true))
+        settings.unload(FakeStrip("0", changed = true))
+
+        val strip = FakeStrip("0", changed = true)
+        settings.switch(false, strip)
+
+        assertEquals(listOf("45"), strip.writes)
+    }
+
+    @Test
     fun `a start keeps the value the user held before the switch`() {
         val settings = settings()
         settings.switch(true, FakeStrip("45", changed = true))

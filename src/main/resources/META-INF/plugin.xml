@@ -89,6 +89,11 @@
                          instance="com.yeskiy.yreview.settings.ReviewConfigurable" />
   </extensions>
 
+  <applicationListeners>
+    <listener class="com.yeskiy.yreview.settings.MaximizeUnload"
+              topic="com.intellij.ide.plugins.DynamicPluginListener" />
+  </applicationListeners>
+
   <actions>
     <action id="com.yeskiy.yreview.CopyDiagnostics"
             class="com.yeskiy.yreview.diagnostic.CopyDiagnosticsAction"

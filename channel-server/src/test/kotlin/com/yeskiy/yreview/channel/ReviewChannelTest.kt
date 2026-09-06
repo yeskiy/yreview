@@ -11,6 +11,7 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import java.lang.reflect.Modifier
 import java.util.Collections
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -352,5 +353,25 @@ class ReviewChannelTest {
     @Test
     fun `the instructions name the file that holds the ids without a push`() {
         assertContains(ReviewChannel.INSTRUCTIONS, "tasks.json")
+    }
+
+    @Test
+    fun `the field that holds the session travels safely between threads`() {
+        // A coroutine can run connect, close and push on three different threads. A plain
+        // field would let one thread read a session that another thread already closed.
+        val field = ReviewChannel::class.java.getDeclaredField("session")
+
+        assertTrue(Modifier.isVolatile(field.modifiers), "the session field must be volatile")
+    }
+
+    @Test
+    fun `a push after a close reaches no transport`() = runBlocking<Unit> {
+        setUp()
+        val channel = this@ReviewChannelTest.channel!!
+        channel.close()
+
+        channel.push(batch)
+
+        assertEquals(emptyList(), notifications.toList())
     }
 }
