@@ -30,6 +30,8 @@ import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoreRoot
 import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.store.ideGitRunner
+import com.yeskiy.yreview.tasks.HandleMatch
+import com.yeskiy.yreview.tasks.TaskHandles
 import git4idea.repo.GitRepositoryManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -80,7 +82,11 @@ class ReviewToolset : McpToolset {
                     if (resolved) repo.book.closed(commit, refs) else repo.book.open(commit, refs)
                 }.map { it to repo.store.kind }
             }
-            ReviewPayloads.list(rows.mapNotNull { (stored, kind) -> ReviewPayloads.rowOf(stored, resolved, kind) })
+            ReviewPayloads.list(
+                rows.mapNotNull { (stored, kind) ->
+                    ReviewPayloads.rowOf(stored, resolved, kind, TaskHandles.of(stored.id))
+                }
+            )
         }
     }
 
@@ -104,13 +110,17 @@ class ReviewToolset : McpToolset {
     ): String {
         val project = coroutineContext.project
         return withContext(Dispatchers.IO) {
-            val hit = locate(project, id)
-                ?: return@withContext ReviewPayloads.error("No review comment has the id $id.")
-            try {
-                hit.repo.book.resolve(hit.stored)
-                ReviewPayloads.resolved(hit.stored.id)
-            } catch (failure: NotesWriteException) {
-                ReviewPayloads.error(failure.message ?: "The resolution was not written.")
+            when (val found = locate(project, id)) {
+                is Found.None -> ReviewPayloads.error("No review comment has the id $id.")
+                is Found.Many -> ReviewPayloads.error(
+                    "The id $id names ${found.count} comments. Call review_list_comments and use a full id."
+                )
+                is Found.One -> try {
+                    found.hit.repo.book.resolve(found.hit.stored)
+                    ReviewPayloads.resolved(id)
+                } catch (failure: NotesWriteException) {
+                    ReviewPayloads.error(failure.message ?: "The resolution was not written.")
+                }
             }
         }
     }
@@ -167,7 +177,7 @@ class ReviewToolset : McpToolset {
             try {
                 val result = service.addComment(anchor, ref, Range(startLine = startLine, endLine = endLine), text)
                 ReviewPayloads.added(
-                    result.stored.id,
+                    TaskHandles.of(result.stored.id),
                     anchor.path,
                     anchor.key,
                     ReviewArguments.isShared(anchor.kind, result.stored.ref, result.shareError),
@@ -199,7 +209,7 @@ class ReviewToolset : McpToolset {
     ): String {
         val project = coroutineContext.project
         val prepared = withContext(Dispatchers.IO) {
-            val hit = locate(project, id) ?: return@withContext null
+            val hit = (locate(project, id) as? Found.One)?.hit ?: return@withContext null
             val location = hit.stored.comment.location ?: return@withContext null
             val root = hit.repo.store.root
             val file = root.findFileByRelativePath(location.path)
@@ -211,7 +221,7 @@ class ReviewToolset : McpToolset {
                 if (atHead || hit.repo.store.kind != StoreKind.GIT) null
                 else revisionText(project, root, location.commit, location.path)
             Prepared(
-                id = hit.stored.id,
+                id = id,
                 path = location.path,
                 line = (location.range?.startLine ?: 1).coerceAtLeast(1),
                 revision = location.commit,
@@ -285,10 +295,32 @@ class ReviewToolset : McpToolset {
         }
     }
 
-    private fun locate(project: Project, id: String): Hit? =
-        reposOf(project).firstNotNullOfOrNull { repo ->
-            repo.book.find(id)?.let { Hit(repo, it) }
+    /** What one search of the stores found for the value an agent sent. */
+    private sealed interface Found {
+
+        data class One(val hit: Hit) : Found
+
+        data object None : Found
+
+        data class Many(val count: Int) : Found
+    }
+
+    /**
+     * Finds the record that [given] names, in the long form or in the short form.
+     *
+     * The method reads every record of every store once, then it matches in memory. A short
+     * handle names the first characters of an identifier, so two records can answer it. The
+     * caller then asks the agent for a full value.
+     */
+    private fun locate(project: Project, given: String): Found {
+        val key = TaskHandles.keyOf(given) ?: return Found.None
+        val found = reposOf(project).flatMap { repo -> repo.book.tasks().map { repo to it } }
+        return when (val match = TaskHandles.match(key, found.map { it.second.id })) {
+            is HandleMatch.None -> Found.None
+            is HandleMatch.Many -> Found.Many(match.count)
+            is HandleMatch.One -> found.first { it.second.id == match.id }.let { Found.One(Hit(it.first, it.second)) }
         }
+    }
 
     /** Reads the file at one commit. Returns null when the revision or the path is not usable. */
     private fun revisionText(project: Project, root: VirtualFile, commit: String, path: String): String? {

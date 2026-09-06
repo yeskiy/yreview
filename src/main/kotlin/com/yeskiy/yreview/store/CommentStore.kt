@@ -81,6 +81,23 @@ class CommentBook(
             list(commit, refs).firstOrNull { it.id == id }
         }
 
+    /**
+     * Every record that can be a task, over every commit that carries a note.
+     *
+     * A resolve record points at another record and can never be a task of its own, so it
+     * stays out. The caller matches a short handle against this list, and a record that no
+     * agent can hold would only make a false match.
+     *
+     * The walk reads through the quiet door, the way [find] does. It searches, and it never
+     * gives the bytes that a write puts back, so a note the plugin cannot read costs the
+     * caller a match and never a record.
+     *
+     * This walk costs one git process for each ref, and one more for each note. A caller
+     * that reads several identifiers therefore calls this once and matches in memory.
+     */
+    fun tasks(refs: List<String> = NoteRefs.ALL): List<StoredComment> =
+        commits(refs).flatMap { commit -> list(commit, refs).filter { it.comment.original == null } }
+
     /** The records with these identifiers, searched over every commit that carries a note. */
     fun findAll(ids: Set<String>, refs: List<String> = NoteRefs.ALL): List<StoredComment> =
         commits(refs).flatMap { commit -> list(commit, refs).filter { it.id in ids } }

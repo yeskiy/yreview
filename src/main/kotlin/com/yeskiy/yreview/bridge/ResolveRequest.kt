@@ -43,7 +43,8 @@ object ResolveRequest {
                 ?: return ResolveParse.Bad("Every id must be a string.")
             if (!isId(text)) {
                 return ResolveParse.Bad(
-                    "An id must be a comment id of 40 lowercase hexadecimal characters, " +
+                    "An id must be a short handle in the form y followed by letters and digits, " +
+                        "a comment id of 40 lowercase hexadecimal characters, " +
                         "or a todo id in the form todo-<40 hexadecimal characters>-<line>."
                 )
             }

@@ -60,11 +60,15 @@ object ReviewPayloads {
         explicitNulls = false
     }
 
-    /** [kind] is the store the record comes from, and it decides whether the record is shared. */
-    fun rowOf(stored: StoredComment, resolved: Boolean, kind: StoreKind): CommentRow? {
+    /**
+     * [kind] is the store the record comes from, and it decides whether the record is shared.
+     * [handle] is the short name the agent reads and sends back. The long value of the store
+     * never leaves the IDE.
+     */
+    fun rowOf(stored: StoredComment, resolved: Boolean, kind: StoreKind, handle: String): CommentRow? {
         val location = stored.comment.location ?: return null
         return CommentRow(
-            id = stored.id,
+            id = handle,
             path = location.path,
             startLine = location.range?.startLine ?: 0,
             startColumn = location.range?.startColumnOrNull(),

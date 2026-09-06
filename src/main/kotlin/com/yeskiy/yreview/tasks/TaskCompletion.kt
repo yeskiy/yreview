@@ -74,9 +74,14 @@ data class ClosePlan(
         /** The bound of a route that a person drives. A user who checks 250 rows asked for 250. */
         const val NO_CAP = Int.MAX_VALUE
 
+        /**
+         * Every list of the plan holds the text the agent sent, in the long form or in the
+         * short form. [TaskHandles.namesTodo] reads both, and it touches no git and no
+         * index, so this call is safe while the IDE builds its index.
+         */
         fun of(ids: List<String>, indexReady: Boolean, limit: Int = ResolveRequest.MAX_IDS): ClosePlan {
             val known = ids.distinct()
-            val (todos, comments) = known.take(limit).partition { TaskIds.isTodo(it) }
+            val (todos, comments) = known.take(limit).partition(TaskHandles::namesTodo)
             return ClosePlan(
                 comments = comments,
                 todos = if (indexReady) todos else emptyList(),
@@ -129,35 +134,76 @@ class TaskCompletion(private val project: Project) {
         )
     }
 
-    private fun closeComments(ids: List<String>): List<CommentOutcome> {
-        if (ids.isEmpty()) return emptyList()
+    /**
+     * Closes the comments of one batch.
+     *
+     * The method reads every record of every store once, then it matches every reported
+     * value in memory. One walk therefore serves the whole batch. A walk for each value
+     * would run one git process for each note, over and over.
+     */
+    private fun closeComments(given: List<String>): List<CommentOutcome> {
+        if (given.isEmpty()) return emptyList()
         val service = ReviewService.getInstance(project)
-        val roots = service.storeRoots().map { it.root }
-        return ids.map { id -> outcomeOf(service, roots, id) }
+        val found = service.storeRoots().flatMap { store ->
+            service.bookForRoot(store.root).tasks().map { store.root to it }
+        }
+        val ids = found.map { it.second.id }
+        return given.map { text -> outcomeOf(service, found, ids, text) }
     }
 
-    private fun outcomeOf(service: ReviewService, roots: List<VirtualFile>, id: String): CommentOutcome {
-        val hit = roots.firstNotNullOfOrNull { root -> service.bookForRoot(root).find(id)?.let { root to it } }
-            ?: return CommentOutcome.Problem("The IDE holds no comment with the id $id.")
+    /** [given] is the text the agent sent. Every sentence names it, and never the long value. */
+    private fun outcomeOf(
+        service: ReviewService,
+        found: List<Pair<VirtualFile, StoredComment>>,
+        ids: List<String>,
+        given: String,
+    ): CommentOutcome {
+        val key = TaskHandles.keyOf(given) ?: return CommentOutcome.Problem("$UNKNOWN $given.")
+        return when (val match = TaskHandles.match(key, ids)) {
+            is HandleMatch.None -> CommentOutcome.Problem("$UNKNOWN $given.")
+            is HandleMatch.Many -> CommentOutcome.Problem("The id $given names ${match.count} tasks. $AMBIGUOUS")
+            is HandleMatch.One -> resolveOne(service, found.first { it.second.id == match.id }, given)
+        }
+    }
+
+    private fun resolveOne(
+        service: ReviewService,
+        hit: Pair<VirtualFile, StoredComment>,
+        given: String,
+    ): CommentOutcome {
         if (isClosed(service.bookForRoot(hit.first), hit.second)) return CommentOutcome.Already
         return try {
             service.resolveComment(hit.first, hit.second)
             CommentOutcome.Closed
         } catch (failure: NotesWriteException) {
-            CommentOutcome.Problem("The IDE could not resolve $id. ${failure.message}")
+            CommentOutcome.Problem("The IDE could not resolve $given. ${failure.message}")
         }
     }
 
     private fun isClosed(book: CommentBook, stored: StoredComment): Boolean =
         book.closed(stored.commit).any { it.id == stored.id }
 
-    private fun openTodoIds(ids: List<String>): List<String> {
-        if (ids.isEmpty()) return emptyList()
-        val open = TaskScan.openTodoIds(project)
-        return ids.filter { it in open }
+    /**
+     * The TODO items of the batch that are still in the source.
+     *
+     * The scan reads the whole project once, and the match then runs in memory. A value
+     * that names no open TODO line simply closed, because the agent removed that line.
+     */
+    private fun openTodoIds(given: List<String>): List<String> {
+        if (given.isEmpty()) return emptyList()
+        val open = TaskScan.openTodoIds(project).toList()
+        return given.filter { text ->
+            val key = TaskHandles.keyOf(text)
+            key != null && TaskHandles.match(key, open) is HandleMatch.One
+        }
     }
 
     companion object {
+
+        const val UNKNOWN = "The IDE holds no open task with the id"
+
+        const val AMBIGUOUS = "Send the whole 40 character id instead."
+
         fun getInstance(project: Project): TaskCompletion = project.service()
     }
 }

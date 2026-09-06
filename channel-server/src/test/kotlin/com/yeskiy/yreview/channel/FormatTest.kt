@@ -29,7 +29,7 @@ class FormatTest {
     @Test
     fun `names the characters of a part of a line`() {
         assertEquals(
-            "[c3f9a12] a.kt:88:4-94:9 @HEAD\ntext",
+            "[c3f9a12aabbccddeeff00112233445566778899a] a.kt:88:4-94:9 @HEAD\ntext",
             Format.batchContent(
                 batchOf(
                     listOf(
@@ -41,18 +41,28 @@ class FormatTest {
     }
 
     @Test
-    fun `puts the short id, the path, the range, and the revision on the first line`() {
+    fun `puts the id, the path, the range, and the revision on the first line`() {
         assertEquals(
-            "[c3f9a12] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
+            "[c3f9a12aabbccddeeff00112233445566778899a] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
                 "This branch never runs when the input is empty. Add the guard before the loop.",
             Format.batchContent(batchOf(listOf(commentOf()))),
         )
     }
 
     @Test
+    fun `prints a short handle whole`() {
+        assertEquals(
+            "[yd8pmsq91] a.kt:1-1 @HEAD\ntext",
+            Format.batchContent(
+                batchOf(listOf(commentOf(id = "yd8pmsq91", path = "a.kt", startLine = 1, endLine = 1, text = "text"))),
+            ),
+        )
+    }
+
+    @Test
     fun `renders the revision as HEAD when it equals the batch commit`() {
         assertEquals(
-            "[c3f9a12] a.kt:1-1 @HEAD\ntext",
+            "[c3f9a12aabbccddeeff00112233445566778899a] a.kt:1-1 @HEAD\ntext",
             Format.batchContent(
                 batchOf(listOf(commentOf(path = "a.kt", startLine = 1, endLine = 1, revision = commit, text = "text"))),
             ),
@@ -62,7 +72,7 @@ class FormatTest {
     @Test
     fun `renders a short revision for an older commit`() {
         assertEquals(
-            "[a7710de] src/main/kotlin/Lexer.kt:12-12 @4f2c8b1\n" +
+            "[a7710de0011223344556677889900aabbccddeef] src/main/kotlin/Lexer.kt:12-12 @4f2c8b1\n" +
                 "This was already wrong before the change. Fix it in the same pass.",
             Format.batchContent(
                 batchOf(
@@ -84,7 +94,7 @@ class FormatTest {
     @Test
     fun `marks a comment taken from the left side of the diff`() {
         assertEquals(
-            "[a7710de] src/main/kotlin/Lexer.kt:12-12 @4f2c8b1 (left side of the diff)\n" +
+            "[a7710de0011223344556677889900aabbccddeef] src/main/kotlin/Lexer.kt:12-12 @4f2c8b1 (left side of the diff)\n" +
                 "This was already wrong before the change. Fix it in the same pass.",
             Format.batchContent(
                 batchOf(
@@ -107,7 +117,7 @@ class FormatTest {
     @Test
     fun `does not mark a comment taken from the right side of the diff`() {
         assertEquals(
-            "[a7710de] a.kt:3-3 @HEAD\ntext",
+            "[a7710de0011223344556677889900aabbccddeef] a.kt:3-3 @HEAD\ntext",
             Format.batchContent(
                 batchOf(
                     listOf(
@@ -128,7 +138,7 @@ class FormatTest {
     @Test
     fun `separates two entries with one blank line`() {
         assertEquals(
-            "[aaaaaaa] a.kt:1-2 @HEAD\nfirst\n\n[bbbbbbb] b.kt:3-4 @HEAD\nsecond",
+            "[aaaaaaa1] a.kt:1-2 @HEAD\nfirst\n\n[bbbbbbb2] b.kt:3-4 @HEAD\nsecond",
             Format.batchContent(
                 batchOf(
                     listOf(
@@ -143,7 +153,7 @@ class FormatTest {
     @Test
     fun `keeps a comment text that spans several lines`() {
         assertEquals(
-            "[aaaaaaa] a.kt:1-1 @HEAD\nfirst line\nsecond line",
+            "[aaaaaaa1] a.kt:1-1 @HEAD\nfirst line\nsecond line",
             Format.batchContent(
                 batchOf(
                     listOf(
@@ -163,7 +173,7 @@ class FormatTest {
     @Test
     fun `removes leading and trailing blank space from the comment text`() {
         assertEquals(
-            "[aaaaaaa] a.kt:1-1 @HEAD\npadded",
+            "[aaaaaaa1] a.kt:1-1 @HEAD\npadded",
             Format.batchContent(
                 batchOf(
                     listOf(

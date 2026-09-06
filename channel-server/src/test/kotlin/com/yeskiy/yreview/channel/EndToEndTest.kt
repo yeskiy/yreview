@@ -75,7 +75,7 @@ class EndToEndTest {
 
         assertEquals("notifications/claude/channel", notifications[0].method)
         assertEquals(
-            "[c3f9a12] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
+            "[c3f9a12aabbccddeeff00112233445566778899a] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
                 "This branch never runs when the input is empty. Add the guard before the loop.",
             params["content"]!!.jsonPrimitive.content,
         )

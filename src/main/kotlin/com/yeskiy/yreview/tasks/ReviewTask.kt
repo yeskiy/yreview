@@ -63,23 +63,40 @@ object TaskIds {
 
     const val TODO_PREFIX = "todo-"
 
+    /**
+     * The first character of every short handle.
+     *
+     * The letter is not a hexadecimal character, so a handle can never look like a comment
+     * identifier. A TODO identifier starts with [TODO_PREFIX], so a handle can never look
+     * like one of those either. The two spaces stay apart with no rule about length.
+     */
+    const val HANDLE_PREFIX = "y"
+
     private val SAFE = Regex("^[A-Za-z0-9_-]{1,200}$")
 
     private val COMMENT = Regex("^[0-9a-f]{40}$")
 
     private val TODO = Regex("^todo-[0-9a-f]{40}-[0-9]{1,7}$")
 
+    private val HANDLE = Regex("^y[a-z0-9]{2,32}$")
+
     /** True when the channel accepts this identifier. The rule comes from the schema. */
     fun isSafe(id: String): Boolean = SAFE.matches(id)
+
+    /** True when this is a value the store holds: a comment identifier or a TODO identifier. */
+    fun isLong(id: String): Boolean = COMMENT.matches(id) || TODO.matches(id)
+
+    /** True when this is a short handle that [TaskHandles] derived. */
+    fun isHandle(id: String): Boolean = HANDLE.matches(id)
 
     /**
      * True when the plugin itself could have made this identifier.
      *
      * An identifier that comes back from an agent goes through this test first. The test
-     * refuses a git option and a path, because both start with a character no identifier
-     * of the plugin starts with.
+     * refuses a git option and a path, because both hold a character that no identifier of
+     * the plugin holds.
      */
-    fun isKnown(id: String): Boolean = COMMENT.matches(id) || TODO.matches(id)
+    fun isKnown(id: String): Boolean = isLong(id) || isHandle(id)
 
     fun isTodo(id: String): Boolean = id.startsWith(TODO_PREFIX)
 

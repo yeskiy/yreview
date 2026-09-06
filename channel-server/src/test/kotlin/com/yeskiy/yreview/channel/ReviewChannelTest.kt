@@ -146,10 +146,10 @@ class ReviewChannelTest {
         push(batch)
 
         assertEquals(
-            "[c3f9a12] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
+            "[c3f9a12aabbccddeeff00112233445566778899a] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
                 "This branch never runs when the input is empty. Add the guard before the loop.\n" +
                 "\n" +
-                "[a7710de] src/main/kotlin/Lexer.kt:12-12 @1111111 (left side of the diff)\n" +
+                "[a7710de0011223344556677889900aabbccddeef] src/main/kotlin/Lexer.kt:12-12 @1111111 (left side of the diff)\n" +
                 "This was already wrong before the change. Fix it in the same pass.",
             paramsOf(notifications[0])["content"]!!.jsonPrimitive.content,
         )

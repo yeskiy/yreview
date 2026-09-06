@@ -23,6 +23,26 @@ class ResolveRequestTest {
     }
 
     @Test
+    fun `reads a short handle`() {
+        assertEquals(listOf("yd8pmsq91"), ids("""{"ids":["yd8pmsq91"]}"""))
+    }
+
+    @Test
+    fun `reads a handle beside an identifier of an older build`() {
+        assertEquals(listOf("yd8pmsq91", one), ids("""{"ids":["yd8pmsq91","$one"]}"""))
+    }
+
+    @Test
+    fun `refuses a short value that carries no prefix`() {
+        assertTrue(reason("""{"ids":["d8pmsq91"]}""").isNotEmpty())
+    }
+
+    @Test
+    fun `names the handle form in the reason`() {
+        assertTrue(reason("""{"ids":["../../etc/passwd"]}""").contains("handle"))
+    }
+
+    @Test
     fun `reads one id`() {
         assertEquals(listOf(one), ids("""{"ids":["$one"]}"""))
     }

@@ -13,6 +13,40 @@ class CommentStoreLogicTest {
         CommentBook(NotesGateway(repo.git), author = "reviewer@example.com", clock = { now })
 
     @Test
+    fun `lists every record that can be a task`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            val first = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "one")
+            val second = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 2, endLine = 2), "two")
+
+            assertEquals(setOf(first.id, second.id), book(repo).tasks().map { it.id }.toSet())
+        }
+    }
+
+    @Test
+    fun `leaves the resolve records out of the task list`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            val stored = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "one")
+            book(repo).resolve(stored)
+
+            assertEquals(listOf(stored.id), book(repo).tasks().map { it.id })
+            assertEquals(2, book(repo).list(head).size)
+        }
+    }
+
+    @Test
+    fun `a task keeps its place after a resolve`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            val stored = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "one")
+            book(repo).resolve(stored)
+
+            assertEquals(head, book(repo).tasks().single().commit)
+        }
+    }
+
+    @Test
     fun `writes a comment that reads back with its anchor`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")

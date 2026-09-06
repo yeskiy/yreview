@@ -81,6 +81,45 @@ class ReviewTaskTest {
     }
 
     @Test
+    fun `knows a handle`() {
+        assertTrue(TaskIds.isHandle("yd8pmsq91"))
+        assertTrue(TaskIds.isKnown("yd8pmsq91"))
+    }
+
+    @Test
+    fun `a handle is never a value of the store`() {
+        assertFalse(TaskIds.isLong("yd8pmsq91"))
+        assertFalse(TaskIds.isTodo("yd8pmsq91"))
+    }
+
+    @Test
+    fun `a value of the store is never a handle`() {
+        assertFalse(TaskIds.isHandle(comment.id))
+        assertFalse(TaskIds.isHandle(todo.id))
+        assertTrue(TaskIds.isLong(comment.id))
+        assertTrue(TaskIds.isLong(todo.id))
+    }
+
+    @Test
+    fun `refuses a short value that carries no prefix`() {
+        assertFalse(TaskIds.isHandle("d8pmsq91"))
+        assertFalse(TaskIds.isKnown("d8pmsq91"))
+    }
+
+    @Test
+    fun `refuses a handle that holds a character the rule bans`() {
+        assertFalse(TaskIds.isHandle("yD8PMSQ91"))
+        assertFalse(TaskIds.isHandle("y-d8pmsq91"))
+        assertFalse(TaskIds.isHandle("y"))
+        assertFalse(TaskIds.isHandle("y" + "a".repeat(33)))
+    }
+
+    @Test
+    fun `a handle the channel refuses is never made`() {
+        assertTrue(TaskIds.isSafe("yd8pmsq91"))
+    }
+
+    @Test
     fun `writes the fields of a comment task`() {
         val text = TaskJson.encode(document(listOf(comment)))
         assertTrue(text.contains(""""kind": "comment""""), text)

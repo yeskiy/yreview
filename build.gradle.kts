@@ -41,6 +41,10 @@ dependencies {
         testFramework(TestFrameworkType.Platform)
     }
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+    // Sqids packs the key of a task into a short lowercase text, and it answers how many
+    // numbers a text carries. That count tells a comment handle from a TODO handle.
+    // The library declares no dependency of its own and it carries the MIT license.
+    implementation("org.sqids:sqids:0.1.0")
     testImplementation(kotlin("test"))
     // The test framework of the platform brings no JUnit. BasePlatformTestCase extends
     // junit.framework.TestCase, and this artifact holds that class.

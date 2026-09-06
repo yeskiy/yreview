@@ -136,6 +136,7 @@ import com.yeskiy.yreview.tasks.TaskChoice
 import com.yeskiy.yreview.tasks.TaskCompletion
 import com.yeskiy.yreview.tasks.TaskDocument
 import com.yeskiy.yreview.tasks.TaskFilter
+import com.yeskiy.yreview.tasks.TaskHandles
 import com.yeskiy.yreview.tasks.TaskKindFilter
 import com.yeskiy.yreview.tasks.TaskLabels
 import com.yeskiy.yreview.tasks.TaskLayout
@@ -720,7 +721,9 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         tasks: List<ReviewTask>,
         target: String?,
     ): SendOutcome {
-        val files = writeFiles(store, repository, tasks)
+        // Every route below reaches an agent, so every task carries its short handle from here.
+        val outward = TaskHandles.outward(tasks)
+        val files = writeFiles(store, repository, outward)
         val bridge = BridgeService.getInstance(project)
         val readers = bridge.readerCount()
         val route = SendRoutes.of(
@@ -733,12 +736,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                 val prompt = HandoffPrompt.of(
                     GitDir.label(files.folder, Path.of(repository.root.path)),
                     repository.commit,
-                    tasks,
+                    outward,
                 )
-                PushFallback.of(bridge.pushText(checkNotNull(target), tasks.size, prompt), prompt)
+                PushFallback.of(bridge.pushText(checkNotNull(target), outward.size, prompt), prompt)
                     .let { SendOutcome(it.report, it.clipboard) }
             }
-            route == SendRoute.CHANNEL -> SendOutcome(bridge.sendTasks(repository.root, tasks, target), null)
+            route == SendRoute.CHANNEL -> SendOutcome(bridge.sendTasks(repository.root, outward, target), null)
             files == null -> SendOutcome(
                 SendReport(0, 0, 0, "The plugin did not write the review files of ${repository.root.name}."),
                 null,
@@ -747,7 +750,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                 val folder = GitDir.label(files.folder, Path.of(repository.root.path))
                 SendOutcome(
                     SendReport(
-                        tasks.size,
+                        outward.size,
                         0,
                         0,
                         route = route,
@@ -756,7 +759,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                             AgentCatalog.of(ReviewSettings.getInstance(project).agentOrDefault())
                         ),
                     ),
-                    HandoffPrompt.of(folder, repository.commit, tasks),
+                    HandoffPrompt.of(folder, repository.commit, outward),
                 )
             }
         }
@@ -843,10 +846,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      * progress window and off the user interface thread.
      */
     private fun collect(tasks: List<ReviewTask>): CopyOutcome {
-        val folders = tasks.groupBy { it.rootPath }.map { (root, group) -> folderOf(root, group) }
+        // The clipboard reaches an agent, so every task carries its short handle from here.
+        val outward = TaskHandles.outward(tasks)
+        val folders = outward.groupBy { it.rootPath }.map { (root, group) -> folderOf(root, group) }
         return CopyOutcome(
             CopyPrompt.of(folders),
-            tasks.size,
+            outward.size,
             folders.size,
             folders.filter { !it.written }.map { it.name },
         )

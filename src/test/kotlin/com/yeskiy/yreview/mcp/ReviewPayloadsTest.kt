@@ -41,11 +41,16 @@ class ReviewPayloadsTest {
     }
 
     @Test
-    fun `a row carries the path, the range, the revision and the text`() {
-        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.GIT)
+    fun `a row carries the handle, the path, the range, the revision and the text`() {
+        val row = ReviewPayloads.rowOf(
+            stored(NoteRefs.DISCUSS),
+            resolved = false,
+            kind = StoreKind.GIT,
+            handle = "yd8pmsq91",
+        )
         assertEquals(
             CommentRow(
-                id = "abc123",
+                id = "yd8pmsq91",
                 path = "src/a.kt",
                 startLine = 3,
                 endLine = 5,
@@ -61,30 +66,30 @@ class ReviewPayloadsTest {
 
     @Test
     fun `a local comment is not shared`() {
-        val row = ReviewPayloads.rowOf(stored(NoteRefs.LOCAL), resolved = false, kind = StoreKind.GIT)
+        val row = ReviewPayloads.rowOf(stored(NoteRefs.LOCAL), resolved = false, kind = StoreKind.GIT, handle = "yd8pmsq91")
         assertEquals(false, row?.shared)
     }
 
     @Test
     fun `a comment without a location has no row`() {
         val orphan = StoredComment("id", NoteRefs.LOCAL, "deadbeef", Comment(timestamp = "1", author = "a"))
-        assertNull(ReviewPayloads.rowOf(orphan, resolved = false, kind = StoreKind.GIT))
+        assertNull(ReviewPayloads.rowOf(orphan, resolved = false, kind = StoreKind.GIT, handle = "yd8pmsq91"))
     }
 
     @Test
     fun `a comment without a range covers the whole file`() {
         val row =
-            ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS, range = null), resolved = false, kind = StoreKind.GIT)
+            ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS, range = null), resolved = false, kind = StoreKind.GIT, handle = "yd8pmsq91")
         assertEquals(0, row?.startLine)
         assertEquals(0, row?.endLine)
     }
 
     @Test
     fun `the list payload names the comments field`() {
-        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.GIT)
+        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.GIT, handle = "yd8pmsq91")
         val text = ReviewPayloads.list(listOfNotNull(row))
         assertTrue(text.startsWith("{\"comments\":["), text)
-        assertTrue(text.contains("\"id\":\"abc123\""), text)
+        assertTrue(text.contains("\"id\":\"yd8pmsq91\""), text)
         assertTrue(text.contains("\"startLine\":3"), text)
     }
 
@@ -94,6 +99,7 @@ class ReviewPayloadsTest {
             stored(NoteRefs.DISCUSS, range = Range(startLine = 3, startColumn = 4, endLine = 5, endColumn = 9)),
             resolved = false,
             kind = StoreKind.GIT,
+            handle = "yd8pmsq91",
         )
 
         val text = ReviewPayloads.list(listOfNotNull(row))
@@ -104,7 +110,7 @@ class ReviewPayloadsTest {
 
     @Test
     fun `the list payload of whole lines names no character`() {
-        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.GIT)
+        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.GIT, handle = "yd8pmsq91")
 
         val text = ReviewPayloads.list(listOfNotNull(row))
 
@@ -217,7 +223,7 @@ class ReviewPayloadsTest {
     @Test
     fun `a comment of a folder store is never shared`() {
         assertEquals(false, ReviewArguments.isShared(StoreKind.FOLDER, NoteRefs.DISCUSS))
-        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.FOLDER)
+        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.FOLDER, handle = "yd8pmsq91")
         assertEquals(false, row?.shared)
     }
 

@@ -3,9 +3,12 @@ package com.yeskiy.yreview.channel
 /**
  * Turns one batch into the text and the attributes that the model reads.
  *
- * The first line of a comment names the short id, the file, the range, and the revision.
- * The lines after it hold the comment. A blank line divides two comments.
- * A comment on a part of a line names the character position of each end.
+ * The first line of a comment names the id, the file, the range, and the revision. The
+ * lines after it hold the comment. A blank line divides two comments. A comment on a part
+ * of a line names the character position of each end.
+ *
+ * The id reaches the model whole. The plugin already shortens it to about 9 characters, and
+ * a second cut would give the model a text that names no task.
  */
 object Format {
 
@@ -30,7 +33,7 @@ object Format {
         }
 
     private fun format(comment: ReviewComment, headCommit: String): String =
-        "[${short(comment.id)}] ${comment.path}:${range(comment)}" +
+        "[${comment.id}] ${comment.path}:${range(comment)}" +
             " @${revisionLabel(comment, headCommit)}${sideLabel(comment)}\n${comment.text.trim()}"
 
     fun batchContent(batch: ReviewBatch): String =
