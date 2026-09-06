@@ -24,7 +24,8 @@ import java.util.Base64
  * plugin may claim more than that.
  *
  * The plugin never sends a directory parameter, because one session owns one port. It
- * never clears the input box either, because text the user typed would be lost.
+ * never clears the input box either, because text the user typed would be lost. That text
+ * keeps its own line, because every prompt starts after a blank line.
  */
 object OpenCodeClient {
 
@@ -38,6 +39,16 @@ object OpenCodeClient {
     const val SUBMIT_PATH = "/tui/submit-prompt"
 
     const val TIMEOUT_SECONDS = 5L
+
+    /**
+     * The blank line that the plugin puts in front of every prompt.
+     *
+     * The append route inserts at the cursor, so a box that holds half a line takes the
+     * prompt straight after those words. The two texts then read as one sentence. This
+     * break keeps them apart. No route of the server reads the box, so the plugin cannot
+     * add the break only when the box holds text. An empty box takes the break as well.
+     */
+    private const val BREAK = "\n\n"
 
     private const val LOOPBACK = "127.0.0.1"
 
@@ -70,7 +81,7 @@ object OpenCodeClient {
 
     /** Null after a good push, or the text of the problem. The text never holds the password. */
     fun push(port: Int, password: String, text: String): String? {
-        val append = post(port, password, APPEND_PATH, appendBody(text))
+        val append = post(port, password, APPEND_PATH, appendBody(BREAK + text))
             .getOrElse { return report(APPEND_PATH, password, it) }
         if (append != OK) return "$APPEND_PATH answered $append."
         val submit = post(port, password, SUBMIT_PATH, "")

@@ -76,6 +76,10 @@ class OpenCodeClientTest {
         return port
     }
 
+    /** The prompt that one call put on the wire. */
+    private fun textOf(body: String): String =
+        Json.parseToJsonElement(body).jsonObject["text"]!!.jsonPrimitive.content
+
     @Test
     fun `the body carries the text as json`() {
         val body = OpenCodeClient.appendBody("line one\nline two `x` \"y\"")
@@ -133,10 +137,7 @@ class OpenCodeClientTest {
 
         OpenCodeClient.push(server.port, "s3cret", "do the work")
 
-        assertEquals(
-            "do the work",
-            Json.parseToJsonElement(server.bodies.first()).jsonObject["text"]!!.jsonPrimitive.content,
-        )
+        assertTrue(textOf(server.bodies.first()).endsWith("do the work"), server.bodies.first())
         assertEquals(OpenCodeClient.authorization("s3cret"), server.authorizations.first())
     }
 
@@ -250,5 +251,27 @@ class OpenCodeClientTest {
 
         assertFalse(problem.contains("the-secret-value"), problem)
         assertTrue(problem.contains(Redact.SECRET_MARK), problem)
+    }
+
+    @Test
+    fun `a half typed line and the prompt never run together`() {
+        // The append route inserts at the cursor, so the box still holds what the user left there.
+        val server = start()
+        val typed = "please also check the "
+
+        OpenCodeClient.push(server.port, "s3cret", "Read AGENT.md, then work through tasks.json.")
+
+        val box = typed + textOf(server.bodies.first())
+        assertFalse(box.contains("please also check the Read"), box)
+        assertEquals(typed, box.lineSequence().first())
+    }
+
+    @Test
+    fun `a push puts a blank line in front of the prompt`() {
+        val server = start()
+
+        OpenCodeClient.push(server.port, "s3cret", "do the work")
+
+        assertEquals("\n\ndo the work", textOf(server.bodies.first()))
     }
 }
