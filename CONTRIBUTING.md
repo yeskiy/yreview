@@ -96,14 +96,14 @@ repository arrived that way, and the review asks for it.
 
 The project carries no linter configuration. Match the code that is already there.
 
-| Rule | Value |
-|---|---|
-| Language | Kotlin, with the Kotlin coding conventions |
-| Indent | Four spaces, never a tab |
-| Line width | 120 characters. A few lines pass it, and none passes 140. |
-| Trailing comma | Yes, in a multi-line argument list |
-| Visibility | The smallest one that works. A value is public only when another package reads it. |
-| Files | One idea per file. A file that holds two unrelated classes gets split. |
+| Rule           | Value                                                                              |
+|----------------|------------------------------------------------------------------------------------|
+| Language       | Kotlin, with the Kotlin coding conventions                                         |
+| Indent         | Four spaces                                                                        |
+| Line width     | 120 characters. A few lines pass it, and none passes 140.                          |
+| Trailing comma | Yes, in a multi-line argument list                                                 |
+| Visibility     | The smallest one that works. A value is public only when another package reads it. |
+| Files          | One idea per file. A file that holds two unrelated classes gets split.             |
 
 Write a KDoc block over a class and over any function whose reason is not plain from its
 name. Say why the code does what it does, not what the next line does. Do not write a
@@ -116,16 +116,16 @@ Every word a person reads follows Simplified Technical English, the standard ASD
 This covers code comments, string literals, documentation, commit messages, and pull
 request text. It does not cover code, identifiers, command syntax, or file paths.
 
-| Rule | Do | Do not |
-|---|---|---|
-| Voice | Active. "The plugin writes the file." | Passive with a known actor. "The file is written." |
-| Tense | Simple. "The task starts the server." | "The task will have started the server." |
-| Sentence | One instruction per sentence, 20 words at most | Two instructions joined by "and" |
-| Words | The short common word: use, help, make sure, before, about, get, show | utilize, facilitate, ensure, prior to, regarding, obtain, demonstrate |
-| Names | One name for one thing, kept to the end | Two names for the same thing |
-| Punctuation | A period. A comma. | A semicolon. An em dash. A curly quote. |
-| Forms | The full form, "do not" and "it is" | Any short form that drops a letter |
-| Adjectives | A measured fact | A marketing word, for example the ones that mean smooth, strong, or without effort |
+| Rule        | Do                                                                    | Do not                                                                             |
+|-------------|-----------------------------------------------------------------------|------------------------------------------------------------------------------------|
+| Voice       | Active. "The plugin writes the file."                                 | Passive with a known actor. "The file is written."                                 |
+| Tense       | Simple. "The task starts the server."                                 | "The task will have started the server."                                           |
+| Sentence    | One instruction per sentence, 20 words at most                        | Two instructions joined by "and"                                                   |
+| Words       | The short common word: use, help, make sure, before, about, get, show | utilize, facilitate, ensure, prior to, regarding, obtain, demonstrate              |
+| Names       | One name for one thing, kept to the end                               | Two names for the same thing                                                       |
+| Punctuation | A period. A comma.                                                    | A semicolon. An em dash. A curly quote.                                            |
+| Forms       | The full form, "do not" and "it is"                                   | Any short form that drops a letter                                                 |
+| Adjectives  | A measured fact                                                       | A marketing word, for example the ones that mean smooth, strong, or without effort |
 
 Write no marketing sentence, and open no paragraph the way a chat reply opens. Text that a
 reader cannot decode gets a definition or a plainer word.
@@ -140,16 +140,16 @@ The project follows [Conventional Commits](https://www.conventionalcommits.org/e
 <body>
 ```
 
-| Type | Use it for |
-|---|---|
-| `feat` | A new behavior a user can see |
-| `fix` | A defect that a user can hit |
-| `docs` | Documentation only |
-| `test` | A test only |
-| `refactor` | A change that keeps every behavior |
-| `chore` | Build files, dependencies, repository files |
-| `ci` | The GitHub workflows |
-| `merge` | A merge of a feature branch back into the main branch |
+| Type       | Use it for                                            |
+|------------|-------------------------------------------------------|
+| `feat`     | A new behavior a user can see                         |
+| `fix`      | A defect that a user can hit                          |
+| `docs`     | Documentation only                                    |
+| `test`     | A test only                                           |
+| `refactor` | A change that keeps every behavior                    |
+| `chore`    | Build files, dependencies, repository files           |
+| `ci`       | The GitHub workflows                                  |
+| `merge`    | A merge of a feature branch back into the main branch |
 
 Add `!` after the type for a breaking change, for example `refactor!:`. A breaking change
 is one that drops a setting, a stored value, or a field of the note format.

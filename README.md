@@ -49,11 +49,11 @@ your working tree.
 
 ### The note refs
 
-| Ref | Holds | Pushed |
-|---|---|---|
-| `refs/notes/y-review/local` | A comment you keep to yourself | Never |
-| `refs/notes/devtools/discuss` | A comment you share with the team | Yes, when you share |
-| `refs/notes/devtools/analyses` | A comment written by a machine. The plugin reads this ref and writes nothing to it today. | No |
+| Ref                            | Holds                                                                                     | Pushed              |
+|--------------------------------|-------------------------------------------------------------------------------------------|---------------------|
+| `refs/notes/y-review/local`    | A comment you keep to yourself                                                            | Never               |
+| `refs/notes/devtools/discuss`  | A comment you share with the team                                                         | Yes, when you share |
+| `refs/notes/devtools/analyses` | A comment written by a machine. The plugin reads this ref and writes nothing to it today. | No                  |
 
 `refs/notes/devtools/discuss` is the ref of
 [git-appraise](https://github.com/google/git-appraise), so the `git appraise` tool reads
@@ -83,18 +83,18 @@ An open comment looks like this, on one line.
 {"timestamp":"1787194427","author":"reviewer@example.com","description":"This branch never runs when the input is empty.","location":{"commit":"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7","path":"src/main/kotlin/Parser.kt","range":{"startLine":88,"endLine":94}}}
 ```
 
-| Field | Type | Meaning |
-|---|---|---|
-| `timestamp` | string | The seconds since 1970, as text |
-| `author` | string | The value of `git config user.email` at the moment of writing |
-| `description` | string, optional | The text of the comment |
-| `parent` | string, optional | The identifier of the comment this record answers |
-| `original` | string, optional | The identifier of the comment this record edits |
-| `resolved` | boolean, optional | True in the record that closes a comment |
-| `location.commit` | string | The commit the comment belongs to |
-| `location.path` | string | The file, relative to the repository root |
-| `location.range` | object, optional | `startLine`, `startColumn`, `endLine`, `endColumn` |
-| `v` | integer, optional | The format version. The value is 0 today, and a value of 0 is left out. |
+| Field             | Type              | Meaning                                                                 |
+|-------------------|-------------------|-------------------------------------------------------------------------|
+| `timestamp`       | string            | The seconds since 1970, as text                                         |
+| `author`          | string            | The value of `git config user.email` at the moment of writing           |
+| `description`     | string, optional  | The text of the comment                                                 |
+| `parent`          | string, optional  | The identifier of the comment this record answers                       |
+| `original`        | string, optional  | The identifier of the comment this record edits                         |
+| `resolved`        | boolean, optional | True in the record that closes a comment                                |
+| `location.commit` | string            | The commit the comment belongs to                                       |
+| `location.path`   | string            | The file, relative to the repository root                               |
+| `location.range`  | object, optional  | `startLine`, `startColumn`, `endLine`, `endColumn`                      |
+| `v`               | integer, optional | The format version. The value is 0 today, and a value of 0 is left out. |
 
 A comment on whole lines writes no column, so `startColumn` and `endColumn` are 0 there. A
 comment on a part of a line writes the character position of each end. A column is a zero
@@ -127,25 +127,25 @@ git notes --ref refs/notes/devtools/discuss show <commit>
 
 ### Everything the plugin writes
 
-| Place | Content | When |
-|---|---|---|
-| `refs/notes/y-review/local` | A local comment | You write a local comment |
-| `refs/notes/devtools/discuss` | A shared comment | You write a shared comment |
-| `<folder root>/.y-review/notes/` | A comment of a file that no git repository covers | You write a comment outside a repository |
-| `<git directory>/y-review/migrated-<milliseconds>` | The folder store, after the records reach the git notes | A git repository starts to cover a folder store |
-| `remote.<name>.fetch` in the git configuration | The line `+refs/notes/devtools/*:refs/notes/devtools/*`, added once | The first time you share a comment |
-| A push to your git remote | The shared note ref only | You write a shared comment |
-| `<git directory>/y-review/<window>/AGENT.md` | The rules an agent reads | Every send |
-| `<git directory>/y-review/<window>/tasks.json` | The open tasks of the repository | Every send |
-| `<git directory>/y-review/<window>/done.txt` | Read only. An agent appends the tasks it finished. The plugin never writes this file. | Never |
-| `<git directory>/y-review/done.txt` | Read only. The done file that an earlier version wrote, outside any window folder. The plugin still reads it, so a task an agent already reported still closes. | Never |
-| `~/.y-review/bridge/<mangled project path>.json` | The loopback address of the bridge and a fresh secret. Owner rights only, where the file system knows them. | The project opens and the channel switch stands on |
-| `~/.y-review/mcp/<agent>-<build code>.json` | The Model Context Protocol configuration of one agent. It holds no secret. | A session of Claude Code, OpenCode, Gemini CLI, or GitHub Copilot CLI starts, and the file there does not hold that text already |
-| `<project>/.cursor/mcp.json` | The review server, in the file that Cursor CLI reads | You press Add on the settings page while Cursor CLI is the chosen agent |
-| The Model Context Protocol file of Antigravity CLI | The review server. The plugin runs `agy mcp add`, and Antigravity CLI writes the file. | You press Add on the settings page while Antigravity CLI is the chosen agent |
-| `<project>/.idea/y-review.xml` | The settings of this plugin for this project | You change a setting |
-| `<IDE configuration>/options/y-review.xml` | The maximize switch and the editor size it replaced. The switch belongs to the whole IDE, so it stands beside the IDE and not beside a project. | You move the maximize switch |
-| The IDE registry key `ide.mainSplitter.min.size` | The value `0` | Only while the maximize switch stands on |
+| Place                                              | Content                                                                                                                                                         | When                                                                                                                             |
+|----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `refs/notes/y-review/local`                        | A local comment                                                                                                                                                 | You write a local comment                                                                                                        |
+| `refs/notes/devtools/discuss`                      | A shared comment                                                                                                                                                | You write a shared comment                                                                                                       |
+| `<folder root>/.y-review/notes/`                   | A comment of a file that no git repository covers                                                                                                               | You write a comment outside a repository                                                                                         |
+| `<git directory>/y-review/migrated-<milliseconds>` | The folder store, after the records reach the git notes                                                                                                         | A git repository starts to cover a folder store                                                                                  |
+| `remote.<name>.fetch` in the git configuration     | The line `+refs/notes/devtools/*:refs/notes/devtools/*`, added once                                                                                             | The first time you share a comment                                                                                               |
+| A push to your git remote                          | The shared note ref only                                                                                                                                        | You write a shared comment                                                                                                       |
+| `<git directory>/y-review/<window>/AGENT.md`       | The rules an agent reads                                                                                                                                        | Every send                                                                                                                       |
+| `<git directory>/y-review/<window>/tasks.json`     | The open tasks of the repository                                                                                                                                | Every send                                                                                                                       |
+| `<git directory>/y-review/<window>/done.txt`       | Read only. An agent appends the tasks it finished. The plugin never writes this file.                                                                           | Never                                                                                                                            |
+| `<git directory>/y-review/done.txt`                | Read only. The done file that an earlier version wrote, outside any window folder. The plugin still reads it, so a task an agent already reported still closes. | Never                                                                                                                            |
+| `~/.y-review/bridge/<mangled project path>.json`   | The loopback address of the bridge and a fresh secret. Owner rights only, where the file system knows them.                                                     | The project opens and the channel switch stands on                                                                               |
+| `~/.y-review/mcp/<agent>-<build code>.json`        | The Model Context Protocol configuration of one agent. It holds no secret.                                                                                      | A session of Claude Code, OpenCode, Gemini CLI, or GitHub Copilot CLI starts, and the file there does not hold that text already |
+| `<project>/.cursor/mcp.json`                       | The review server, in the file that Cursor CLI reads                                                                                                            | You press Add on the settings page while Cursor CLI is the chosen agent                                                          |
+| The Model Context Protocol file of Antigravity CLI | The review server. The plugin runs `agy mcp add`, and Antigravity CLI writes the file.                                                                          | You press Add on the settings page while Antigravity CLI is the chosen agent                                                     |
+| `<project>/.idea/y-review.xml`                     | The settings of this plugin for this project                                                                                                                    | You change a setting                                                                                                             |
+| `<IDE configuration>/options/y-review.xml`         | The maximize switch and the editor size it replaced. The switch belongs to the whole IDE, so it stands beside the IDE and not beside a project.                 | You move the maximize switch                                                                                                     |
+| The IDE registry key `ide.mainSplitter.min.size`   | The value `0`                                                                                                                                                   | Only while the maximize switch stands on                                                                                         |
 
 The git directory is `.git` in a normal repository. Git never tracks that folder, so no
 review file reaches a commit.
@@ -200,11 +200,11 @@ in the settings, and the plugin opens no port and starts no server.
 
 ## Requirements
 
-| Item | Version | Needed |
-|---|---|---|
-| IntelliJ IDEA | 2026.2 or newer, build 262 or newer | Yes. The plugin declares no upper build limit. |
-| Git | Any current version, on the PATH | Yes. The plugin runs the `git` program of your machine. |
-| A command line agent | Any current version | No. Without one every comment feature works, and only the review session stays out. |
+| Item                 | Version                             | Needed                                                                              |
+|----------------------|-------------------------------------|-------------------------------------------------------------------------------------|
+| IntelliJ IDEA        | 2026.2 or newer, build 262 or newer | Yes. The plugin declares no upper build limit.                                      |
+| Git                  | Any current version, on the PATH    | Yes. The plugin runs the `git` program of your machine.                             |
+| A command line agent | Any current version                 | No. Without one every comment feature works, and only the review session stays out. |
 
 The settings page lists nine agents: Claude Code, OpenCode, OpenAI Codex CLI, Antigravity
 CLI, Gemini CLI, GitHub Copilot CLI, Cursor CLI, Aider, and Amp. The page also runs a
@@ -233,18 +233,18 @@ The archive lands in `build/distributions/`.
 
 Open Settings, Tools, Yreview.
 
-| Setting | Default | What it does |
-|---|---|---|
-| New comments: | Local only | Where a new comment goes. `Local only` writes `refs/notes/y-review/local`. `Shared` writes `refs/notes/devtools/discuss` and pushes that ref. The add-comment box can change the choice for one comment. |
-| Remote for shared comments: | `origin` | The remote that a shared note goes to. Not every repository names its remote `origin`. A blank field falls back to `origin`. |
-| Add the notes refspec to the git configuration | On | The plugin adds `+refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch` once, so the notes other people write come back with the next fetch. With the box clear the plugin writes no git configuration, and you add that line by hand. |
-| Send the review tasks through the channel | On | With the box clear, the plugin opens no port and starts no channel server. Every send then writes `AGENT.md` and `tasks.json` in the review folder of this project window, and it copies the prompt to the clipboard. |
-| Show the session tool window | On | Whether the review session window appears. The window appears and disappears at once, so you need no restart. |
-| Command line agent: | Claude Code | The agent that the session window runs. A running session keeps the agent it started with, and the next session uses the new choice. |
-| Command: | The default command of the chosen agent, `claude` for Claude Code | The one command a shell runs to start the session. The page keeps one command for each agent. Paste a full path when the command is not on the PATH. |
-| Start a session when the session tool window opens | On | Opening the window starts the session of its first tab with no press. With the box clear that tab opens and waits, and the Start button in the title bar starts it. The plus button always starts the session of the tab it opens. |
-| Show comment marks in the editor | On | An open editor shows one icon for each comment range, and a quiet background over the lines of that range. With the box clear the editor stays plain, and the tool window still lists every comment. |
-| Hide the editor beside a maximized tool window | Off | A maximized tool window always leaves a strip of editor. This box writes the IDE registry key `ide.mainSplitter.min.size`, which belongs to the whole IDE and not to this plugin alone. The plugin writes the earlier value again when you clear the box. |
+| Setting                                            | Default                                                           | What it does                                                                                                                                                                                                                                              |
+|----------------------------------------------------|-------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| New comments:                                      | Local only                                                        | Where a new comment goes. `Local only` writes `refs/notes/y-review/local`. `Shared` writes `refs/notes/devtools/discuss` and pushes that ref. The add-comment box can change the choice for one comment.                                                  |
+| Remote for shared comments:                        | `origin`                                                          | The remote that a shared note goes to. Not every repository names its remote `origin`. A blank field falls back to `origin`.                                                                                                                              |
+| Add the notes refspec to the git configuration     | On                                                                | The plugin adds `+refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch` once, so the notes other people write come back with the next fetch. With the box clear the plugin writes no git configuration, and you add that line by hand.    |
+| Send the review tasks through the channel          | On                                                                | With the box clear, the plugin opens no port and starts no channel server. Every send then writes `AGENT.md` and `tasks.json` in the review folder of this project window, and it copies the prompt to the clipboard.                                     |
+| Show the session tool window                       | On                                                                | Whether the review session window appears. The window appears and disappears at once, so you need no restart.                                                                                                                                             |
+| Command line agent:                                | Claude Code                                                       | The agent that the session window runs. A running session keeps the agent it started with, and the next session uses the new choice.                                                                                                                      |
+| Command:                                           | The default command of the chosen agent, `claude` for Claude Code | The one command a shell runs to start the session. The page keeps one command for each agent. Paste a full path when the command is not on the PATH.                                                                                                      |
+| Start a session when the session tool window opens | On                                                                | Opening the window starts the session of its first tab with no press. With the box clear that tab opens and waits, and the Start button in the title bar starts it. The plus button always starts the session of the tab it opens.                        |
+| Show comment marks in the editor                   | On                                                                | An open editor shows one icon for each comment range, and a quiet background over the lines of that range. With the box clear the editor stays plain, and the tool window still lists every comment.                                                      |
+| Hide the editor beside a maximized tool window     | Off                                                               | A maximized tool window always leaves a strip of editor. This box writes the IDE registry key `ide.mainSplitter.min.size`, which belongs to the whole IDE and not to this plugin alone. The plugin writes the earlier value again when you clear the box. |
 
 Two agents keep their servers in a file of their own, so the page shows an **Add** button
 for them. Antigravity CLI gets a command that the plugin runs once, and Cursor CLI gets the
@@ -252,10 +252,10 @@ file `.cursor/mcp.json` in the project. The plugin writes nothing there until yo
 
 Two more pages carry settings of this plugin.
 
-| Page | Setting |
-|---|---|
-| Settings, Editor, Color Scheme | The color of the lines an open comment covers |
-| Settings, Keymap | The keystroke of Add Review Comment, Control Shift G by default |
+| Page                           | Setting                                                         |
+|--------------------------------|-----------------------------------------------------------------|
+| Settings, Editor, Color Scheme | The color of the lines an open comment covers                   |
+| Settings, Keymap               | The keystroke of Add Review Comment, Control Shift G by default |
 
 The tool window toolbar holds the per-tab view state: group by module, group by directory,
 flatten the directories, the preview pane, the kind filter, and the resolved switch. The
