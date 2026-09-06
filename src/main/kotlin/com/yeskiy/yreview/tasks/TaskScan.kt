@@ -120,7 +120,7 @@ object TaskScan {
         val log = ShareLog.getInstance(project)
         val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, store.root, '/') }
         return records(ReviewService.getInstance(project).bookFor(store), showResolved)
-            .mapNotNull { record -> taskOf(record, store.root, log.isUnshared(record.stored.id)) }
+            .mapNotNull { record -> CommentTask.of(record, store.root.path, log.isUnshared(record.stored.id)) }
             .filter { wanted == null || it.path == wanted }
     }
 
@@ -158,33 +158,8 @@ object TaskScan {
         val log = ShareLog.getInstance(project)
         val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, root, '/') }
         return records(ReviewService.getInstance(project).bookForRoot(root), showResolved)
-            .mapNotNull { record -> taskOf(record, root, log.isUnshared(record.stored.id)) }
+            .mapNotNull { record -> CommentTask.of(record, root.path, log.isUnshared(record.stored.id)) }
             .filter { wanted == null || it.path == wanted }
-    }
-
-    private fun taskOf(record: ScanRecord, root: VirtualFile, unshared: Boolean): ReviewTask? {
-        val stored = record.stored
-        val location = stored.comment.location ?: return null
-        val text = stored.comment.description?.trim().orEmpty()
-        if (text.isEmpty()) return null
-        return ReviewTask(
-            id = stored.id,
-            kind = TaskKind.COMMENT,
-            path = location.path,
-            startLine = location.range?.startLine ?: 0,
-            endLine = location.range?.endLine ?: 0,
-            text = text,
-            author = stored.comment.author,
-            filePath = "${root.path}/${location.path}",
-            rootPath = root.path,
-            revision = location.commit,
-            state = CommentWord.of(
-                shared = NoteRefs.isShared(stored.ref),
-                worktree = stored.commit == FolderStore.WORKTREE,
-                unshared = unshared,
-                resolved = record.resolved,
-            ),
-        )
     }
 
     private fun todos(

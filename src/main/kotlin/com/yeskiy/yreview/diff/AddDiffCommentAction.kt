@@ -39,13 +39,7 @@ class AddDiffCommentAction : AnAction(), DumbAware {
         val root = editor.getUserData(REVIEW_ROOT) ?: return
 
         val target = CommentTarget.fromEditor(editor, anchor.path)
-        val header = CommentText.diffHeader(
-            anchor.path,
-            target.startLine,
-            target.endLine,
-            anchor.commit,
-            anchor.dirty,
-        )
+        val header = CommentText.diffHeader(anchor.path, target.range, anchor.commit, anchor.dirty)
 
         AddCommentPopup.show(project, editor, header) { text, share ->
             CommentWriter.write(

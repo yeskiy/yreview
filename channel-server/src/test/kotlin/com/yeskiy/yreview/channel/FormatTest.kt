@@ -18,11 +18,27 @@ class FormatTest {
         id: String = "c3f9a12aabbccddeeff00112233445566778899a",
         path: String = "src/main/kotlin/Parser.kt",
         startLine: Int = 88,
+        startColumn: Int? = null,
         endLine: Int = 94,
+        endColumn: Int? = null,
         revision: String = "HEAD",
         side: Side? = null,
         text: String = "This branch never runs when the input is empty. Add the guard before the loop.",
-    ) = ReviewComment(id, path, startLine, endLine, revision, side, text)
+    ) = ReviewComment(id, path, startLine, startColumn, endLine, endColumn, revision, side, text)
+
+    @Test
+    fun `names the characters of a part of a line`() {
+        assertEquals(
+            "[c3f9a12] a.kt:88:4-94:9 @HEAD\ntext",
+            Format.batchContent(
+                batchOf(
+                    listOf(
+                        commentOf(path = "a.kt", startColumn = 4, endColumn = 9, text = "text"),
+                    ),
+                ),
+            ),
+        )
+    }
 
     @Test
     fun `puts the short id, the path, the range, and the revision on the first line`() {

@@ -22,18 +22,14 @@ class CommentCardTest {
         text: String? = "first line\nsecond line",
         author: String = "a@b.c",
         resolved: Boolean? = null,
-        startLine: Int? = 88,
+        range: Range? = Range(startLine = 88, endLine = 94),
     ): StoredComment {
         val comment = Comment(
             timestamp = "1787194427",
             author = author,
             description = text,
             resolved = resolved,
-            location = Location(
-                commit = COMMIT,
-                path = "src/main/kotlin/Parser.kt",
-                range = startLine?.let { Range(startLine = it, endLine = it + 6) },
-            ),
+            location = Location(commit = COMMIT, path = "src/main/kotlin/Parser.kt", range = range),
         )
         return StoredComment(comment.id(), ref, COMMIT, comment)
     }
@@ -53,6 +49,29 @@ class CommentCardTest {
     }
 
     @Test
+    fun `the card states the characters of a comment on a part of a line`() {
+        val card = CommentCard.html(
+            listOf(stored(range = Range(startLine = 88, startColumn = 4, endLine = 94, endColumn = 9))),
+            time,
+        )
+
+        assertTrue(
+            card.contains("lines 88-94, from character 4 of line 88 to character 9 of line 94, local, open"),
+            card,
+        )
+    }
+
+    @Test
+    fun `the card states the characters of a comment inside one line`() {
+        val card = CommentCard.html(
+            listOf(stored(range = Range(startLine = 88, startColumn = 4, endLine = 88, endColumn = 9))),
+            time,
+        )
+
+        assertTrue(card.contains("lines 88-88, from character 4 to character 9, local, open"), card)
+    }
+
+    @Test
     fun `the card marks a shared comment`() {
         assertTrue(CommentCard.html(listOf(stored(ref = NoteRefs.DISCUSS)), time).contains("shared, open"))
     }
@@ -64,7 +83,7 @@ class CommentCardTest {
 
     @Test
     fun `the card states that a comment without a range has no lines`() {
-        assertTrue(CommentCard.html(listOf(stored(startLine = null)), time).contains("no lines, local, open"))
+        assertTrue(CommentCard.html(listOf(stored(range = null)), time).contains("no lines, local, open"))
     }
 
     @Test

@@ -5,6 +5,7 @@ package com.yeskiy.yreview.channel
  *
  * The first line of a comment names the short id, the file, the range, and the revision.
  * The lines after it hold the comment. A blank line divides two comments.
+ * A comment on a part of a line names the character position of each end.
  */
 object Format {
 
@@ -20,8 +21,16 @@ object Format {
     private fun sideLabel(comment: ReviewComment): String =
         if (comment.side == Side.LEFT) " (left side of the diff)" else ""
 
+    // The same rule stands in RangeText.kt of the plugin. Keep the two copies equal.
+    private fun range(comment: ReviewComment): String =
+        if ((comment.startColumn ?: 0) != 0 || (comment.endColumn ?: 0) != 0) {
+            "${comment.startLine}:${comment.startColumn ?: 0}-${comment.endLine}:${comment.endColumn ?: 0}"
+        } else {
+            "${comment.startLine}-${comment.endLine}"
+        }
+
     private fun format(comment: ReviewComment, headCommit: String): String =
-        "[${short(comment.id)}] ${comment.path}:${comment.startLine}-${comment.endLine}" +
+        "[${short(comment.id)}] ${comment.path}:${range(comment)}" +
             " @${revisionLabel(comment, headCommit)}${sideLabel(comment)}\n${comment.text.trim()}"
 
     fun batchContent(batch: ReviewBatch): String =

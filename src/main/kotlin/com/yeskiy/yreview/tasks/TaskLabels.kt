@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import com.intellij.openapi.util.text.HtmlBuilder
 import com.intellij.openapi.util.text.HtmlChunk
+import com.yeskiy.yreview.store.RangeText
 
 /** The text of one row of the review tree, and the text one task takes in the clipboard. */
 object TaskLabels {
@@ -26,8 +27,12 @@ object TaskLabels {
 
     fun folderCount(folder: TaskFolder): String = count(TaskTree.tasksOf(folder).size, "task")
 
-    fun lines(task: ReviewTask): String =
-        if (task.endLine <= task.startLine) "${task.startLine}" else "${task.startLine}-${task.endLine}"
+    fun lines(task: ReviewTask): String = when {
+        RangeText.hasColumns(task.startColumn, task.endColumn) ->
+            RangeText.compact(task.startLine, task.startColumn, task.endLine, task.endColumn)
+        task.endLine <= task.startLine -> "${task.startLine}"
+        else -> "${task.startLine}-${task.endLine}"
+    }
 
     fun taskTitle(task: ReviewTask): String = "${lines(task)}: ${rowText(task.text)}"
 

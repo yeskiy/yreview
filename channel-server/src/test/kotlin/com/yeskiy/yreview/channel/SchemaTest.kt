@@ -40,6 +40,16 @@ class SchemaTest {
     }
 
     @Test
+    fun `accepts the character fields of a comment`() {
+        assertTrue(accepts(batch(comments = comment(extra = ""","startColumn":4,"endColumn":9"""))))
+    }
+
+    @Test
+    fun `rejects a negative character position`() {
+        assertFalse(accepts(batch(comments = comment(extra = ""","startColumn":-1"""))))
+    }
+
+    @Test
     fun `rejects a side that is neither left nor right`() {
         assertFalse(accepts(batch(comments = comment(extra = ""","side":"middle""""))))
     }

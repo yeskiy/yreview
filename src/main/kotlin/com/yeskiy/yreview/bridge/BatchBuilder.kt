@@ -52,7 +52,9 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
         id = task.id,
         path = task.path,
         startLine = task.startLine.coerceIn(0, MAX_LINE),
+        startColumn = task.startColumn?.coerceIn(0, MAX_LINE),
         endLine = task.endLine.coerceIn(0, MAX_LINE),
+        endColumn = task.endColumn?.coerceIn(0, MAX_LINE),
         revision = task.revision,
         text = TaskText.of(task.text).trim().take(MAX_TEXT),
     )

@@ -42,8 +42,8 @@ class FolderMigrationTest {
             TempRepo().use { repo ->
                 val head = repo.commit("a.kt", "one")
                 val folder = FolderNotes(root)
-                val first = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", 1, 1, "one")
-                val second = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", 2, 2, "two")
+                val first = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
+                val second = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 2, endLine = 2), "two")
 
                 val notes = NotesGateway(repo.git)
                 val report = FolderMigration.copy(folder, notes, NoteRefs.ALL, head)
@@ -64,7 +64,7 @@ class FolderMigrationTest {
             TempRepo().use { repo ->
                 val head = repo.commit("a.kt", "one")
                 val folder = FolderNotes(root)
-                bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", 1, 1, "one")
+                bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
                 val notes = NotesGateway(repo.git)
 
                 FolderMigration.copy(folder, notes, NoteRefs.ALL, head)
@@ -83,8 +83,8 @@ class FolderMigrationTest {
             TempRepo().use { repo ->
                 val head = repo.commit("a.kt", "one")
                 val folder = FolderNotes(root)
-                bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", 1, 1, "local one")
-                bookOf(folder).add(NoteRefs.DISCUSS, FolderStore.WORKTREE, "a.kt", 2, 2, "shared one")
+                bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "local one")
+                bookOf(folder).add(NoteRefs.DISCUSS, FolderStore.WORKTREE, "a.kt", Range(startLine = 2, endLine = 2), "shared one")
                 val notes = NotesGateway(repo.git)
 
                 FolderMigration.copy(folder, notes, NoteRefs.ALL, head)
@@ -107,7 +107,7 @@ class FolderMigrationTest {
             TempRepo().use { repo ->
                 val head = repo.commit("a.kt", "one")
                 val folder = FolderNotes(root)
-                val stored = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", 1, 1, "one")
+                val stored = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
                 bookOf(folder).resolve(stored)
                 val notes = NotesGateway(repo.git)
 
@@ -123,7 +123,7 @@ class FolderMigrationTest {
     fun `a target that keeps no line reports a problem`() {
         withFolder { root ->
             val folder = FolderNotes(root)
-            bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", 1, 1, "one")
+            bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
 
             val report = FolderMigration.copy(folder, DeafStore(), NoteRefs.ALL, "deadbeef")
 
@@ -138,7 +138,7 @@ class FolderMigrationTest {
             TempRepo().use { repo ->
                 val head = repo.commit("a.kt", "one")
                 val folder = FolderNotes(root)
-                val stored = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", 1, 1, "one")
+                val stored = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
 
                 FolderMigration.copy(folder, NotesGateway(repo.git), NoteRefs.ALL, head)
 

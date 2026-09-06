@@ -19,7 +19,7 @@ class CommentTextTest {
     private fun stored(
         ref: String,
         text: String,
-        startLine: Int? = 88,
+        range: Range? = Range(startLine = 88, endLine = 94),
         commit: String = COMMIT,
         author: String = "a@b.c",
         path: String = "src/main/kotlin/Parser.kt",
@@ -28,30 +28,55 @@ class CommentTextTest {
             timestamp = "1787194427",
             author = author,
             description = text,
-            location = Location(
-                commit = commit,
-                path = path,
-                range = startLine?.let { Range(startLine = it, endLine = it + 6) },
-            ),
+            location = Location(commit = commit, path = path, range = range),
         )
         return StoredComment(comment.id(), ref, commit, comment)
     }
 
     @Test
     fun `the header names the file and the line range`() {
-        assertEquals("src/Parser.kt:12-18", CommentText.header("src/Parser.kt", 12, 18))
+        assertEquals(
+            "src/Parser.kt:12-18",
+            CommentText.header("src/Parser.kt", Range(startLine = 12, endLine = 18)),
+        )
     }
 
     @Test
     fun `the header of one line holds the same number twice`() {
-        assertEquals("a.kt:7-7", CommentText.header("a.kt", 7, 7))
+        assertEquals("a.kt:7-7", CommentText.header("a.kt", Range(startLine = 7, endLine = 7)))
+    }
+
+    @Test
+    fun `the header names the characters of a part of a line`() {
+        assertEquals(
+            "src/Parser.kt:88:4-94:9",
+            CommentText.header("src/Parser.kt", Range(startLine = 88, startColumn = 4, endLine = 94, endColumn = 9)),
+        )
     }
 
     @Test
     fun `the diff header adds the short revision`() {
         assertEquals(
             "a.kt:1-2 @0123456",
-            CommentText.diffHeader("a.kt", 1, 2, "0123456789abcdef0123456789abcdef01234567", dirty = false),
+            CommentText.diffHeader(
+                "a.kt",
+                Range(startLine = 1, endLine = 2),
+                "0123456789abcdef0123456789abcdef01234567",
+                dirty = false,
+            ),
+        )
+    }
+
+    @Test
+    fun `the diff header names the characters of a part of a line`() {
+        assertEquals(
+            "a.kt:1:4-2:9 @0123456",
+            CommentText.diffHeader(
+                "a.kt",
+                Range(startLine = 1, startColumn = 4, endLine = 2, endColumn = 9),
+                "0123456789abcdef0123456789abcdef01234567",
+                dirty = false,
+            ),
         )
     }
 
@@ -59,7 +84,12 @@ class CommentTextTest {
     fun `the diff header marks the working tree`() {
         assertEquals(
             "a.kt:1-2 @0123456 (working tree)",
-            CommentText.diffHeader("a.kt", 1, 2, "0123456789abcdef0123456789abcdef01234567", dirty = true),
+            CommentText.diffHeader(
+                "a.kt",
+                Range(startLine = 1, endLine = 2),
+                "0123456789abcdef0123456789abcdef01234567",
+                dirty = true,
+            ),
         )
     }
 
@@ -105,7 +135,7 @@ class CommentTextTest {
     fun `the location of a comment without a range shows the path`() {
         assertEquals(
             "src/main/kotlin/Parser.kt @0123456",
-            CommentText.location(stored(NoteRefs.LOCAL, "x", startLine = null)),
+            CommentText.location(stored(NoteRefs.LOCAL, "x", range = null)),
         )
     }
 
@@ -133,6 +163,20 @@ class CommentTextTest {
     }
 
     @Test
+    fun `the summary names the characters of a part of a line`() {
+        assertEquals(
+            "88:4-94:9: first line",
+            CommentText.summary(
+                stored(
+                    NoteRefs.LOCAL,
+                    "first line\nsecond line",
+                    Range(startLine = 88, startColumn = 4, endLine = 94, endColumn = 9),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun `an author that starts with the markup tag reads as unknown`() {
         assertEquals(
             "unknown, local",
@@ -153,14 +197,14 @@ class CommentTextTest {
         assertEquals(
             "unknown @0123456",
             CommentText.location(
-                stored(NoteRefs.LOCAL, "x", startLine = null, path = "<html><img src=x>"),
+                stored(NoteRefs.LOCAL, "x", range = null, path = "<html><img src=x>"),
             ),
         )
     }
 
     @Test
     fun `a header cuts a path that is longer than the cap`() {
-        val header = CommentText.header("y".repeat(400), 1, 2)
+        val header = CommentText.header("y".repeat(400), Range(startLine = 1, endLine = 2))
 
         assertTrue(header.startsWith("y".repeat(200) + "..."), header)
     }

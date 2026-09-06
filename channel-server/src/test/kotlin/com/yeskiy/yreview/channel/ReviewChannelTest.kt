@@ -244,8 +244,8 @@ class ReviewChannelTest {
         push(
             batch.copy(
                 comments = listOf(
-                    ReviewComment("dd11111111111111111111111111111111111111", "a.kt", 1, 1, "HEAD", null, "one"),
-                    ReviewComment("dd22222222222222222222222222222222222222", "b.kt", 2, 2, "HEAD", null, "two"),
+                    ReviewComment("dd11111111111111111111111111111111111111", "a.kt", startLine = 1, endLine = 1, revision = "HEAD", text = "one"),
+                    ReviewComment("dd22222222222222222222222222222222222222", "b.kt", startLine = 2, endLine = 2, revision = "HEAD", text = "two"),
                 ),
             ),
         )

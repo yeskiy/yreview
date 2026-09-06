@@ -3,6 +3,7 @@ package com.yeskiy.yreview.store
 import com.yeskiy.yreview.TempRepo
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -15,7 +16,7 @@ class CommentStoreLogicTest {
     fun `writes a comment that reads back with its anchor`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            val stored = book(repo).add(NoteRefs.LOCAL, head, "a.kt", 88, 94, "fix this")
+            val stored = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 88, endLine = 94), "fix this")
             val read = book(repo).list(head).single()
             assertEquals(stored.id, read.id)
             assertEquals("a.kt", read.comment.location?.path)
@@ -26,10 +27,68 @@ class CommentStoreLogicTest {
     }
 
     @Test
+    fun `writes the characters of a comment on a part of a line`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            book(repo).add(
+                NoteRefs.LOCAL,
+                head,
+                "a.kt",
+                Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 9),
+                "fix this word",
+            )
+            val range = book(repo).list(head).single().comment.location?.range
+            assertEquals(4, range?.startColumn)
+            assertEquals(9, range?.endColumn)
+        }
+    }
+
+    @Test
+    fun `writes no character for a comment on whole lines`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 88, endLine = 94), "fix this")
+            val range = book(repo).list(head).single().comment.location?.range
+            assertEquals(0, range?.startColumn)
+            assertEquals(0, range?.endColumn)
+        }
+    }
+
+    @Test
+    fun `the note of a comment on whole lines holds no character field`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 88, endLine = 94), "fix this")
+            val note = NotesGateway(repo.git).readLines(NoteRefs.LOCAL, head).single()
+            assertTrue(note.contains("""{"startLine":88,"endLine":94}"""), note)
+            assertFalse(note.contains("Column"), note)
+        }
+    }
+
+    @Test
+    fun `the note of a comment on a part of a line holds both character fields`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            book(repo).add(
+                NoteRefs.LOCAL,
+                head,
+                "a.kt",
+                Range(startLine = 88, startColumn = 4, endLine = 94, endColumn = 9),
+                "fix this word",
+            )
+            val note = NotesGateway(repo.git).readLines(NoteRefs.LOCAL, head).single()
+            assertTrue(
+                note.contains("""{"startLine":88,"startColumn":4,"endLine":94,"endColumn":9}"""),
+                note,
+            )
+        }
+    }
+
+    @Test
     fun `a stored comment carries the key it was read with`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            book(repo).add(NoteRefs.LOCAL, head, "a.kt", 88, 94, "fix this")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 88, endLine = 94), "fix this")
             assertEquals(head, book(repo).list(head).single().commit)
         }
     }
@@ -38,7 +97,7 @@ class CommentStoreLogicTest {
     fun `stamps a ten digit timestamp and the author`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            val stored = book(repo).add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
+            val stored = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
             assertEquals("1787194427", stored.comment.timestamp)
             assertEquals(10, stored.comment.timestamp.length)
             assertEquals("reviewer@example.com", stored.comment.author)
@@ -50,8 +109,8 @@ class CommentStoreLogicTest {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
             val store = book(repo)
-            store.add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "private")
-            store.add(NoteRefs.DISCUSS, head, "a.kt", 2, 2, "shared")
+            store.add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "private")
+            store.add(NoteRefs.DISCUSS, head, "a.kt", Range(startLine = 2, endLine = 2), "shared")
             val byRef = book(repo).list(head).associateBy { it.ref }
             assertEquals("private", byRef.getValue(NoteRefs.LOCAL).comment.description)
             assertEquals("shared", byRef.getValue(NoteRefs.DISCUSS).comment.description)
@@ -63,7 +122,7 @@ class CommentStoreLogicTest {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
             val store = book(repo)
-            val first = store.add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
+            val first = store.add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
             store.resolve(first)
 
             val all = book(repo).list(head)
@@ -79,7 +138,7 @@ class CommentStoreLogicTest {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
             val store = book(repo)
-            val first = store.add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
+            val first = store.add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
             store.resolve(first)
             assertTrue(book(repo).open(head).isEmpty())
         }
@@ -89,7 +148,7 @@ class CommentStoreLogicTest {
     fun `an unresolved comment is listed as open`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            book(repo).add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
             assertEquals(1, book(repo).open(head).size)
         }
     }
@@ -99,7 +158,7 @@ class CommentStoreLogicTest {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
             val store = book(repo)
-            val first = store.add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
+            val first = store.add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
             store.resolve(first)
 
             val closed = book(repo).closed(head)
@@ -112,7 +171,7 @@ class CommentStoreLogicTest {
     fun `an open comment is not listed as closed`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            book(repo).add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
             assertTrue(book(repo).closed(head).isEmpty())
         }
     }
@@ -123,8 +182,8 @@ class CommentStoreLogicTest {
             val first = repo.commit("a.kt", "one")
             val second = repo.commit("b.kt", "two")
             val store = book(repo)
-            store.add(NoteRefs.LOCAL, first, "a.kt", 1, 1, "x")
-            store.add(NoteRefs.DISCUSS, second, "b.kt", 1, 1, "y")
+            store.add(NoteRefs.LOCAL, first, "a.kt", Range(startLine = 1, endLine = 1), "x")
+            store.add(NoteRefs.DISCUSS, second, "b.kt", Range(startLine = 1, endLine = 1), "y")
 
             assertEquals(setOf(first, second), book(repo).commits().toSet())
         }
@@ -143,7 +202,7 @@ class CommentStoreLogicTest {
         TempRepo().use { repo ->
             repo.commit("a.kt", "one")
             val second = repo.commit("b.kt", "two")
-            val wanted = book(repo).add(NoteRefs.DISCUSS, second, "b.kt", 4, 6, "look here")
+            val wanted = book(repo).add(NoteRefs.DISCUSS, second, "b.kt", Range(startLine = 4, endLine = 6), "look here")
 
             val found = book(repo).find(wanted.id)
             assertEquals(wanted.id, found?.id)
@@ -156,7 +215,7 @@ class CommentStoreLogicTest {
     fun `find returns nothing for an unknown id`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            book(repo).add(NoteRefs.LOCAL, head, "a.kt", 1, 1, "x")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
             assertNull(book(repo).find("0000000000000000000000000000000000000000"))
         }
     }

@@ -96,6 +96,11 @@ An open comment looks like this, on one line.
 | `location.range` | object, optional | `startLine`, `startColumn`, `endLine`, `endColumn` |
 | `v` | integer, optional | The format version. The value is 0 today, and a value of 0 is left out. |
 
+A comment on whole lines writes no column, so `startColumn` and `endColumn` are 0 there. A
+comment on a part of a line writes the character position of each end. A column is a zero
+based character position in a line, and `endColumn` names the character after the last
+character of the comment.
+
 A field with no value is left out. A reader that meets an unknown field keeps the record.
 
 The identifier of a comment is the SHA-1 digest of the JSON text of that comment. The

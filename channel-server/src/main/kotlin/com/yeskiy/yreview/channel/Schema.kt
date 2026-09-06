@@ -19,7 +19,9 @@ data class ReviewComment(
     val id: String,
     val path: String,
     val startLine: Int,
+    val startColumn: Int? = null,
     val endLine: Int,
+    val endColumn: Int? = null,
     val revision: String,
     val side: Side? = null,
     val text: String,
@@ -92,7 +94,9 @@ object BatchSchema {
         opaqueId("id", comment.id)
             ?: plainLine("path", comment.path, MAX_PATH)
             ?: line("startLine", comment.startLine)
+            ?: comment.startColumn?.let { line("startColumn", it) }
             ?: line("endLine", comment.endLine)
+            ?: comment.endColumn?.let { line("endColumn", it) }
             ?: revision("revision", comment.revision)
             ?: count("text", comment.text.length, 1, MAX_TEXT)
 

@@ -16,19 +16,14 @@ class CommentBook(
         ref: String,
         commit: String,
         path: String,
-        startLine: Int,
-        endLine: Int,
+        range: Range,
         text: String,
     ): StoredComment {
         val comment = Comment(
             timestamp = clock().toString(),
             author = author,
             description = text,
-            location = Location(
-                commit = commit,
-                path = path,
-                range = Range(startLine = startLine, endLine = endLine),
-            ),
+            location = Location(commit = commit, path = path, range = range),
         )
         return write(ref, commit, comment)
     }

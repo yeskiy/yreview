@@ -7,6 +7,12 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A review comment on a part of a line records the character position of each end. The card,
+  the review tree, the clipboard prompt, the channel event, and the agent tools all name
+  those characters. A comment on whole lines keeps the line numbers alone.
+
 ## [1.0.0] - 2026-09-04
 
 The first public release. Every entry below describes a part of the plugin that no earlier

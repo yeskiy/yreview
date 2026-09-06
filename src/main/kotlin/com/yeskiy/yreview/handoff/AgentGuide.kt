@@ -36,7 +36,9 @@ object AgentGuide {
         - `id` is the name of the task. You report this value when the task is done.
         - `kind` is `comment` or `todo`.
         - `path` is the file inside the repository.
-        - `startLine` and `endLine` are one based line numbers.
+        - `startLine` and `endLine` are one based line numbers. `startColumn` and `endColumn`
+          are zero based character positions. A task holds a column only for a comment on a
+          part of a line. `endColumn` names the character after the last character.
         - `text` is the work to do.
         - `pattern` is `TODO` or `FIXME`. Only a task of the kind `todo` holds it.
         - `author` is the person who wrote the comment. Only a task of the kind `comment` holds it.

@@ -70,8 +70,8 @@ class CardChoiceTest {
     fun `a delete removes the card from the pane`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            val card = book(repo).add(NoteRefs.LOCAL, head, "a.kt", 10, 12, "look here")
-            book(repo).add(NoteRefs.LOCAL, head, "a.kt", 40, 41, "and here")
+            val card = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 10, endLine = 12), "look here")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 40, endLine = 41), "and here")
             book(repo).remove(listOf(card))
 
             val move = CardChoice.after(card, book(repo).open(head))
@@ -85,7 +85,7 @@ class CardChoiceTest {
     fun `a resolve removes the card from the pane`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            val card = book(repo).add(NoteRefs.LOCAL, head, "a.kt", 10, 12, "look here")
+            val card = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 10, endLine = 12), "look here")
             book(repo).resolve(card)
 
             val move = CardChoice.after(card, book(repo).open(head))
@@ -99,8 +99,8 @@ class CardChoiceTest {
     fun `a write beside the card keeps that card`() {
         TempRepo().use { repo ->
             val head = repo.commit("a.kt", "one")
-            val card = book(repo).add(NoteRefs.LOCAL, head, "a.kt", 10, 12, "look here")
-            book(repo).add(NoteRefs.LOCAL, head, "a.kt", 40, 41, "and here")
+            val card = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 10, endLine = 12), "look here")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 40, endLine = 41), "and here")
 
             val move = CardChoice.after(card, book(repo).open(head))
 

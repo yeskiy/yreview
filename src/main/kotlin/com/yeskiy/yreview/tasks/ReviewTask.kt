@@ -23,6 +23,10 @@ enum class TaskKind {
  * after them stay in memory. The tree needs a file path, and the channel needs a git
  * revision. An agent needs neither one.
  *
+ * A comment on whole lines carries no column. A comment on a part of a line carries the
+ * zero based character position of each end. The end column names the character after the
+ * last character of the comment. A TODO always names whole lines.
+ *
  * The module carries the name of the IDE module that holds the file, and it is empty when
  * the file sits outside every module. The pattern rule is the rule text of the TODO
  * pattern that matched, as the user wrote it under Settings, Editor, TODO. The tree takes
@@ -34,7 +38,9 @@ data class ReviewTask(
     val kind: TaskKind,
     val path: String,
     val startLine: Int,
+    val startColumn: Int? = null,
     val endLine: Int,
+    val endColumn: Int? = null,
     val text: String,
     val pattern: String? = null,
     val author: String? = null,

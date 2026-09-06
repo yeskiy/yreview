@@ -20,8 +20,8 @@ class WordingTest {
         branch = "main",
         commit = "4f2c8b1c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6",
         comments = listOf(
-            ReviewComment("aaaaaaa1111111111111111111111111111111111", "a.kt", 1, 1, "HEAD", null, "one"),
-            ReviewComment("bbbbbbb2222222222222222222222222222222222", "b.kt", 2, 2, "HEAD", null, "two"),
+            ReviewComment("aaaaaaa1111111111111111111111111111111111", "a.kt", startLine = 1, endLine = 1, revision = "HEAD", text = "one"),
+            ReviewComment("bbbbbbb2222222222222222222222222222222222", "b.kt", startLine = 2, endLine = 2, revision = "HEAD", text = "two"),
         ),
     )
 

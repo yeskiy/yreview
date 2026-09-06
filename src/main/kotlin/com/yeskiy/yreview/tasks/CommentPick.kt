@@ -1,6 +1,10 @@
 package com.yeskiy.yreview.tasks
 
+import com.yeskiy.yreview.store.FolderStore
+import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.store.endColumnOrNull
+import com.yeskiy.yreview.store.startColumnOrNull
 
 /** One record that a scan read, and whether somebody already resolved it. */
 data class ScanRecord(val stored: StoredComment, val resolved: Boolean)
@@ -47,5 +51,43 @@ object CommentWord {
         worktree -> NOT_SHARED
         unshared -> NOT_SHARED
         else -> SHARED
+    }
+}
+
+/**
+ * The task of one review comment record.
+ *
+ * A record of whole lines carries no column, and the task then holds no column either.
+ *
+ * The rule reads plain values, so a test runs it without a running IDE.
+ */
+object CommentTask {
+
+    /** Null when the record names no place, and null when it holds no text. */
+    fun of(record: ScanRecord, rootPath: String, unshared: Boolean): ReviewTask? {
+        val stored = record.stored
+        val location = stored.comment.location ?: return null
+        val text = stored.comment.description?.trim().orEmpty()
+        if (text.isEmpty()) return null
+        return ReviewTask(
+            id = stored.id,
+            kind = TaskKind.COMMENT,
+            path = location.path,
+            startLine = location.range?.startLine ?: 0,
+            startColumn = location.range?.startColumnOrNull(),
+            endLine = location.range?.endLine ?: 0,
+            endColumn = location.range?.endColumnOrNull(),
+            text = text,
+            author = stored.comment.author,
+            filePath = "$rootPath/${location.path}",
+            rootPath = rootPath,
+            revision = location.commit,
+            state = CommentWord.of(
+                shared = NoteRefs.isShared(stored.ref),
+                worktree = stored.commit == FolderStore.WORKTREE,
+                unshared = unshared,
+                resolved = record.resolved,
+            ),
+        )
     }
 }

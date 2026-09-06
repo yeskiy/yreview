@@ -11,8 +11,8 @@ class MetaTest {
         branch = "feat/channel-server",
         commit = "4f2c8b1c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6",
         comments = listOf(
-            ReviewComment("aaaaaaa1", "a.kt", 1, 1, "HEAD", null, "one"),
-            ReviewComment("bbbbbbb2", "b.kt", 2, 2, "HEAD", null, "two"),
+            ReviewComment("aaaaaaa1", "a.kt", startLine = 1, endLine = 1, revision = "HEAD", text = "one"),
+            ReviewComment("bbbbbbb2", "b.kt", startLine = 2, endLine = 2, revision = "HEAD", text = "two"),
         ),
     )
 

@@ -36,8 +36,10 @@ class AgentGuideTest {
 
     @Test
     fun `names every field of a task record`() {
-        listOf("`id`", "`kind`", "`path`", "`startLine`", "`endLine`", "`text`", "`pattern`", "`author`")
-            .forEach { field -> assertTrue(AgentGuide.TEXT.contains(field), "the guide misses $field") }
+        listOf(
+            "`id`", "`kind`", "`path`", "`startLine`", "`startColumn`", "`endLine`", "`endColumn`",
+            "`text`", "`pattern`", "`author`",
+        ).forEach { field -> assertTrue(AgentGuide.TEXT.contains(field), "the guide misses $field") }
     }
 
     @Test

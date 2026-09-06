@@ -3,10 +3,13 @@ package com.yeskiy.yreview.tasks
 import com.yeskiy.yreview.store.Comment
 import com.yeskiy.yreview.store.Location
 import com.yeskiy.yreview.store.NoteRefs
+import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.store.id
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CommentPickTest {
@@ -72,5 +75,52 @@ class CommentPickTest {
             CommentWord.SHARED,
             CommentWord.of(shared = true, worktree = false, unshared = false, resolved = false),
         )
+    }
+
+    @Test
+    fun `a task carries the characters of the record`() {
+        val stored = storedWith(Range(startLine = 88, startColumn = 4, endLine = 94, endColumn = 9))
+
+        val task = CommentTask.of(ScanRecord(stored, resolved = false), "/repo", unshared = false)
+
+        assertEquals(4, task?.startColumn)
+        assertEquals(9, task?.endColumn)
+        assertEquals(88, task?.startLine)
+        assertEquals(94, task?.endLine)
+    }
+
+    @Test
+    fun `a task of whole lines carries no character`() {
+        val stored = storedWith(Range(startLine = 88, endLine = 94))
+
+        val task = CommentTask.of(ScanRecord(stored, resolved = false), "/repo", unshared = false)
+
+        assertNull(task?.startColumn)
+        assertNull(task?.endColumn)
+    }
+
+    @Test
+    fun `a record without a text has no task`() {
+        assertNull(
+            CommentTask.of(
+                ScanRecord(storedWith(Range(startLine = 1, endLine = 1), text = "  "), resolved = false),
+                "/repo",
+                unshared = false,
+            ),
+        )
+    }
+
+    private fun storedWith(range: Range, text: String = "fix this"): StoredComment {
+        val comment = Comment(
+            timestamp = "1787194427",
+            author = "a@b.c",
+            description = text,
+            location = Location(
+                commit = "0123456789abcdef0123456789abcdef01234567",
+                path = "src/main/kotlin/Parser.kt",
+                range = range,
+            ),
+        )
+        return StoredComment(comment.id(), NoteRefs.LOCAL, "0123456789abcdef0123456789abcdef01234567", comment)
     }
 }

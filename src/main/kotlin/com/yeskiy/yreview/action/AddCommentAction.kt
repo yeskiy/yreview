@@ -11,16 +11,21 @@ import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.gutter.CommentGutter
 import com.yeskiy.yreview.store.AnchorResult
+import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.ui.AddCommentPopup
 import com.yeskiy.yreview.ui.CommentText
 import com.yeskiy.yreview.ui.ReviewNotice
 
-data class Target(val path: String, val startLine: Int, val endLine: Int) {
+data class Target(val path: String, val range: Range) {
+
+    val startLine: Int get() = range.startLine
+
+    val endLine: Int get() = range.endLine
 
     /** The line the box of the editor sits under. */
-    val lastLine: Int get() = maxOf(startLine, endLine)
+    val lastLine: Int get() = maxOf(range.startLine, range.endLine)
 }
 
 object CommentTarget {
@@ -30,10 +35,18 @@ object CommentTarget {
         val document = editor.document
         val startOffset = if (selection.hasSelection()) selection.selectionStart else editor.caretModel.offset
         val endOffset = if (selection.hasSelection()) selection.selectionEnd else editor.caretModel.offset
+        val startLine = document.getLineNumber(startOffset)
+        val endLine = document.getLineNumber(endOffset)
+        val endLineStart = document.getLineStartOffset(endLine)
         return Target(
             path = path,
-            startLine = document.getLineNumber(startOffset) + 1,
-            endLine = document.getLineNumber(endOffset) + 1,
+            range = CommentRange.of(
+                startLine = startLine + 1,
+                startColumn = startOffset - document.getLineStartOffset(startLine),
+                endLine = endLine + 1,
+                endColumn = endOffset - endLineStart,
+                endLineLength = document.getLineEndOffset(endLine) - endLineStart,
+            ),
         )
     }
 }
@@ -73,7 +86,7 @@ class AddCommentAction : AnAction(), DumbAware {
         val anchor = (found as? AnchorResult.Found)?.anchor ?: return
         val target = CommentTarget.fromEditor(editor, anchor.path)
 
-        val header = CommentText.header(target.path, target.startLine, target.endLine)
+        val header = CommentText.header(target.path, target.range)
         val canPush = anchor.kind == StoreKind.GIT
         if (CommentPlace.of(event) == BoxPlace.PREVIEW) {
             AddCommentPopup.show(project, editor, header, canPush, event.dataContext) { text, share ->

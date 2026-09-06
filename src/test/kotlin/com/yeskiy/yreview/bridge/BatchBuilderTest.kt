@@ -61,6 +61,25 @@ class BatchBuilderTest {
     }
 
     @Test
+    fun `carries the characters of a part of a line`() {
+        val json = BatchJson.encode(
+            builder().build("main", commit, listOf(task().copy(startColumn = 4, endColumn = 9)))
+                .batches.single(),
+        )
+
+        assertTrue(json.contains(""""startColumn":4"""), json)
+        assertTrue(json.contains(""""endColumn":9"""), json)
+    }
+
+    @Test
+    fun `writes no character field for a task of whole lines`() {
+        val json = BatchJson.encode(builder().build("main", commit, listOf(task())).batches.single())
+
+        assertFalse(json.contains("startColumn"), json)
+        assertFalse(json.contains("endColumn"), json)
+    }
+
+    @Test
     fun `writes a text that holds a line break as one line of JSON`() {
         val json = BatchJson.encode(builder().build("main", commit, listOf(task("first\nsecond"))).batches.single())
         assertFalse(json.contains('\n'), "the event carries one batch on one line")

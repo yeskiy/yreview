@@ -3,6 +3,8 @@ package com.yeskiy.yreview.mcp
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.store.endColumnOrNull
+import com.yeskiy.yreview.store.startColumnOrNull
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -11,7 +13,9 @@ data class CommentRow(
     val id: String,
     val path: String,
     val startLine: Int,
+    val startColumn: Int? = null,
     val endLine: Int,
+    val endColumn: Int? = null,
     val revision: String,
     val author: String,
     val text: String,
@@ -63,7 +67,9 @@ object ReviewPayloads {
             id = stored.id,
             path = location.path,
             startLine = location.range?.startLine ?: 0,
+            startColumn = location.range?.startColumnOrNull(),
             endLine = location.range?.endLine ?: 0,
+            endColumn = location.range?.endColumnOrNull(),
             revision = location.commit,
             author = stored.comment.author,
             text = stored.comment.description.orEmpty(),

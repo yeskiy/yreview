@@ -29,6 +29,26 @@ class TaskLabelsTest {
         pattern = "TODO",
     )
 
+    private val part = comment.copy(startColumn = 4, endColumn = 9)
+
+    @Test
+    fun `shows the characters when the task names a part of a line`() {
+        assertEquals("88:4-94:9", TaskLabels.lines(part))
+    }
+
+    @Test
+    fun `shows the characters in the tooltip of a part of a line`() {
+        assertTrue(TaskLabels.taskTooltip(part).contains("src/main/kotlin/Parser.kt:88:4-94:9"))
+    }
+
+    @Test
+    fun `writes the characters in the plain text of a part of a line`() {
+        assertEquals(
+            "a1b2c3 comment src/main/kotlin/Parser.kt:88:4-94:9\nfirst line\nsecond line",
+            TaskLabels.plainText(part),
+        )
+    }
+
     @Test
     fun `shows one line number when the task holds one line`() {
         assertEquals("12", TaskLabels.lines(todo))

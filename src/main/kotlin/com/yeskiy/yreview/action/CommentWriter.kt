@@ -36,7 +36,7 @@ object CommentWriter {
         try {
             StoreWrite.run(project, PROGRESS) {
                 ReviewService.getInstance(project)
-                    .addComment(anchor, NoteRefs.refFor(share), target.startLine, target.endLine, text)
+                    .addComment(anchor, NoteRefs.refFor(share), target.range, text)
             }.shareError?.let { ShareFailure.report(project, TITLE, it) }
         } catch (failure: NotesWriteException) {
             Messages.showErrorDialog(project, failure.message ?: "The comment was not written.", TITLE)

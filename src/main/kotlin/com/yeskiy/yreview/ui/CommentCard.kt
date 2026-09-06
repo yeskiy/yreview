@@ -4,6 +4,7 @@ import com.intellij.openapi.util.text.HtmlBuilder
 import com.intellij.openapi.util.text.HtmlChunk
 import com.yeskiy.yreview.store.Comment
 import com.yeskiy.yreview.store.NoteRefs
+import com.yeskiy.yreview.store.RangeText
 import com.yeskiy.yreview.store.StoredComment
 
 /**
@@ -42,10 +43,10 @@ object CommentCard {
     private fun head(stored: StoredComment, time: (Comment) -> String): String =
         "${stored.comment.author}, ${time(stored.comment)}"
 
-    /** The lines under the comment, the ref that holds it, and the state of the work. */
+    /** The place of the comment, the ref that holds it, and the state of the work. */
     fun state(stored: StoredComment): String =
         listOf(
-            stored.comment.location?.range?.let { "lines ${it.startLine}-${it.endLine}" } ?: "no lines",
+            stored.comment.location?.range?.let { RangeText.words(it) } ?: "no lines",
             if (NoteRefs.isShared(stored.ref)) "shared" else "local",
             if (stored.comment.resolved == true) "resolved" else "open",
         ).joinToString(", ")

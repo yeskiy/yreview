@@ -23,6 +23,7 @@ import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NotesWriteException
+import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
@@ -55,6 +56,9 @@ class ReviewToolset : McpToolset {
         |- "id", the value the other review tools need
         |- "path", the file inside its git repository or inside its folder store
         |- "startLine" and "endLine", one based line numbers. 0 means the whole file
+        |- "startColumn" and "endColumn", zero based character positions in a line. A comment
+        |  holds them only when it covers a part of a line. "endColumn" names the character
+        |  after the last character of the comment
         |- "revision", the git commit that the comment belongs to, or "worktree" for a comment
         |  of a folder that no git repository holds
         |- "author", "text", "shared" and "resolved"
@@ -161,7 +165,7 @@ class ReviewToolset : McpToolset {
             // takes the same push path. A shared ref reaches the remote, a local ref does not.
             val ref = NoteRefs.refFor(ReviewSettings.getInstance(project).sharing.shareByDefault)
             try {
-                val result = service.addComment(anchor, ref, startLine, endLine, text)
+                val result = service.addComment(anchor, ref, Range(startLine = startLine, endLine = endLine), text)
                 ReviewPayloads.added(
                     result.stored.id,
                     anchor.path,

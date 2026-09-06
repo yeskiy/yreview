@@ -3,6 +3,8 @@ package com.yeskiy.yreview.ui
 import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.Location
 import com.yeskiy.yreview.store.NoteRefs
+import com.yeskiy.yreview.store.Range
+import com.yeskiy.yreview.store.RangeText
 import com.yeskiy.yreview.store.StoredComment
 
 /**
@@ -15,13 +17,12 @@ object CommentText {
 
     const val EMPTY_MESSAGE = "Write the comment first."
 
-    /** The header of the popup. It names the file and the line range. */
-    fun header(path: String, startLine: Int, endLine: Int): String =
-        "${PlainText.of(path)}:$startLine-$endLine"
+    /** The header of the popup. It names the file and the place of the comment. */
+    fun header(path: String, range: Range): String = "${PlainText.of(path)}:${RangeText.compact(range)}"
 
     /** The same header for one side of a diff, with the revision that the comment anchors to. */
-    fun diffHeader(path: String, startLine: Int, endLine: Int, commit: String, dirty: Boolean): String =
-        "${header(path, startLine, endLine)} @${short(commit)}${if (dirty) " (working tree)" else ""}"
+    fun diffHeader(path: String, range: Range, commit: String, dirty: Boolean): String =
+        "${header(path, range)} @${short(commit)}${if (dirty) " (working tree)" else ""}"
 
     /**
      * The tooltip of the share box. A folder store reaches no remote, so the box states when
@@ -51,12 +52,12 @@ object CommentText {
 
     /** One line for a tooltip or for a list row. */
     fun summary(stored: StoredComment): String {
-        val range = stored.comment.location?.range
-        return "${range?.startLine}-${range?.endLine}: ${firstLine(stored)}"
+        val range = stored.comment.location?.range ?: return "no lines: ${firstLine(stored)}"
+        return "${RangeText.compact(range)}: ${firstLine(stored)}"
     }
 
     private fun range(place: Location): String =
-        place.range?.let { header(place.path, it.startLine, it.endLine) } ?: PlainText.of(place.path)
+        place.range?.let { header(place.path, it) } ?: PlainText.of(place.path)
 
     private fun firstLine(stored: StoredComment): String =
         stored.comment.description?.lineSequence()?.firstOrNull().orEmpty()

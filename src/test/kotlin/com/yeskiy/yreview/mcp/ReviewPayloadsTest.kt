@@ -89,6 +89,30 @@ class ReviewPayloadsTest {
     }
 
     @Test
+    fun `the list payload carries the characters of a part of a line`() {
+        val row = ReviewPayloads.rowOf(
+            stored(NoteRefs.DISCUSS, range = Range(startLine = 3, startColumn = 4, endLine = 5, endColumn = 9)),
+            resolved = false,
+            kind = StoreKind.GIT,
+        )
+
+        val text = ReviewPayloads.list(listOfNotNull(row))
+
+        assertTrue(text.contains("\"startColumn\":4"), text)
+        assertTrue(text.contains("\"endColumn\":9"), text)
+    }
+
+    @Test
+    fun `the list payload of whole lines names no character`() {
+        val row = ReviewPayloads.rowOf(stored(NoteRefs.DISCUSS), resolved = false, kind = StoreKind.GIT)
+
+        val text = ReviewPayloads.list(listOfNotNull(row))
+
+        assertFalse(text.contains("startColumn"), text)
+        assertFalse(text.contains("endColumn"), text)
+    }
+
+    @Test
     fun `an empty list still names the comments field`() {
         assertEquals("{\"comments\":[]}", ReviewPayloads.list(emptyList()))
     }

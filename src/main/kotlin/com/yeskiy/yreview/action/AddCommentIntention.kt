@@ -36,7 +36,7 @@ class AddCommentIntention : IntentionAction, DumbAware {
         CommentGutter.getInstance(project).openWriteBox(
             editor,
             target.lastLine,
-            CommentText.header(target.path, target.startLine, target.endLine),
+            CommentText.header(target.path, target.range),
             anchor.kind == StoreKind.GIT,
         ) { text, share -> CommentWriter.write(project, anchor, target, text, share) }
     }

@@ -216,14 +216,13 @@ class ReviewService(private val project: Project) {
         ref: String,
         commit: String,
         path: String,
-        startLine: Int,
-        endLine: Int,
+        range: Range,
         text: String,
-    ): CommentWriteResult = finish(root, bookForRoot(root).add(ref, commit, path, startLine, endLine, text))
+    ): CommentWriteResult = finish(root, bookForRoot(root).add(ref, commit, path, range, text))
 
     /** A folder store has no remote, so it takes no share step and it starts no bridge. */
-    fun addComment(anchor: ReviewAnchor, ref: String, startLine: Int, endLine: Int, text: String): CommentWriteResult {
-        val stored = bookFor(anchor).add(ref, anchor.key, anchor.path, startLine, endLine, text)
+    fun addComment(anchor: ReviewAnchor, ref: String, range: Range, text: String): CommentWriteResult {
+        val stored = bookFor(anchor).add(ref, anchor.key, anchor.path, range, text)
         if (anchor.kind == StoreKind.FOLDER) {
             notifyChanged()
             return CommentWriteResult(stored, null)

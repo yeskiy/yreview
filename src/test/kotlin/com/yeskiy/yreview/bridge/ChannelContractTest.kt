@@ -77,6 +77,11 @@ class ChannelContractTest {
         ),
     )
 
+    private val partBatch = batch.copy(
+        batchId = "b7f2a92",
+        comments = listOf(batch.comments.single().copy(startColumn = 4, endColumn = 9)),
+    )
+
     private fun startChannel(key: String? = null, sink: LinkedBlockingQueue<String> = lines): Process {
         val jar = File(System.getProperty("y.review.channel.jar").orEmpty())
         Assumptions.assumeTrue(jar.isFile, "the channel jar is missing at ${jar.absolutePath}")
@@ -166,6 +171,21 @@ class ChannelContractTest {
         assertEquals(commit, meta["commit"]!!.jsonPrimitive.content)
         assertEquals("1", meta["count"]!!.jsonPrimitive.content)
         assertEquals("b7f2a91", meta["batch_id"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun `the channel names the characters of a part of a line`() {
+        handshake()
+        awaitStreams(1)
+        assertEquals(1, server.send(partBatch))
+
+        val notification = awaitLine("notifications/claude/channel")
+
+        assertEquals(
+            "[c3f9a12] src/main/kotlin/Parser.kt:88:4-94:9 @HEAD\n" +
+                "This branch never runs when the input is empty. Add the guard before the loop.",
+            notification["params"]!!.jsonObject["content"]!!.jsonPrimitive.content,
+        )
     }
 
     @Test
