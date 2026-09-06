@@ -11,11 +11,8 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.ThreadFactory
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 
 /** Where the bridge listens, and the secret a session must send to reach it. */
 data class BridgeAddress(val url: String, val token: String, val port: Int)
@@ -33,16 +30,12 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
     /**
      * One open event stream. [key] names the session, and null means a session with no key.
      *
-     * The queue holds [MAX_QUEUED] events. An item leaves it only while the thread of the
-     * reader runs, and that thread stands inside its write for as long as the client reads
-     * nothing. A queue with no bound would therefore grow with every send.
+     * [StreamQueue] holds the events of this stream, drops the ones beyond its bound, and
+     * counts them for the line that names the loss.
      */
     private class Reader(val key: String?) {
 
-        val queue = LinkedBlockingQueue<String>(MAX_QUEUED)
-
-        /** How many events this stream lost since the last line that named them. */
-        val lost = AtomicInteger(0)
+        val queue = StreamQueue()
     }
 
     private val streams = CopyOnWriteArrayList<Reader>()
@@ -74,10 +67,7 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
 
     fun stop() {
         running.set(false)
-        streams.forEach {
-            it.queue.clear()
-            it.queue.offer(STOP)
-        }
+        streams.forEach { it.queue.replaceWith(STOP) }
         streams.clear()
         http?.stop(0)
         http = null
@@ -98,7 +88,7 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
     fun send(batch: ReviewBatch, target: String? = null): Int {
         val data = BatchJson.encode(batch)
         val open = streams.toList().filter { target == null || it.key == target }
-        open.forEach { if (!it.queue.offer(data)) it.lost.incrementAndGet() }
+        open.forEach { it.queue.add(data) }
         return open.size
     }
 
@@ -181,7 +171,7 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
             val body = exchange.responseBody
             write(body, ": open\n\n")
             while (running.get()) {
-                val next = reader.queue.poll(KEEPALIVE_SECONDS, TimeUnit.SECONDS)
+                val next = reader.queue.next(KEEPALIVE_SECONDS)
                 reportLoss(body, reader)
                 when {
                     next == null -> write(body, ": keep-alive\n\n")
@@ -200,17 +190,11 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
 
     // --- The helpers ---
 
-    /**
-     * Names the events one stream lost, and sets the count back to zero.
-     *
-     * The line is a Server-Sent Events comment. It can never look like a batch, so a
-     * client that reads the events keeps its contract, and a person who reads the raw
-     * stream sees how many events went. A stream that lost nothing gets no line.
-     */
+    /** Names the events one stream lost. A stream that lost nothing gets no line. */
     private fun reportLoss(body: OutputStream, reader: Reader) {
-        val lost = reader.lost.getAndSet(0)
+        val lost = reader.queue.takeLoss()
         if (lost == 0) return
-        write(body, ": $DROPPED ${TaskLabels.count(lost, "event")} for this session, because it read none\n\n")
+        write(body, lossLine(lost))
     }
 
     private fun authorized(exchange: HttpExchange): Boolean =
@@ -245,17 +229,18 @@ class BridgeServer(private val onResolve: (List<String>, String?) -> String?) {
         /** The number of event streams the bridge serves at once. The window reads it too. */
         const val MAX_STREAMS = 16
 
-        /**
-         * How many events one stream holds while its client reads none.
-         *
-         * One send of the user makes one batch for each 200 comments, so this bound takes
-         * several whole sends. A client that is still behind after that reads nothing at
-         * all, and the plugin then keeps the events it already holds.
-         */
-        const val MAX_QUEUED = 64
-
         /** The start of the line that names the events one stream lost. */
         const val DROPPED = "the bridge dropped"
+
+        /**
+         * The whole line that names the events one stream lost.
+         *
+         * The line is a Server-Sent Events comment. It can never look like a batch, so a
+         * client that reads the events keeps its contract, and a person who reads the raw
+         * stream sees how many events went.
+         */
+        internal fun lossLine(lost: Int): String =
+            ": $DROPPED ${TaskLabels.count(lost, "event")} for this session, because it read none\n\n"
 
         private const val LOOPBACK = "127.0.0.1"
         private const val EPHEMERAL_PORT = 0

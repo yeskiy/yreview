@@ -11,7 +11,22 @@ import kotlin.test.assertTrue
 
 class GitDirTest {
 
+    /** The root of the file system that runs this test, "E:\" on Windows and "/" on Linux. */
+    private val root: Path = Path.of("").toAbsolutePath().root
+
+    /** The same root as the label writes it, "E:/" on Windows and "/" on Linux. */
+    private val rootLabel: String = root.toString().replace('\\', '/')
+
     private fun real(path: Path): String = path.toRealPath().toString().replace('\\', '/')
+
+    /**
+     * A path that is absolute on every platform.
+     *
+     * A name that starts with a drive letter is absolute on Windows and relative on Linux,
+     * and a relative path takes the working directory of the run. The label of a folder
+     * outside the repository holds the whole path, so a test of it starts at the root.
+     */
+    private fun absolute(vararg names: String): Path = names.fold(root) { path, name -> path.resolve(name) }
 
     @Test
     fun `finds the git directory of a plain repository`() {
@@ -60,15 +75,15 @@ class GitDirTest {
     fun `shortens a folder that sits inside the repository`() {
         assertEquals(
             ".git/y-review",
-            GitDir.label(Path.of("E:/repo/.git/y-review"), Path.of("E:/repo")),
+            GitDir.label(absolute("repo", ".git", "y-review"), absolute("repo")),
         )
     }
 
     @Test
     fun `keeps the whole path of a folder outside the repository`() {
         assertEquals(
-            "E:/main/.git/worktrees/tree/y-review",
-            GitDir.label(Path.of("E:/main/.git/worktrees/tree/y-review"), Path.of("E:/tree")),
+            "${rootLabel}main/.git/worktrees/tree/y-review",
+            GitDir.label(absolute("main", ".git", "worktrees", "tree", "y-review"), absolute("tree")),
         )
     }
 }

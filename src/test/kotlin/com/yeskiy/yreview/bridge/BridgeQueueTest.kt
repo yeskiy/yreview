@@ -8,14 +8,17 @@ import kotlin.test.Test
 import kotlin.test.assertTrue
 
 /**
- * What one event stream does when its client reads nothing.
+ * What one event stream tells its client about the events it lost.
  *
  * The thread of a stream stands inside its write for as long as the client takes no byte.
  * Nothing leaves the queue of that stream then, so every send adds one more event to it.
- * The queue holds a bound, and the events beyond that bound go away.
+ * The queue holds a bound, and the events beyond that bound go away. The stream then
+ * writes one line that names the number.
  *
- * The client of this test is a plain socket that sends the request and reads nothing. The
- * test then reads the stream and looks for the line that names the loss.
+ * [StreamQueueTest] proves the bound itself, because a socket blocks its writer only after
+ * the buffers of the operating system are full, and the size of those buffers belongs to
+ * the platform. The tests here read the line of the loss, and one real stream proves that
+ * a client which loses nothing reads no such line.
  */
 class BridgeQueueTest {
 
@@ -32,14 +35,18 @@ class BridgeQueueTest {
     }
 
     @Test
-    fun `a stream whose client reads nothing loses the events beyond the bound`() {
-        val open = openStream()
+    fun `the line of a loss names the number of events`() {
+        val line = BridgeServer.lossLine(LOST)
 
-        repeat(SENDS) { number -> server.send(batch(number)) }
+        assertTrue(line.startsWith(": ${BridgeServer.DROPPED} $LOST events"), line)
+        assertTrue(line.endsWith("\n\n"), "a comment of an event stream ends with a blank line")
+    }
 
+    @Test
+    fun `the line of one lost event names one event`() {
         assertTrue(
-            read(open).contains(BridgeServer.DROPPED),
-            "the stream must name the events it lost",
+            BridgeServer.lossLine(1).startsWith(": ${BridgeServer.DROPPED} 1 event "),
+            BridgeServer.lossLine(1),
         )
     }
 
@@ -94,7 +101,7 @@ class BridgeQueueTest {
         }
     }
 
-    /** One batch that is large enough to fill the buffers of a socket in a few sends. */
+    /** One batch with a text of [TEXT_CHARS] characters, the size of a long comment. */
     private fun batch(number: Int) = ReviewBatch(
         batchId = "b$number",
         branch = "main",
@@ -114,8 +121,8 @@ class BridgeQueueTest {
     private companion object {
         const val LOOPBACK = "127.0.0.1"
 
-        /** Enough sends to fill the buffers of the socket and the whole queue after them. */
-        const val SENDS = 300
+        /** More than one lost event, so the line must name a plural. */
+        const val LOST = 5
 
         const val TEXT_CHARS = 20_000
         const val CHUNK_BYTES = 65_536
