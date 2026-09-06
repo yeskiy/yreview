@@ -30,3 +30,6 @@ MIT License
   org.slf4j:slf4j-nop
     Copyright 2004-2022 QOS.ch Sarl (Switzerland)
     The file META-INF/LICENSE.txt inside y-review-channel.jar holds the full text.
+
+  org.sqids:sqids
+    Copyright 2023-present Sqids maintainers
