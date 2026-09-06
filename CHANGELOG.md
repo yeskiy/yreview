@@ -1,7 +1,6 @@
 # Changelog
 
 All notable changes to Yreview are written in this file.
-
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
 project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
@@ -61,7 +60,6 @@ was published, so no user of a released version met those defects.
 - Choose the command line agent, name its command, and switch the channel or the session
   tool window off, in the settings page.
 - Add an application switch that lets a maximized tool window cover the editor completely.
-
 - A review comment on a part of a line records the character position of each end. The
   comment card, the review tree, the clipboard prompt, the task file, the channel event and
   the agent tools all name those characters. A comment on whole lines keeps the line numbers
@@ -235,6 +233,5 @@ was published, so no user of a released version met those defects.
 - A note whose path carried a few thousand separators emptied the review tree. The tree
   stops at 64 folders and shows the rest of the path in one row.
 
-
 [Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/yeskiy/yreview/releases/tag/v1.0.0
+[1.0.0]: https://github.com/yeskiy/yreview/commits/v1.0.0
