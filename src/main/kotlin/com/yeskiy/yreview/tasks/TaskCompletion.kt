@@ -6,6 +6,7 @@ import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.bridge.ResolveRequest
+import com.yeskiy.yreview.handoff.SentTasks
 import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewService
@@ -92,6 +93,34 @@ data class ClosePlan(
     }
 }
 
+/**
+ * What one batch of reported TODO identifiers proves.
+ *
+ * A TODO leaves no record behind, so the plugin reads two other facts. [open] holds the
+ * TODO lines that the scan of this project still finds, and [sent] holds the tasks that
+ * this project window handed to an agent.
+ *
+ * An identifier that the scan still finds is still in the source. An identifier that this
+ * window handed out and the scan no longer finds closed, because the agent removed that
+ * line. An identifier that this window never handed out belongs to another window, so it
+ * proves nothing and it reaches neither list.
+ */
+data class TodoOutcome(val closed: List<String>, val stillOpen: List<String>) {
+
+    companion object {
+
+        fun of(given: List<String>, open: List<String>, sent: Set<String>): TodoOutcome {
+            val (stillOpen, gone) = given.partition { namesOne(it, open) }
+            return TodoOutcome(gone.filter { TaskHandles.of(it) in sent }, stillOpen)
+        }
+
+        private fun namesOne(text: String, ids: List<String>): Boolean {
+            val key = TaskHandles.keyOf(text) ?: return false
+            return TaskHandles.match(key, ids) is HandleMatch.One
+        }
+    }
+}
+
 private sealed interface CommentOutcome {
 
     data object Closed : CommentOutcome
@@ -111,6 +140,11 @@ private sealed interface CommentOutcome {
  * agent closes it when the agent removes the line. The plugin only reports a TODO that is
  * still in the source.
  *
+ * One done file serves every window of one repository, so an identifier can name a TODO of
+ * a folder that this project never sent. [SentTasks] reads the task file of this window and
+ * answers whether the identifier ever left here, and [TodoOutcome] then counts a TODO only
+ * when this window handed it out and the line is gone.
+ *
  * An identifier that arrives twice writes nothing the second time. The done file keeps its
  * whole history, so the same line reaches this class again after a restart of the IDE.
  *
@@ -125,11 +159,11 @@ class TaskCompletion(private val project: Project) {
     fun close(ids: List<String>, limit: Int = ResolveRequest.MAX_IDS): CloseReport {
         val plan = ClosePlan.of(ids, indexReady = !DumbService.getInstance(project).isDumb, limit = limit)
         val outcomes = closeComments(plan.comments)
-        val stillOpen = openTodoIds(plan.todos)
+        val todos = todoOutcome(plan.todos)
         return CloseReport(
-            closed = outcomes.count { it is CommentOutcome.Closed } + plan.todos.size - stillOpen.size,
+            closed = outcomes.count { it is CommentOutcome.Closed } + todos.closed.size,
             problems = outcomes.filterIsInstance<CommentOutcome.Problem>().map { it.text } +
-                stillOpen.map { "The line of the task $it is still in the source." } +
+                todos.stillOpen.map { "The line of the task $it is still in the source." } +
                 listOfNotNull(plan.deferralProblem, plan.overflowProblem),
         )
     }
@@ -184,18 +218,15 @@ class TaskCompletion(private val project: Project) {
         book.closed(stored.commit).any { it.id == stored.id }
 
     /**
-     * The TODO items of the batch that are still in the source.
+     * What the reported TODO identifiers of one batch prove.
      *
-     * The scan reads the whole project once, and the match then runs in memory. A value
-     * that names no open TODO line simply closed, because the agent removed that line.
+     * The scan reads the whole project once, the task file of this window reads once, and
+     * the match then runs in memory. Both reads cost far less than the scan of the index
+     * that stands in front of them.
      */
-    private fun openTodoIds(given: List<String>): List<String> {
-        if (given.isEmpty()) return emptyList()
-        val open = TaskScan.openTodoIds(project).toList()
-        return given.filter { text ->
-            val key = TaskHandles.keyOf(text)
-            key != null && TaskHandles.match(key, open) is HandleMatch.One
-        }
+    private fun todoOutcome(given: List<String>): TodoOutcome {
+        if (given.isEmpty()) return TodoOutcome(emptyList(), emptyList())
+        return TodoOutcome.of(given, TaskScan.openTodoIds(project).toList(), SentTasks.of(project))
     }
 
     companion object {

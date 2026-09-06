@@ -34,15 +34,16 @@ class TaskCompletionDumbTest : BasePlatformTestCase() {
         assertTrue(report.problem.orEmpty().contains(TODO_ID))
     }
 
-    fun `test a reported todo item closes while the index is ready`() {
+    fun `test a reported todo item that this project cannot see closes nothing`() {
         val answer = AtomicReference<CloseReport?>(null)
         val work = closing(answer)
         work.join(DEADLINE_MS)
         val report = answer.get()
 
         assertNotNull("the plugin must answer while the index is ready", report)
-        assertEquals(1, report!!.closed)
+        assertEquals(0, report!!.closed)
         assertNull(report.problem)
+        assertTrue("a report that proves no close must stay quiet", report.quiet)
     }
 
     /** Closes the identifier away from the thread that runs the test, and starts at once. */

@@ -27,7 +27,9 @@ data class Places(
  * developer really uses, so the scan finds an agent that the PATH hides.
  *
  * A folder that no variable names drops out of the list, so no broken path reaches the
- * file system.
+ * file system. A variable that carries an empty value names no folder either. An empty
+ * first part would give a relative path. The scan would then read a folder under the
+ * working directory of the IDE.
  */
 object AgentFolders {
 
@@ -96,7 +98,7 @@ object AgentFolders {
         path(places.home, ".local", "share", "flatpak", "exports", "bin"),
     )
 
-    /** Null when the first part is null, and null when no path can carry the parts. */
+    /** Null when the first part names no folder, and null when no path carries the parts. */
     private fun path(first: String?, vararg more: String): Path? =
-        first?.let { runCatching { Path.of(it, *more) }.getOrNull() }
+        first?.takeIf { it.isNotBlank() }?.let { runCatching { Path.of(it, *more) }.getOrNull() }
 }

@@ -61,6 +61,7 @@ data class SessionPlan(
             sessionKey: String? = null,
             httpPort: Int? = null,
             passwordFile: String? = null,
+            windows: Boolean = ShellCommand.onWindows(),
         ): SessionPlan {
             val serverPath = (server as? ChannelServer.Answer.Found)?.path
             /** A registration reaches the agent only when all three parts of the server stand. */
@@ -78,7 +79,7 @@ data class SessionPlan(
                     ),
                     passwordFile?.let { SecretVariable(OpenCodeClient.PASSWORD_VARIABLE, it) },
                 ),
-                workingDirectory = ShellCommand.windowsPath(projectPath),
+                workingDirectory = ShellCommand.workingDirectory(projectPath, windows),
                 bridgeUrl = (bridge as? BridgeLookup.Available)?.url.orEmpty(),
                 environment = bridgeVariables(bridge, sessionKey) +
                     AgentLaunch.variables(agent, configFile.takeIf { registered }),

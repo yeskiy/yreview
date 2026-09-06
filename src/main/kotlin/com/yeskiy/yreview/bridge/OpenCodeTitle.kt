@@ -40,6 +40,9 @@ object OpenCodeTitle {
 
     private val JSON = Json { ignoreUnknownKeys = true }
 
+    /** The drive letter that starts a Windows path, in the spelling of the answer. */
+    private val DRIVE = Regex("^[a-z]:")
+
     /** An answer that no parser accepts holds no session, and it must throw nothing. */
     fun parse(body: String): List<OpenCodeSession> =
         runCatching { JSON.decodeFromString<List<OpenCodeSession>>(body) }.getOrDefault(emptyList())
@@ -61,8 +64,15 @@ object OpenCodeTitle {
         ?.takeUnless { PlainText.isMarkup(it) }
         ?.let { PlainText.of(it) }
 
-    /** One directory, two spellings. The plugin writes a slash, and the server a backslash. */
+    /**
+     * One directory, two spellings. The plugin writes a slash, and the server a backslash.
+     *
+     * The case of the path stays, because a Linux file system holds /home/dev/Project and
+     * /home/dev/project as two folders. A drive letter is the one part that a tool spells
+     * in either case, so that letter alone reads as one letter.
+     */
     fun same(left: String, right: String): Boolean = plain(left) == plain(right)
 
-    private fun plain(path: String): String = path.replace('\\', '/').trimEnd('/').lowercase()
+    private fun plain(path: String): String =
+        DRIVE.replace(path.replace('\\', '/').trimEnd('/')) { it.value.uppercase() }
 }

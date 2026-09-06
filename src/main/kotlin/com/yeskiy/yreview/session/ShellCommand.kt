@@ -15,8 +15,8 @@ data class SecretVariable(val name: String, val path: String)
  * shell function still resolves. The shell carries no flag that keeps it alive, therefore
  * it exits with the agent and the tool window reports the true state.
  *
- * The session reads the project from the working directory, which is why [windowsPath]
- * still matters. The IDE server refuses a WSL path.
+ * The session reads the project from the working directory, which is why [workingDirectory]
+ * still matters. The IDE server of Windows refuses a WSL path.
  *
  * Nothing here knows any agent. [AgentLaunch] builds the argument list.
  */
@@ -38,6 +38,16 @@ object ShellCommand {
             ?: slashes
         return if (windows.length > 3 && windows.endsWith("/")) windows.dropLast(1) else windows
     }
+
+    /**
+     * The working directory of one session, in the form the machine accepts.
+     *
+     * Windows takes the form of [windowsPath]. Any other system keeps the path as it
+     * stands. A folder named /mnt/c is an ordinary folder there. A backslash is also an
+     * ordinary character of a file name.
+     */
+    fun workingDirectory(raw: String, windows: Boolean = onWindows()): String =
+        if (windows) windowsPath(raw) else raw
 
     /**
      * One line for the shell. Every part is a literal string, so a path with a space and

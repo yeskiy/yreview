@@ -152,6 +152,31 @@ class BatchBuilderTest {
     }
 
     @Test
+    fun `a cut of the text keeps every character whole`() {
+        // The last character before the cap takes two code units. A cut by code units
+        // would leave one half, and the encoder writes the replacement byte for a half.
+        val wide = String(Character.toChars(0x1F680))
+        val comment = builder()
+            .build("main", commit, listOf(task("x".repeat(BatchBuilder.MAX_TEXT - 1) + wide)))
+            .batches.single().comments.single()
+
+        assertEquals(BatchBuilder.MAX_TEXT - 1, comment.text.length)
+        assertFalse(comment.text.last().isHighSurrogate(), "a half character reached the channel")
+    }
+
+    @Test
+    fun `a cut of the branch name keeps every character whole`() {
+        // Git takes a branch name of UTF-8, and the channel carries that name to the agent.
+        val wide = String(Character.toChars(0x1F680))
+        val batch = builder()
+            .build("b".repeat(BatchBuilder.MAX_BRANCH - 1) + wide, commit, listOf(task()))
+            .batches.single()
+
+        assertEquals(BatchBuilder.MAX_BRANCH - 1, batch.branch.length)
+        assertFalse(batch.branch.last().isHighSurrogate(), "a half character reached the channel")
+    }
+
+    @Test
     fun `cuts a text that is longer than the contract allows`() {
         val batch = builder().build("main", commit, listOf(task("x".repeat(30_000)))).batches.single()
         assertEquals(20_000, batch.comments.single().text.length)

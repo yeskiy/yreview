@@ -37,6 +37,16 @@ class PlainTextTest {
     }
 
     @Test
+    fun `a cut of the value keeps every character whole`() {
+        // Half of a character draws as a broken glyph in a tab name and in a notice.
+        val wide = String(Character.toChars(0x1F680))
+
+        val cut = PlainText.of("y".repeat(PlainText.LONGEST - 1) + wide + "tail")
+
+        assertEquals("y".repeat(PlainText.LONGEST - 1) + PlainText.MORE, cut)
+    }
+
+    @Test
     fun `a value over the cap ends with the mark`() {
         val cut = PlainText.of("x".repeat(PlainText.LONGEST + 40))
 

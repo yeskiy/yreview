@@ -37,6 +37,21 @@ class ShellCommandTest {
     }
 
     @Test
+    fun `windows converts the working directory of a session`() {
+        assertEquals(project, ShellCommand.workingDirectory("/mnt/e/work/demo-repo", windows = true))
+    }
+
+    @Test
+    fun `another system keeps the working directory as it stands`() {
+        // A folder named /mnt/e is an ordinary folder on Linux, and the session starts there.
+        assertEquals(
+            "/mnt/e/work/demo-repo",
+            ShellCommand.workingDirectory("/mnt/e/work/demo-repo", windows = false),
+        )
+        assertEquals("/home/dev/a\\b", ShellCommand.workingDirectory("/home/dev/a\\b", windows = false))
+    }
+
+    @Test
     fun `windows runs powershell with the profile of the user`() {
         val command = ShellCommand.shellCommand(listOf("claude"), windows = true)
 

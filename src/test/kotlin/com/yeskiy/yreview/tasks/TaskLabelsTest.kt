@@ -127,6 +127,16 @@ class TaskLabelsTest {
     }
 
     @Test
+    fun `a cut of the row keeps every character whole`() {
+        // Half of a character draws as a broken glyph in the tree.
+        val wide = String(Character.toChars(0x1F680))
+
+        val row = TaskLabels.rowText("x".repeat(TaskLabels.ROW_LIMIT - 1) + wide + "tail")
+
+        assertEquals("x".repeat(TaskLabels.ROW_LIMIT - 1) + TaskLabels.MORE, row)
+    }
+
+    @Test
     fun `keeps a line of the length of the row limit whole`() {
         val edge = "y".repeat(TaskLabels.ROW_LIMIT)
 
@@ -164,6 +174,33 @@ class TaskLabelsTest {
         assertTrue(tooltip.contains("first line"))
         assertTrue(tooltip.contains("second line"))
         assertTrue(tooltip.contains("<br/>"))
+    }
+
+    @Test
+    fun `a very long text ends in the tooltip`() {
+        val tooltip = TaskLabels.taskTooltip(comment.copy(text = "z".repeat(1_000_000)))
+
+        assertTrue(tooltip.length < TaskLabels.TOOLTIP_LIMIT * 2, "the tooltip holds ${tooltip.length} characters")
+        assertTrue(tooltip.contains(TaskLabels.MORE), tooltip.take(200))
+    }
+
+    @Test
+    fun `a text of many lines ends in the tooltip`() {
+        val tooltip = TaskLabels.taskTooltip(comment.copy(text = (1..5_000).joinToString("\n") { "line $it" }))
+
+        assertTrue(tooltip.contains("line 1<br/>"), tooltip.take(200))
+        assertFalse(tooltip.contains("line ${TaskLabels.TOOLTIP_LINES + 1}<"), "the tooltip holds too many lines")
+        assertTrue(tooltip.contains(TaskLabels.MORE), tooltip.take(200))
+    }
+
+    @Test
+    fun `the tooltip still shows more than the row`() {
+        val long = comment.copy(text = "z".repeat(TaskLabels.ROW_LIMIT * 4))
+
+        assertTrue(
+            TaskLabels.taskTooltip(long).contains("z".repeat(TaskLabels.ROW_LIMIT * 4)),
+            "the tooltip must carry the text the row cannot show",
+        )
     }
 
     @Test

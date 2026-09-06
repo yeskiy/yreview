@@ -43,8 +43,22 @@ class OpenCodeTitleTest {
         // The plugin writes a forward slash, and the server answers with a backslash.
         assertTrue(OpenCodeTitle.same("C:\\work\\app", "C:/work/app"))
         assertTrue(OpenCodeTitle.same("C:/work/app/", "C:/work/app"))
-        assertTrue(OpenCodeTitle.same("c:/work/app", "C:/Work/App"))
+        assertTrue(OpenCodeTitle.same("c:/work/app", "C:/work/app"))
         assertFalse(OpenCodeTitle.same("C:/work/app", "C:/work/app2"))
+    }
+
+    @Test
+    fun `two folders that differ by case are two folders`() {
+        // A Linux file system holds both of these, and they are not one directory.
+        assertFalse(OpenCodeTitle.same("/home/dev/Project", "/home/dev/project"))
+        assertFalse(OpenCodeTitle.same("C:/work/App", "C:/work/app"))
+    }
+
+    @Test
+    fun `a session of a folder that differs by case never names the tab`() {
+        val rows = listOf(session("ses_a", "the other project", "/home/dev/Project", 900))
+
+        assertNull(OpenCodeTitle.pick(rows, "/home/dev/project"))
     }
 
     @Test

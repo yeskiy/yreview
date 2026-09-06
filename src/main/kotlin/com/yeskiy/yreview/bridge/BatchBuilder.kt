@@ -56,11 +56,11 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
         endLine = task.endLine.coerceIn(0, MAX_LINE),
         endColumn = task.endColumn?.coerceIn(0, MAX_LINE),
         revision = task.revision,
-        text = TaskText.of(task.text).trim().take(MAX_TEXT),
+        text = TaskText.cut(TaskText.of(task.text).trim(), MAX_TEXT),
     )
 
     private fun branchName(branch: String): String =
-        branch.filterNot { TaskText.isAnyControl(it) }.take(MAX_BRANCH).ifEmpty { "HEAD" }
+        TaskText.cut(branch.filterNot { TaskText.isAnyControl(it) }, MAX_BRANCH).ifEmpty { "HEAD" }
 
     companion object {
         const val MAX_COMMENTS = 200

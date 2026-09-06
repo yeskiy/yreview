@@ -236,8 +236,18 @@ class SessionPlanTest {
     }
 
     @Test
-    fun `the plan converts a wsl project path`() {
-        assertEquals(project, SessionPlan.of("/mnt/e/work/demo-repo", ready).workingDirectory)
+    fun `the plan converts a wsl project path on windows`() {
+        assertEquals(project, SessionPlan.of("/mnt/e/work/demo-repo", ready, windows = true).workingDirectory)
+    }
+
+    @Test
+    fun `the plan keeps the project path of another system`() {
+        // A folder named /mnt/e is an ordinary folder on Linux. The rule of Windows would
+        // rewrite it to a drive that no such machine holds. The session would not start.
+        assertEquals(
+            "/mnt/e/work/demo-repo",
+            SessionPlan.of("/mnt/e/work/demo-repo", ready, windows = false).workingDirectory,
+        )
     }
 
     @Test

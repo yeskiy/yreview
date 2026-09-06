@@ -19,6 +19,12 @@ object TaskLabels {
     /** The mark at the end of a row whose text goes on. */
     const val MORE = "..."
 
+    /** How many characters of the text the tooltip of a row shows. */
+    const val TOOLTIP_LIMIT = 2_000
+
+    /** How many lines of the text the tooltip of a row shows. */
+    const val TOOLTIP_LINES = 20
+
     fun fileTitle(group: TaskGroup): String = group.name
 
     fun fileCount(group: TaskGroup): String = count(group.tasks.size, "task")
@@ -46,7 +52,7 @@ object TaskLabels {
     fun rowText(text: String): String {
         val lines = textLines(text)
         val first = lines.firstOrNull().orEmpty()
-        val short = first.take(ROW_LIMIT).trimEnd()
+        val short = TaskText.cut(first, ROW_LIMIT).trimEnd()
         return if (short.length < first.length || lines.size > 1) "$short$MORE" else short
     }
 
@@ -58,7 +64,7 @@ object TaskLabels {
         if (task.kind == TaskKind.TODO) task.pattern.orEmpty() else task.state
 
     /**
-     * The tooltip of one row. It names the place and then holds the whole text.
+     * The tooltip of one row. It names the place and then holds the text.
      *
      * The row is short, so the tooltip carries the text the row cannot show. The builder
      * escapes every character that means something in HTML.
@@ -67,7 +73,7 @@ object TaskLabels {
         HtmlBuilder()
             .append(HtmlChunk.text("${task.path}:${lines(task)}").bold())
             .br()
-            .appendWithSeparators(HtmlChunk.br(), task.text.trim().lines().map { HtmlChunk.text(it) })
+            .appendWithSeparators(HtmlChunk.br(), tooltipLines(task.text.trim()).map { HtmlChunk.text(it) })
             .wrapWithHtmlBody()
             .toString()
 
@@ -85,6 +91,20 @@ object TaskLabels {
     fun count(value: Int, name: String): String = "$value $name${if (value == 1) "" else "s"}"
 
     private fun kindWord(task: ReviewTask): String = if (task.kind == TaskKind.TODO) "todo" else "comment"
+
+    /**
+     * The lines of one tooltip.
+     *
+     * A review comment can hold a million characters, and the layout of Swing reads every
+     * one of them. The tooltip therefore ends after [TOOLTIP_LIMIT] characters and after
+     * [TOOLTIP_LINES] lines, and [MORE] says that the text goes on. Both bounds stay far
+     * above [ROW_LIMIT], so the tooltip still shows what the row cannot.
+     */
+    private fun tooltipLines(text: String): List<String> {
+        val rows = TaskText.cut(text, TOOLTIP_LIMIT).lines()
+        val kept = rows.take(TOOLTIP_LINES)
+        return if (kept.size < rows.size || text.length > TOOLTIP_LIMIT) kept + MORE else kept
+    }
 
     private fun textLines(text: String): List<String> =
         text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.toList()

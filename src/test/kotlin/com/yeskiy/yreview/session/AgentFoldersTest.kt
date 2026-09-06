@@ -75,6 +75,29 @@ class AgentFoldersTest {
     }
 
     @Test
+    fun `an empty data home leaves the default pnpm folder standing`() {
+        // A shell that exports the variable without a value gives an empty string. An
+        // empty first part then makes a relative path under the folder of the IDE.
+        val folders = texts(Platform.LINUX, unix.copy(dataHome = ""))
+
+        assertTrue(folders.contains("/home/dev/.local/share/pnpm"), "$folders")
+        assertFalse(folders.contains("pnpm"), "$folders")
+    }
+
+    @Test
+    fun `an empty variable names no folder at all`() {
+        // An empty value has to name as little as a missing value names. Every field of
+        // the places carries the same risk of a relative path.
+        Platform.entries.forEach { platform ->
+            assertEquals(
+                AgentFolders.of(platform, Places(null, null, null, null, null)),
+                AgentFolders.of(platform, Places("", "", "", "", "")),
+                "$platform reads an empty variable and a missing one differently",
+            )
+        }
+    }
+
+    @Test
     fun `a machine that names no variable gives no broken path`() {
         val empty = Places(null, null, null, null, null)
 

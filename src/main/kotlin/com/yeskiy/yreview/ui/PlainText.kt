@@ -1,5 +1,7 @@
 package com.yeskiy.yreview.ui
 
+import com.yeskiy.yreview.tasks.TaskText
+
 /**
  * The rule for a value that a component shows as plain text.
  *
@@ -7,6 +9,8 @@ package com.yeskiy.yreview.ui
  * platform adds no escape of its own. A value of a review record comes from the person who
  * wrote the record, so it can carry that tag and it can be as long as a book. A value that
  * starts with the tag reads as [UNKNOWN], and a long value ends after the cap.
+ *
+ * A cut takes [TaskText.cut], so a value never ends on one half of a character.
  *
  * A builder of markup needs no rule from here, because it escapes every character itself.
  */
@@ -32,6 +36,6 @@ object PlainText {
         val text = value.orEmpty()
         if (isMarkup(text)) return UNKNOWN
         if (text.length <= limit) return text
-        return text.take(limit).trimEnd() + MORE
+        return TaskText.cut(text, limit).trimEnd() + MORE
     }
 }
