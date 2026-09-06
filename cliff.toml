@@ -1,0 +1,80 @@
+# The changelog generator. git-cliff reads the Conventional Commits messages of this
+# repository and writes CHANGELOG.md from them.
+#
+# https://git-cliff.org/docs/configuration
+#
+# The headings follow Keep a Changelog, because the org.jetbrains.changelog Gradle plugin
+# parses the generated file. That plugin reads a heading of the form
+# "## [1.2.3] - 2026-01-01". It splits the heading text and takes the first token that
+# matches a semantic version, and the token "v1.2.3" fails that test. For this reason the
+# template removes the leading "v" from the tag name.
+#
+# The group names come from the six that the Gradle plugin knows: Added, Changed,
+# Deprecated, Removed, Fixed, and Security. A heading outside that set reaches the
+# Marketplace listing as plain text under no section.
+#
+# This file writes no link at the foot of the changelog. The patchChangelog task of the
+# Gradle plugin writes one line for each heading, and publishPlugin runs that task. The
+# task adds a line that the file does not hold and changes no other line, therefore a
+# generated file and a patched file stay equal after the first release.
+
+[changelog]
+# The header carries the Unreleased heading, and the body never writes that heading.
+#
+# The IntelliJ Platform Gradle Plugin reads the change notes as
+# "getOrNull(pluginVersion) ?: getUnreleased()", and getUnreleased() raises
+# MissingVersionException when the file holds no Unreleased heading. A run at a tag has
+# nothing unreleased, therefore a body that writes the heading only when it has entries
+# would leave the released file without one. A raised pluginVersion would then stop
+# patchPluginXml until the next release. A heading in the header stands in every generated
+# file, and the entries of the unreleased range fall under it, because git-cliff writes the
+# unreleased range before every tagged range.
+header = """
+# Changelog
+
+git-cliff writes this file from the commit messages. Do not edit it by hand.
+The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this
+project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased]
+"""
+body = """
+{% if version %}
+## [{{ version | trim_start_matches(pat="v") }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}
+- {% if commit.breaking %}Breaking. {% endif %}{{ commit.message | split(pat="\n") | first | upper_first | trim }}
+{%- endfor %}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+# A breaking commit reaches the file even when a rule below skips its type.
+protect_breaking_commits = true
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf", group = "Changed" },
+  { message = "^refactor", group = "Changed" },
+  { message = "^revert", group = "Changed" },
+  { message = "^docs", skip = true },
+  { message = "^style", skip = true },
+  { message = "^test", skip = true },
+  { message = "^chore", skip = true },
+  { message = "^build", skip = true },
+  { message = "^ci", skip = true },
+  # This repository closes a branch with a "merge:" commit. That commit repeats the
+  # description of the commits below it, so the file would carry each change twice.
+  { message = "^merge", skip = true },
+  # A type that no rule above names falls here. The six group names that the Gradle plugin
+  # knows are the only headings this file may carry, therefore an unknown type takes one of
+  # them in place of a heading of its own. Write a rule above when a new type appears.
+  { message = ".*", group = "Changed" },
+]
