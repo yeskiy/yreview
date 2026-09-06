@@ -37,10 +37,6 @@
       <li>The plugin resolves a comment when the agent reports that the task is done.</li>
     </ul>
     <p>
-      The plugin sends no data to a server of the author. It opens one port on the loopback
-      interface, and it pushes a shared note only to your own git remote.
-    </p>
-    <p>
       Source code and issue tracker:
       <a href="https://github.com/yeskiy/yreview">https://github.com/yeskiy/yreview</a>
     </p>
