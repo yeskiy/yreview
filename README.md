@@ -135,11 +135,12 @@ git notes --ref refs/notes/devtools/discuss show <commit>
 | `<git directory>/y-review/migrated-<milliseconds>` | The folder store, after the records reach the git notes | A git repository starts to cover a folder store |
 | `remote.<name>.fetch` in the git configuration | The line `+refs/notes/devtools/*:refs/notes/devtools/*`, added once | The first time you share a comment |
 | A push to your git remote | The shared note ref only | You write a shared comment |
-| `<git directory>/y-review/AGENT.md` | The rules an agent reads | Every send |
-| `<git directory>/y-review/tasks.json` | The open tasks of the repository | Every send |
-| `<git directory>/y-review/done.txt` | Read only. An agent appends the tasks it finished. The plugin never writes this file. | Never |
+| `<git directory>/y-review/<window>/AGENT.md` | The rules an agent reads | Every send |
+| `<git directory>/y-review/<window>/tasks.json` | The open tasks of the repository | Every send |
+| `<git directory>/y-review/<window>/done.txt` | Read only. An agent appends the tasks it finished. The plugin never writes this file. | Never |
+| `<git directory>/y-review/done.txt` | Read only. The done file that an earlier version wrote, outside any window folder. The plugin still reads it, so a task an agent already reported still closes. | Never |
 | `~/.y-review/bridge/<mangled project path>.json` | The loopback address of the bridge and a fresh secret. Owner rights only, where the file system knows them. | The project opens and the channel switch stands on |
-| `~/.y-review/mcp/<agent>.json` | The Model Context Protocol configuration of one agent. It holds no secret. | A session of Claude Code, OpenCode, Gemini CLI, or GitHub Copilot CLI starts, and the file there does not hold that text already |
+| `~/.y-review/mcp/<agent>-<build code>.json` | The Model Context Protocol configuration of one agent. It holds no secret. | A session of Claude Code, OpenCode, Gemini CLI, or GitHub Copilot CLI starts, and the file there does not hold that text already |
 | `<project>/.cursor/mcp.json` | The review server, in the file that Cursor CLI reads | You press Add on the settings page while Cursor CLI is the chosen agent |
 | The Model Context Protocol file of Antigravity CLI | The review server. The plugin runs `agy mcp add`, and Antigravity CLI writes the file. | You press Add on the settings page while Antigravity CLI is the chosen agent |
 | `<project>/.idea/y-review.xml` | The settings of this plugin for this project | You change a setting |
@@ -148,6 +149,10 @@ git notes --ref refs/notes/devtools/discuss show <commit>
 
 The git directory is `.git` in a normal repository. Git never tracks that folder, so no
 review file reaches a commit.
+
+`<window>` is the folder of one project window. The name joins the name of the project
+folder and a short digest of its whole path. You can open two windows on one repository,
+and each one then keeps its own task list.
 
 ## What the plugin runs
 
@@ -233,7 +238,7 @@ Open Settings, Tools, Yreview.
 | New comments: | Local only | Where a new comment goes. `Local only` writes `refs/notes/y-review/local`. `Shared` writes `refs/notes/devtools/discuss` and pushes that ref. The add-comment box can change the choice for one comment. |
 | Remote for shared comments: | `origin` | The remote that a shared note goes to. Not every repository names its remote `origin`. A blank field falls back to `origin`. |
 | Add the notes refspec to the git configuration | On | The plugin adds `+refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch` once, so the notes other people write come back with the next fetch. With the box clear the plugin writes no git configuration, and you add that line by hand. |
-| Send the review tasks through the channel | On | With the box clear, the plugin opens no port and starts no channel server. Every send then writes `AGENT.md` and `tasks.json` in the git directory, and it copies the prompt to the clipboard. |
+| Send the review tasks through the channel | On | With the box clear, the plugin opens no port and starts no channel server. Every send then writes `AGENT.md` and `tasks.json` in the review folder of this project window, and it copies the prompt to the clipboard. |
 | Show the session tool window | On | Whether the review session window appears. The window appears and disappears at once, so you need no restart. |
 | Command line agent: | Claude Code | The agent that the session window runs. A running session keeps the agent it started with, and the next session uses the new choice. |
 | Command: | The default command of the chosen agent, `claude` for Claude Code | The one command a shell runs to start the session. The page keeps one command for each agent. Paste a full path when the command is not on the PATH. |
