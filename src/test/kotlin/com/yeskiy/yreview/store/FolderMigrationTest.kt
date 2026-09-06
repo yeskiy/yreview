@@ -6,6 +6,7 @@ import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -14,11 +15,22 @@ private class DeafStore : NoteStore {
 
     override fun readLines(ref: String, commit: String): List<String> = emptyList()
 
+    override fun readOrRefuse(ref: String, commit: String): List<String> = emptyList()
+
     override fun append(ref: String, commit: String, line: String) = Unit
 
     override fun rewrite(ref: String, commit: String, lines: List<String>) = Unit
 
     override fun commitsWithNotes(ref: String): List<String> = emptyList()
+
+    override fun commitsOrRefuse(ref: String): List<String> = emptyList()
+}
+
+/** A store that refuses every read, which is what a note the runner could not read looks like. */
+private class BlindStore(private val real: NoteStore) : NoteStore by real {
+
+    override fun readOrRefuse(ref: String, commit: String): List<String> =
+        throw NotesWriteException("The plugin did not read the record of $commit, so it wrote no record.")
 }
 
 class FolderMigrationTest {
@@ -156,6 +168,41 @@ class FolderMigrationTest {
                 val report = FolderMigration.copy(FolderNotes(root), NotesGateway(repo.git), NoteRefs.ALL, head)
                 assertEquals(0, report.moved)
                 assertNull(report.problem)
+            }
+        }
+    }
+
+    @Test
+    fun `a source the plugin cannot read reports a problem and moves nothing`() {
+        withFolder { root ->
+            TempRepo().use { repo ->
+                val head = repo.commit("a.kt", "one")
+                val folder = FolderNotes(root)
+                bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
+                val notes = NotesGateway(repo.git)
+
+                val report = FolderMigration.copy(BlindStore(folder), notes, NoteRefs.ALL, head)
+
+                assertEquals(0, report.moved)
+                assertNotNull(report.problem, "a read the plugin cannot trust must stop the move")
+                assertTrue(bookOf(notes).list(head).isEmpty())
+            }
+        }
+    }
+
+    @Test
+    fun `a target the plugin cannot read reports a problem and writes no duplicate`() {
+        withFolder { root ->
+            TempRepo().use { repo ->
+                val head = repo.commit("a.kt", "one")
+                val folder = FolderNotes(root)
+                bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
+
+                val report = FolderMigration.copy(folder, BlindStore(NotesGateway(repo.git)), NoteRefs.ALL, head)
+
+                assertEquals(0, report.moved)
+                assertNotNull(report.problem)
+                assertTrue(bookOf(NotesGateway(repo.git)).list(head).isEmpty())
             }
         }
     }

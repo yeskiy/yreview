@@ -43,6 +43,15 @@ data class TaskGrouping(
  */
 object TaskTree {
 
+    /**
+     * How many folder rows may stand above a file row.
+     *
+     * The path of a review comment comes from the note, so another person wrote it and the
+     * tree must survive any value. A real path stays far below this number, because a path
+     * of 64 folders needs at least 128 characters and Windows stops a path at 260.
+     */
+    const val MAX_DEPTH = 64
+
     fun group(tasks: List<ReviewTask>, label: (ReviewTask) -> String = { it.path }): List<TaskGroup> =
         tasks.distinctBy { "${it.filePath} ${it.id}" }
             .groupBy(label)
@@ -86,7 +95,15 @@ object TaskTree {
         )
     }
 
+    /**
+     * One folder row for each segment of the path, down to [MAX_DEPTH].
+     *
+     * At the cap every file takes one row, and that row shows the rest of its path. The
+     * method calls itself once for each folder row, so a path of many thousand separators
+     * would otherwise fill the stack and leave the whole tree empty.
+     */
     private fun nest(groups: List<TaskGroup>, depth: Int): TaskLayout {
+        if (depth >= MAX_DEPTH) return TaskLayout(files = rest(groups, depth))
         val (deeper, here) = groups.partition { segments(it).size > depth + 1 }
         return TaskLayout(
             deeper.groupBy { segments(it)[depth] }
@@ -95,6 +112,10 @@ object TaskTree {
             short(here),
         )
     }
+
+    /** The part of each path that stands below [depth], as the name of one file row. */
+    private fun rest(groups: List<TaskGroup>, depth: Int): List<TaskGroup> =
+        groups.sortedBy { it.path }.map { it.copy(name = segments(it).drop(depth).joinToString("/")) }
 
     private fun short(groups: List<TaskGroup>): List<TaskGroup> =
         groups.sortedBy { it.path }.map { it.copy(name = it.path.substringAfterLast('/')) }

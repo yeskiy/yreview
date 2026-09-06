@@ -163,4 +163,63 @@ class NotesGatewayTest {
             }
         }
     }
+
+    // --- A read the plugin cannot trust ---
+
+    @Test
+    fun `the refusing read gives no record for a commit that carries no note`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.txt", "one")
+            assertEquals(emptyList(), NotesGateway(repo.git).readOrRefuse(NoteRefs.LOCAL, head))
+        }
+    }
+
+    @Test
+    fun `the refusing read stops a note the runner refused`() {
+        val gateway = NotesGateway(OneAnswer(GitResult(GitResult.TOO_MUCH_OUTPUT, "", "the note passed the limit")))
+
+        assertFailsWith<NotesWriteException> { gateway.readOrRefuse(NoteRefs.LOCAL, "deadbeef") }
+    }
+
+    @Test
+    fun `the refusing read stops a git that never started`() {
+        val gateway = NotesGateway(OneAnswer(GitResult(GitResult.DID_NOT_START, "", "the plugin could not start git")))
+
+        assertFailsWith<NotesWriteException> { gateway.readOrRefuse(NoteRefs.LOCAL, "deadbeef") }
+    }
+
+    @Test
+    fun `the quiet read gives no record for a note the runner refused`() {
+        val gateway = NotesGateway(OneAnswer(GitResult(GitResult.TOO_MUCH_OUTPUT, "", "the note passed the limit")))
+
+        assertEquals(emptyList(), gateway.readLines(NoteRefs.LOCAL, "deadbeef"))
+    }
+
+    @Test
+    fun `the refusing list stops a git that never started`() {
+        val gateway = NotesGateway(OneAnswer(GitResult(GitResult.DID_NOT_START, "", "the plugin could not start git")))
+
+        assertFailsWith<NotesWriteException> { gateway.commitsOrRefuse(NoteRefs.LOCAL) }
+    }
+
+    @Test
+    fun `the refusing list gives no key for a ref that holds no note`() {
+        TempRepo().use { repo ->
+            repo.commit("a.txt", "one")
+            assertEquals(emptyList(), NotesGateway(repo.git).commitsOrRefuse(NoteRefs.LOCAL))
+        }
+    }
+
+    @Test
+    fun `the quiet list gives no key for a git that never started`() {
+        val gateway = NotesGateway(OneAnswer(GitResult(GitResult.DID_NOT_START, "", "the plugin could not start git")))
+
+        assertEquals(emptyList(), gateway.commitsWithNotes(NoteRefs.LOCAL))
+    }
+}
+
+/** A runner that gives one answer to every command. */
+private class OneAnswer(private val answer: GitResult) : GitRunner {
+
+    override fun run(vararg args: String): GitResult = answer
 }

@@ -165,4 +165,33 @@ class TaskLayoutTest {
         assertTrue(layout.files.isEmpty())
         assertTrue(TaskTree.tasksOf(layout).isEmpty())
     }
+
+    // --- A path that another person wrote ---
+
+    @Test
+    fun `a path of many folders stops at the depth cap`() {
+        val layout = TaskTree.layout(groups(task("a", deepPath(20_000))), byDirectory)
+
+        assertEquals(TaskTree.MAX_DEPTH, depthOf(layout))
+        assertEquals(listOf("a"), TaskTree.tasksOf(layout).map { it.id }, "the task keeps its row")
+    }
+
+    @Test
+    fun `the row at the depth cap shows the rest of the path`() {
+        val layout = TaskTree.layout(groups(task("a", deepPath(TaskTree.MAX_DEPTH + 2))), byDirectory)
+
+        assertEquals(listOf("d/d/A.kt"), deepest(layout).files.map { it.name })
+    }
+
+    /** A path of [folders] folders, each one named the same, with one file at the end. */
+    private fun deepPath(folders: Int): String = List(folders) { "d" }.joinToString("/") + "/A.kt"
+
+    private fun depthOf(layout: TaskLayout): Int = layout.folders.maxOfOrNull { depthOf(it) } ?: 0
+
+    private fun depthOf(folder: TaskFolder): Int = 1 + (folder.folders.maxOfOrNull { depthOf(it) } ?: 0)
+
+    private fun deepest(layout: TaskLayout): TaskFolder = deepest(layout.folders.single())
+
+    private fun deepest(folder: TaskFolder): TaskFolder =
+        folder.folders.singleOrNull()?.let { deepest(it) } ?: folder
 }

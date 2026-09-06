@@ -91,6 +91,9 @@ class CommentBook(
      * One record is one line of the note of its commit. The method reads that note, keeps
      * every other line byte for byte, and writes the note again. A resolve record that
      * points at a deleted record goes with it, so no line of the note is left dangling.
+     *
+     * The read feeds the write, so a note the plugin cannot read stops the delete and names
+     * the reason. A quiet read would report that the note holds no line for that comment.
      */
     fun remove(records: List<StoredComment>): Int =
         records.groupBy({ NoteKey(it.ref, it.commit) }, { it.id })
@@ -98,7 +101,7 @@ class CommentBook(
             .sum()
 
     private fun removeFrom(key: NoteKey, ids: Set<String>): Int {
-        val lines = gateway.readLines(key.ref, key.commit)
+        val lines = gateway.readOrRefuse(key.ref, key.commit)
         val kept = lines.filterNot { drops(it, ids) }
         if (kept.size == lines.size) return 0
         gateway.rewrite(key.ref, key.commit, kept)

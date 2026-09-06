@@ -1,6 +1,7 @@
 package com.yeskiy.yreview.store
 
 import java.io.IOException
+import java.io.UncheckedIOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.nio.file.Path
@@ -67,13 +68,13 @@ class FolderNotes(private val root: Path) : NoteStore {
      * one byte that no UTF-8 text holds, and it reports a disk that refused the read. Both
      * are a failure, and neither is an empty file.
      */
-    private fun readOrRefuse(ref: String, commit: String): List<String> {
+    override fun readOrRefuse(ref: String, commit: String): List<String> {
         val file = fileOf(ref, commit)
         if (!Files.isRegularFile(file)) return emptyList()
         return try {
             Files.readAllLines(file, StandardCharsets.UTF_8).filter { it.isNotBlank() }
         } catch (failure: IOException) {
-            throw NotesWriteException("The plugin did not read $file, so it wrote no record. ${failure.message}")
+            throw NotesWriteException(refusal(file, failure.message))
         }
     }
 
@@ -91,18 +92,33 @@ class FolderNotes(private val root: Path) : NoteStore {
         }
     }
 
-    override fun commitsWithNotes(ref: String): List<String> {
+    override fun commitsWithNotes(ref: String): List<String> =
+        try {
+            commitsOrRefuse(ref)
+        } catch (refused: NotesWriteException) {
+            emptyList()
+        }
+
+    /** A folder that is not there holds no key. A folder the plugin cannot list stops the caller. */
+    override fun commitsOrRefuse(ref: String): List<String> {
         val directory = folder.resolve(FolderStore.slug(ref))
         if (!Files.isDirectory(directory)) return emptyList()
-        return runCatching {
+        return try {
             Files.list(directory).use { stream ->
                 stream.map { it.name }
                     .filter { it.endsWith(FolderStore.SUFFIX) }
                     .map { it.removeSuffix(FolderStore.SUFFIX) }
                     .toList()
             }
-        }.getOrDefault(emptyList())
+        } catch (failure: IOException) {
+            throw NotesWriteException(refusal(directory, failure.message))
+        } catch (failure: UncheckedIOException) {
+            throw NotesWriteException(refusal(directory, failure.message))
+        }
     }
+
+    private fun refusal(place: Path, reason: String?): String =
+        "The plugin did not read $place, so it wrote no record. $reason"
 
     private fun remove(file: Path) {
         try {

@@ -6,9 +6,32 @@ class NotesWriteException(message: String) : RuntimeException(message)
 
 class NotesGateway(private val git: GitRunner) : NoteStore {
 
-    override fun readLines(ref: String, commit: String): List<String> {
+    /**
+     * The records of one note, and no record when the plugin cannot read that note.
+     *
+     * [FolderNotes] answers the same way when a file fails, so both stores keep one contract.
+     * A caller that shows records therefore needs no second path.
+     */
+    override fun readLines(ref: String, commit: String): List<String> =
+        try {
+            readOrRefuse(ref, commit)
+        } catch (refused: NotesWriteException) {
+            emptyList()
+        }
+
+    /**
+     * The records of one note. A note the plugin cannot read stops the caller.
+     *
+     * A commit that carries no note gives an exit code of git itself, and no record is the
+     * right answer. A note that passed the limit of the runner and a git that never started
+     * both give a failed answer that states nothing, and neither one is an empty note.
+     */
+    override fun readOrRefuse(ref: String, commit: String): List<String> {
         val result = git.run("notes", "--ref", ref, "show", commit)
-        if (!result.ok) return emptyList()
+        if (!result.ok) {
+            if (!result.answered) throw NotesWriteException(refusal("the note of $commit", result))
+            return emptyList()
+        }
         return result.stdout.lineSequence().filter { it.isNotBlank() }.toList()
     }
 
@@ -35,14 +58,28 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
         }
     }
 
-    override fun commitsWithNotes(ref: String): List<String> {
+    override fun commitsWithNotes(ref: String): List<String> =
+        try {
+            commitsOrRefuse(ref)
+        } catch (refused: NotesWriteException) {
+            emptyList()
+        }
+
+    /** A list the plugin cannot read stops the caller, the same way [readOrRefuse] does. */
+    override fun commitsOrRefuse(ref: String): List<String> {
         val result = git.run("notes", "--ref", ref, "list")
-        if (!result.ok) return emptyList()
+        if (!result.ok) {
+            if (!result.answered) throw NotesWriteException(refusal("the notes of $ref", result))
+            return emptyList()
+        }
         return result.stdout.lineSequence()
             .filter { it.isNotBlank() }
             .map { it.substringAfter(' ').trim() }
             .toList()
     }
+
+    private fun refusal(what: String, result: GitResult): String =
+        "The plugin did not read $what, so it wrote no record. ${result.stderr.trim()}".trim()
 
     /**
      * The note text goes through a file, never through an argument. On Windows the Java

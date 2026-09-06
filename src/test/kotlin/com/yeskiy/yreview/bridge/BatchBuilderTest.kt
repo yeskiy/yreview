@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.bridge
 
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskKind
 import kotlin.test.Test
@@ -98,6 +99,14 @@ class BatchBuilderTest {
         val plan = builder().build("main", commit, listOf(task(text = "   ")))
         assertTrue(plan.batches.isEmpty())
         assertEquals(BatchBuilder.TEXT_REASON, plan.reason)
+    }
+
+    @Test
+    fun `carries a comment that a migration moved out of a folder store`() {
+        val plan = builder().build("main", commit, listOf(task(revision = FolderStore.WORKTREE)))
+
+        assertEquals(1, plan.tasks, plan.reason)
+        assertEquals(FolderStore.WORKTREE, plan.batches.single().comments.single().revision)
     }
 
     @Test

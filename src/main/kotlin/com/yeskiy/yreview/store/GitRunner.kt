@@ -18,10 +18,22 @@ data class GitResult(val exitCode: Int, val stdout: String, val stderr: String) 
      */
     val ran: Boolean get() = exitCode != DID_NOT_START
 
+    /**
+     * True when git itself gave this exit code.
+     *
+     * A false answer states nothing about the repository, because the runner made it. Git
+     * never gives a negative exit code, and every sentinel of this class is negative. A
+     * caller that reads a fact out of a failed run tests this first.
+     */
+    val answered: Boolean get() = exitCode >= 0
+
     companion object {
 
         /** The exit code of an answer that no git process made. A git exit code is not negative. */
         const val DID_NOT_START = -2
+
+        /** The exit code of an answer the runner refused, because one stream passed its limit. */
+        const val TOO_MUCH_OUTPUT = -1
     }
 }
 
@@ -53,7 +65,7 @@ class ProcessGitRunner(
         // A stopped process closes the error pipe, and the reader of that pipe then fails.
         val stderr = if (stdout == null) runCatching { errors.get() }.getOrNull() else errors.get()
         val exitCode = process.waitFor()
-        if (stdout == null || stderr == null) return TOO_MUCH_OUTPUT
+        if (stdout == null || stderr == null) return REFUSED_OUTPUT
         return GitResult(exitCode, stdout, stderr)
     }
 
@@ -89,8 +101,6 @@ class ProcessGitRunner(
 
         private const val CHUNK_BYTES = 64 * 1024
 
-        private const val TOO_MUCH_OUTPUT_CODE = -1
-
         /**
          * The answer of a run that never started. Git is missing, or the system refused it.
          *
@@ -103,8 +113,8 @@ class ProcessGitRunner(
             "The plugin could not start git. Set the path to git under Settings, Version Control, Git.",
         )
 
-        private val TOO_MUCH_OUTPUT = GitResult(
-            TOO_MUCH_OUTPUT_CODE,
+        private val REFUSED_OUTPUT = GitResult(
+            GitResult.TOO_MUCH_OUTPUT,
             "",
             "The git command wrote more than $MAX_OUTPUT_BYTES bytes. " +
                 "The plugin stopped the command and refused the answer.",

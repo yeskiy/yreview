@@ -3,7 +3,24 @@ package com.yeskiy.yreview.store
 import com.yeskiy.yreview.TempRepo
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
+
+/**
+ * A runner that refuses to read a note, the way the real one refuses an over-large stream.
+ *
+ * Every other command reaches git, so a test writes the note first and then reads it with
+ * a runner that cannot answer. A real note of that size would make the test slow.
+ */
+private class RefusesTheNote(private val real: GitRunner) : GitRunner {
+
+    override fun run(vararg args: String): GitResult =
+        if (args.firstOrNull() == "notes" && args.contains("show")) {
+            GitResult(GitResult.TOO_MUCH_OUTPUT, "", "the note passed the limit of the runner")
+        } else {
+            real.run(*args)
+        }
+}
 
 /**
  * A delete of one review comment.
@@ -149,6 +166,23 @@ class CommentRemovalTest {
             assertEquals(0, book(repo).remove(listOf(unknown)))
 
             assertEquals(before, lines(repo, commit = head))
+        }
+    }
+
+    @Test
+    fun `a delete keeps every comment when the runner refuses the note`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            val store = book(repo)
+            store.add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "keep this one")
+            val second = store.add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 2, endLine = 2), "delete this one")
+            val before = lines(repo, commit = head)
+
+            val blind = CommentBook(NotesGateway(RefusesTheNote(repo.git)), author = "reviewer@example.com")
+            assertFailsWith<NotesWriteException> { blind.remove(listOf(second)) }
+
+            assertEquals(before, lines(repo, commit = head), "a read the plugin cannot trust must write nothing")
+            assertEquals(2, book(repo).list(head).size)
         }
     }
 

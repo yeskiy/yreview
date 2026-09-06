@@ -71,6 +71,13 @@ object FolderMigration {
 
     private fun commentCount(value: Int): String = "$value review comment${if (value == 1) "" else "s"}"
 
+    /**
+     * Copies every record, and stops at the first read the plugin cannot trust.
+     *
+     * Every read here feeds a write, so each one goes through the door that refuses. A read
+     * that answered an empty list because it failed would let the copy report success, and
+     * the caller would then move a folder whose records never reached the notes.
+     */
     fun copy(from: NoteStore, to: NoteStore, refs: List<String>, target: String): MigrationReport =
         refs.fold(MigrationReport(0, null)) { report, ref ->
             if (report.problem != null) report else copyRef(from, to, ref, target, report)
@@ -83,8 +90,12 @@ object FolderMigration {
         target: String,
         report: MigrationReport,
     ): MigrationReport =
-        from.commitsWithNotes(ref).fold(report) { carried, key ->
-            if (carried.problem != null) carried else copyKey(from, to, ref, key, target, carried)
+        try {
+            from.commitsOrRefuse(ref).fold(report) { carried, key ->
+                if (carried.problem != null) carried else copyKey(from, to, ref, key, target, carried)
+            }
+        } catch (refused: NotesWriteException) {
+            MigrationReport(report.moved, refused.message.orEmpty())
         }
 
     private fun copyKey(
@@ -94,13 +105,27 @@ object FolderMigration {
         key: String,
         target: String,
         report: MigrationReport,
+    ): MigrationReport =
+        try {
+            moveKey(from, to, ref, key, target, report)
+        } catch (refused: NotesWriteException) {
+            MigrationReport(report.moved, refused.message.orEmpty())
+        }
+
+    private fun moveKey(
+        from: NoteStore,
+        to: NoteStore,
+        ref: String,
+        key: String,
+        target: String,
+        report: MigrationReport,
     ): MigrationReport {
-        val source = from.readLines(ref, key)
+        val source = from.readOrRefuse(ref, key)
         if (source.isEmpty()) return report
-        val known: Set<String?> = idsOf(to.readLines(ref, target))
+        val known: Set<String?> = idsOf(to.readOrRefuse(ref, target))
         val missing = source.filter { idOf(it) !in known }
         missing.forEach { to.append(ref, target, it) }
-        val after = idsOf(to.readLines(ref, target))
+        val after = idsOf(to.readOrRefuse(ref, target))
         val lost = source.mapNotNull { idOf(it) }.filterNot { it in after }
         if (lost.isNotEmpty()) {
             return MigrationReport(report.moved, "The note of $ref did not take ${lineCount(lost.size)}.")

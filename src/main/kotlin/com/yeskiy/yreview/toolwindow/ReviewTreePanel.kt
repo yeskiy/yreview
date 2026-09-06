@@ -122,6 +122,7 @@ import com.yeskiy.yreview.tasks.ChangeListFacts
 import com.yeskiy.yreview.tasks.ChangeListScan
 import com.yeskiy.yreview.tasks.ChangeListTab
 import com.yeskiy.yreview.tasks.CheckState
+import com.yeskiy.yreview.tasks.ClosePlan
 import com.yeskiy.yreview.tasks.CloseReport
 import com.yeskiy.yreview.tasks.RemoveReport
 import com.yeskiy.yreview.tasks.RepositoryTasks
@@ -883,21 +884,16 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
         val report = ProgressManager.getInstance().runProcessWithProgressSynchronously(
             ThrowableComputable<CloseReport, RuntimeException> {
-                TaskCompletion.getInstance(project).close(chosen.comments.map { it.id })
+                TaskCompletion.getInstance(project).close(chosen.comments.map { it.id }, ClosePlan.NO_CAP)
             },
             "Resolving the Review Comments",
             true,
             project,
         )
-        val problem = report.problem
-        if (problem != null) {
-            ReviewNotice.warn(project, problem)
-            return
-        }
-        ReviewNotice.say(
-            project,
+        val text = report.sentence(
             "The IDE resolved ${TaskLabels.count(report.closed, "comment")}. ${chosen.todoNotice}".trim(),
         )
+        if (report.problem == null) ReviewNotice.say(project, text) else ReviewNotice.warn(project, text)
     }
 
     // --- Delete ---

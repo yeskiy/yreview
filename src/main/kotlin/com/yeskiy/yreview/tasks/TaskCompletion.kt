@@ -5,6 +5,7 @@ import com.intellij.openapi.components.service
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.yeskiy.yreview.bridge.ResolveRequest
 import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewService
@@ -16,6 +17,14 @@ data class CloseReport(val closed: Int, val problems: List<String> = emptyList()
     val problem: String? get() = problems.joinToString(" ").ifEmpty { null }
 
     val quiet: Boolean get() = closed == 0 && problems.isEmpty()
+
+    /**
+     * What a person reads after a close. [done] names the count, and a problem follows it.
+     *
+     * A person who reads a problem alone cannot tell how many tasks closed, and a batch that
+     * closed most of its tasks still carries a problem about the rest.
+     */
+    fun sentence(done: String): String = listOfNotNull(done.ifBlank { null }, problem).joinToString(" ")
 }
 
 /**
@@ -27,23 +36,52 @@ data class CloseReport(val closed: Int, val problems: List<String> = emptyList()
  *
  * The plugin therefore holds the TODO identifiers back while the IDE builds its index. The
  * comments still close, and the agent reads one sentence and reports the TODO items again.
+ *
+ * One batch also has a size. Each comment identifier costs a walk over every commit that
+ * carries a note, and every walk starts a git process for each note. A batch that an agent
+ * outside the IDE wrote therefore stops at [ResolveRequest.MAX_IDS] identifiers, which is
+ * the number the channel route already takes, and [overflowProblem] names the rest.
+ *
+ * That bound is the default of [of], so a route which states nothing takes it. A route that
+ * a person drives states [NO_CAP], because a user who checks 250 rows asked for 250.
  */
-data class ClosePlan(val comments: List<String>, val todos: List<String>, val deferred: List<String>) {
+data class ClosePlan(
+    val comments: List<String>,
+    val todos: List<String>,
+    val deferred: List<String>,
+    val dropped: List<String> = emptyList(),
+) {
 
     /** The sentence the agent reads about the identifiers this plan held back. */
     val deferralProblem: String?
         get() = if (deferred.isEmpty()) null else "$INDEX_BUSY ${deferred.joinToString(" ")}"
 
+    /**
+     * The sentence about the identifiers the cap left out.
+     *
+     * The sentence names the count and not the identifiers, because one batch can hold many
+     * thousand of them and a person reads this text.
+     */
+    val overflowProblem: String?
+        get() = if (dropped.isEmpty()) null else "$TOO_MANY It left ${dropped.size} out, so report them again."
+
     companion object {
 
         const val INDEX_BUSY = "The IDE builds its index, so it cannot read the TODO lines yet. Report these again:"
 
-        fun of(ids: List<String>, indexReady: Boolean): ClosePlan {
-            val (todos, comments) = ids.distinct().partition { TaskIds.isTodo(it) }
+        const val TOO_MANY = "The plugin closes at most ${ResolveRequest.MAX_IDS} tasks at one time."
+
+        /** The bound of a route that a person drives. A user who checks 250 rows asked for 250. */
+        const val NO_CAP = Int.MAX_VALUE
+
+        fun of(ids: List<String>, indexReady: Boolean, limit: Int = ResolveRequest.MAX_IDS): ClosePlan {
+            val known = ids.distinct()
+            val (todos, comments) = known.take(limit).partition { TaskIds.isTodo(it) }
             return ClosePlan(
                 comments = comments,
                 todos = if (indexReady) todos else emptyList(),
                 deferred = if (indexReady) emptyList() else todos,
+                dropped = known.drop(limit),
             )
         }
     }
@@ -70,19 +108,24 @@ private sealed interface CommentOutcome {
  *
  * An identifier that arrives twice writes nothing the second time. The done file keeps its
  * whole history, so the same line reaches this class again after a restart of the IDE.
+ *
+ * [close] bounds one batch at [ResolveRequest.MAX_IDS] identifiers. Both agent routes take
+ * that bound, because neither one has a person behind it. The tool window states
+ * [ClosePlan.NO_CAP], because a user picked every row and waits behind a progress window
+ * that takes a cancel.
  */
 @Service(Service.Level.PROJECT)
 class TaskCompletion(private val project: Project) {
 
-    fun close(ids: List<String>): CloseReport {
-        val plan = ClosePlan.of(ids, indexReady = !DumbService.getInstance(project).isDumb)
+    fun close(ids: List<String>, limit: Int = ResolveRequest.MAX_IDS): CloseReport {
+        val plan = ClosePlan.of(ids, indexReady = !DumbService.getInstance(project).isDumb, limit = limit)
         val outcomes = closeComments(plan.comments)
         val stillOpen = openTodoIds(plan.todos)
         return CloseReport(
             closed = outcomes.count { it is CommentOutcome.Closed } + plan.todos.size - stillOpen.size,
             problems = outcomes.filterIsInstance<CommentOutcome.Problem>().map { it.text } +
                 stillOpen.map { "The line of the task $it is still in the source." } +
-                listOfNotNull(plan.deferralProblem),
+                listOfNotNull(plan.deferralProblem, plan.overflowProblem),
         )
     }
 

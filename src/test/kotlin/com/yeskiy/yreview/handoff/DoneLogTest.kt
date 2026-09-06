@@ -26,6 +26,11 @@ class DoneLogTest {
         Files.writeString(file, text, StandardOpenOption.CREATE, StandardOpenOption.APPEND)
     }
 
+    /** A line that no read can hold takes several reads to pass, so the test reads until the end. */
+    private fun drain(log: DoneLog): List<String> = (1..READS).flatMap { log.newIds() }
+
+    private fun tooLong(): String = "x".repeat((DoneLog.MAX_READ * 2).toInt())
+
     @Test
     fun `gives nothing when the file is missing`() {
         withFile { file -> assertTrue(DoneLog(file).newIds().isEmpty()) }
@@ -124,5 +129,52 @@ class DoneLogTest {
             log.newIds()
             assertEquals(41L, log.offset)
         }
+    }
+
+    @Test
+    fun `reads the identifiers after a line that no read can hold`() {
+        withFile { file ->
+            append(file, "${tooLong()}\n$one\n$two\n")
+
+            assertEquals(listOf(one, two), drain(DoneLog(file)))
+        }
+    }
+
+    @Test
+    fun `counts a line that no read can hold as one refused line`() {
+        withFile { file ->
+            append(file, "${tooLong()}\n$one\n")
+            val log = DoneLog(file)
+
+            drain(log)
+
+            assertEquals(1, log.rejected)
+        }
+    }
+
+    @Test
+    fun `moves the read position past a line that no read can hold`() {
+        withFile { file ->
+            append(file, "${tooLong()}\n")
+            val log = DoneLog(file)
+
+            drain(log)
+
+            assertEquals(Files.size(file), log.offset, "a read that never moves reads the same bytes for good")
+        }
+    }
+
+    @Test
+    fun `takes no identifier out of the end of a line that no read can hold`() {
+        withFile { file ->
+            append(file, "${tooLong()}$one\n$two\n")
+
+            assertEquals(listOf(two), drain(DoneLog(file)))
+        }
+    }
+
+    private companion object {
+        /** How many reads the tests give a log. A line of two megabytes needs three. */
+        const val READS = 8
     }
 }
