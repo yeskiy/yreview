@@ -1,3 +1,4 @@
+import org.jetbrains.intellij.platform.gradle.IntelliJPlatformType
 import org.jetbrains.intellij.platform.gradle.TestFrameworkType
 import org.jetbrains.intellij.platform.gradle.tasks.PrepareSandboxTask
 
@@ -68,9 +69,19 @@ intellijPlatform {
         }
     }
 
+    // The verifier reads one IDE, IntelliJ IDEA.
+    //
+    // recommended() reads the product release feed and answers every release of the
+    // current product between sinceBuild and untilBuild, over the release, the EAP and the
+    // RC channel. That list changes on the day JetBrains publishes a build, so a release
+    // run could meet an IDE that no run met before. One named version keeps every run equal.
+    //
+    // The code IU answers the type IntellijIdea from version 2026.2, where JetBrains put
+    // the two editions of IntelliJ IDEA into one distribution. An earlier version answers
+    // IntellijIdeaUltimate instead.
     pluginVerification {
         ides {
-            recommended()
+            create(IntelliJPlatformType.IntellijIdea, "2026.2.2")
         }
     }
 
