@@ -1124,13 +1124,13 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             autoScroll.createToggleAction(),
             PreviewAction(),
             Separator.getInstance(),
+            SendAction(),
+            CopyAction(),
             RefreshAction(),
             CheckAllAction(),
             ClearChecksAction(),
             ResolveAction(),
             DeleteAction(),
-            SendAction(),
-            CopyAction(),
         )
     }
 
