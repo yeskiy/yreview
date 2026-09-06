@@ -125,7 +125,7 @@ jobs:
           # Anything left under Unreleased means the promotion never ran, so the notes of
           # this tag are short by everything written since the last release.
           ./gradlew getChangelog --unreleased --no-header --no-links --output-file build/tmp/unreleased.md --console=plain
-          if [ -s build/tmp/unreleased.md ]; then
+          if [ -n "$(tr -d "[:space:]" < build/tmp/unreleased.md)" ]; then
             echo "CHANGELOG.md still holds entries under Unreleased." >&2
             echo "Move them under $version before you tag the release." >&2
             exit 1
