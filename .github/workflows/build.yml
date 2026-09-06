@@ -1,7 +1,12 @@
-# The build, the tests, and the JetBrains Plugin Verifier.
+# The build, the tests, the JetBrains Plugin Verifier, and the changelog configuration.
 #
-# Three jobs run in place of one, so a red run names the step that broke. Every action is
+# Four jobs run in place of one, so a red run names the step that broke. Every action is
 # pinned to a commit, because a tag can move to other code and these runners hold a cache.
+#
+# Two rules keep this file safe from a pull request that a stranger opens. Never change the
+# trigger to pull_request_target. Never add a workflow_run job that runs the code of the
+# plugin-archive artifact. Each one hands the code of a fork the secrets of this repository
+# and a token that writes.
 name: Build
 
 on:
@@ -35,8 +40,13 @@ jobs:
           tool-cache: false
           large-packages: false
 
+      # The token stays out of .git/config. This job runs ./gradlew, which reads
+      # build.gradle.kts of the pull request, and no job of this file writes to the
+      # repository.
       - name: Check out the sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -70,8 +80,13 @@ jobs:
           tool-cache: false
           large-packages: false
 
+      # The token stays out of .git/config. This job runs ./gradlew, which reads
+      # build.gradle.kts of the pull request, and no job of this file writes to the
+      # repository.
       - name: Check out the sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -111,8 +126,13 @@ jobs:
           tool-cache: false
           large-packages: false
 
+      # The token stays out of .git/config. This job runs ./gradlew, which reads
+      # build.gradle.kts of the pull request, and no job of this file writes to the
+      # repository.
       - name: Check out the sources
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -139,3 +159,47 @@ jobs:
         with:
           name: plugin-verifier-report
           path: build/reports/pluginVerifier
+
+  # The release run writes CHANGELOG.md from cliff.toml before any Gradle task starts. A
+  # broken configuration would stop that run after the tag is public, and a tag is hard to
+  # take back. This job reads the same configuration on every pull request instead. It
+  # needs no Java and no Gradle, so it costs about half a minute.
+  changelog:
+    name: Check the changelog configuration
+    runs-on: ubuntu-latest
+    steps:
+      # git-cliff reads every commit and every tag, so the shallow default does not serve.
+      # The token stays out of .git/config, as it does in every other job of this file.
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The action carries the exit code of git-cliff, therefore a configuration that no
+      # parser reads, or a template that no renderer runs, stops this job.
+      #
+      # The args input names the path as the shell variable RUNNER_TEMP. The action writes
+      # the value of that input into a bash line, so no expression may stand here. Read the
+      # step named "Write the changelog from the commit messages" in release.yml.
+      - name: Write the changelog into a scratch file
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        with:
+          config: cliff.toml
+          args: --output "${RUNNER_TEMP}/changelog-check.md"
+
+      # The org.jetbrains.changelog Gradle plugin knows six section names, and a name
+      # outside that set reaches the Marketplace listing as plain text under no section. A
+      # commit type that cliff.toml does not name would write such a heading.
+      - name: Check that every section name is one the build reads
+        run: |
+          unknown="${RUNNER_TEMP}/unknown-sections.txt"
+          sed -n 's/^### //p' "${RUNNER_TEMP}/changelog-check.md" \
+            | sort -u \
+            | grep -vxE "Added|Changed|Deprecated|Removed|Fixed|Security" > "$unknown" || true
+          if [ -s "$unknown" ]; then
+            echo "CHANGELOG.md would carry a section that the build cannot read:" >&2
+            cat "$unknown" >&2
+            echo "Write a rule for the commit type in cliff.toml under commit_parsers." >&2
+            exit 1
+          fi

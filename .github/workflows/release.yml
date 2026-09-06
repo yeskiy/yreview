@@ -4,9 +4,16 @@
 # certificate, and no token.
 #
 # Three secrets carry the release: CERTIFICATE_CHAIN, PRIVATE_KEY, and PUBLISH_TOKEN.
-# PRIVATE_KEY_PASSWORD stays empty. The signer cannot read an encrypted key on a plain
-# runtime, so the documented openssl rsa step removes the password from the key. An
-# unencrypted key ignores the password, therefore an empty secret is correct.
+# PRIVATE_KEY_PASSWORD stays empty. The signer reads an encrypted key as well, because
+# PrivateKeyUtils of marketplace-zip-signer takes a PEMEncryptedKeyPair and a
+# PKCS8EncryptedPrivateKeyInfo and decrypts each one with the password. This project ships
+# an unencrypted key, because the documented openssl rsa step removes the password and the
+# secret store guards the file. An unencrypted key ignores the password, therefore an empty
+# secret is correct.
+#
+# git-cliff writes CHANGELOG.md and the release notes from the commit messages. Both texts
+# come from one tool and one configuration, so the release page and the Marketplace listing
+# read the same. cliff.toml holds the rule that maps a commit type to a section.
 name: Release
 
 on:
@@ -18,14 +25,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
-permissions:
-  contents: write
-
 jobs:
 
   release:
     name: Sign and publish the plugin
     runs-on: ubuntu-latest
+    # Only the last step writes to the repository. The right to write stands on the job
+    # that needs it, and not on the workflow, so a job added later starts with no right.
+    permissions:
+      contents: write
     steps:
       - name: Free the disk
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
@@ -33,11 +41,74 @@ jobs:
           tool-cache: false
           large-packages: false
 
-      # The whole history comes down, because the changelog step reads the earlier tags.
+      # The whole history comes down, because git-cliff reads every commit and every tag.
+      #
+      # This checkout keeps the token in .git/config, because the last step pushes the
+      # changelog to main. Every checkout in build.yml drops the token instead, because no
+      # job there writes to the repository.
       - name: Check out the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
+
+      # The tag and the build must name one version. The IntelliJ Platform Gradle Plugin
+      # reads the change notes for the build version, so two different numbers would carry
+      # the notes of an earlier release to the Marketplace.
+      - name: Check that the tag and the build name one version
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          build_version=$(sed -n 's/^pluginVersion=//p' gradle.properties)
+          if [ "$tag_version" != "$build_version" ]; then
+            echo "The tag names version $tag_version, and gradle.properties names $build_version." >&2
+            echo "Set pluginVersion to $tag_version, then tag the release again." >&2
+            exit 1
+          fi
+
+      # The two steps below name the tag as the shell variable GITHUB_REF_NAME, and never
+      # as the expression github.ref_name. git-cliff-action is a composite action, and it
+      # runs "run.sh --config=... ${{ inputs.args }}" in bash. GitHub writes the value of
+      # args into that line before bash reads it, so a tag named v1.0.0$(id) would run the
+      # command id. A tag takes both forms, because git accepts them in a ref name. Bash
+      # expands a variable after it parses the line, therefore the quoted variable stays
+      # text. Keep every value that a person controls out of the args input.
+      #
+      # This step runs before every Gradle task, because the build reads the file it
+      # writes. The IntelliJ Platform Gradle Plugin takes the change notes from the section
+      # of the build version, therefore the fresh file needs no other wiring.
+      - name: Write the changelog from the commit messages
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        with:
+          config: cliff.toml
+          args: --tag "${GITHUB_REF_NAME}" --output CHANGELOG.md
+
+      # The release page takes the section of this tag alone. The header of the file holds
+      # the title and the Unreleased heading, and neither one belongs on a release page.
+      - name: Write the release notes of this tag
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        with:
+          config: cliff.toml
+          args: --tag "${GITHUB_REF_NAME}" --latest --strip header --output "${RUNNER_TEMP}/release-notes-raw.md"
+
+      # The Gradle plugin renders the Marketplace listing without the version heading. The
+      # first command drops the same heading from the release notes, and the second drops
+      # the blank lines above the first section, so both pages read the same.
+      #
+      # Two guards stood here before. One asked that the file holds a section for this tag,
+      # and the other asked that the Unreleased section is empty. Both watched a person who
+      # promotes a section by hand. A generator writes the section of the tag on every run
+      # and leaves nothing under Unreleased, so neither guard can fail now. The guard below
+      # catches the failure that remains. Every commit of a tag can carry a type that
+      # cliff.toml skips, and the release page would then carry no text at all.
+      - name: Read the release notes
+        run: |
+          sed -e '0,/^## \[/d' "${RUNNER_TEMP}/release-notes-raw.md" \
+            | sed -e '/./,$!d' > "${RUNNER_TEMP}/release-notes.md"
+          if [ -z "$(tr -d "[:space:]" < "${RUNNER_TEMP}/release-notes.md")" ]; then
+            echo "git-cliff wrote no entry for ${GITHUB_REF_NAME}." >&2
+            echo "Every commit of this tag carries a type that cliff.toml skips." >&2
+            exit 1
+          fi
+          cat "${RUNNER_TEMP}/release-notes.md"
 
       - name: Set up Java
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
@@ -107,35 +178,40 @@ jobs:
         run: ./gradlew publishPlugin --console=plain
 
       # The GitHub CLI is on every hosted runner, so this needs no third-party action.
-      # The tag names the release, therefore the body carries no header line and no link
-      # list.
+      # The tag names the release, therefore the body carries no version heading.
       #
-      # Two guards stand here, because the old step could pass while it shipped the wrong
-      # text. It asked for no version, so the task answered the newest released section,
-      # which stays the same when nobody promotes the Unreleased heading. The only check
-      # was test -s, and a section of an earlier version is not empty, so a release could
-      # carry the notes of the version before it and report success.
-      - name: Read the change notes of this version
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          # The notes must belong to the tag that is being released. A missing section
-          # stops the release instead of falling back to an earlier one.
-          ./gradlew getChangelog --project-version="$version" --no-header --no-links --output-file build/tmp/release-notes.md --console=plain
-          test -s build/tmp/release-notes.md
-          # Anything left under Unreleased means the promotion never ran, so the notes of
-          # this tag are short by everything written since the last release.
-          ./gradlew getChangelog --unreleased --no-header --no-links --output-file build/tmp/unreleased.md --console=plain
-          if [ -n "$(tr -d "[:space:]" < build/tmp/unreleased.md)" ]; then
-            echo "CHANGELOG.md still holds entries under Unreleased." >&2
-            echo "Move them under $version before you tag the release." >&2
-            exit 1
-          fi
-
+      # The env block carries the tag into the script as a variable, and the script reads
+      # it between double quotes. GitHub writes the value of an expression into the script
+      # text before bash reads that text, so the expression github.ref_name here would run
+      # the command in a tag named v1.0.0$(id). Git accepts such a name for a tag. Bash
+      # expands a variable after it parses the line, therefore the value stays text.
       - name: Create the GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
-          gh release create "${{ github.ref_name }}" \
-            --title "${{ github.ref_name }}" \
-            --notes-file build/tmp/release-notes.md \
+          gh release create "$TAG" \
+            --title "$TAG" \
+            --notes-file "${RUNNER_TEMP}/release-notes.md" \
             build/distributions/*-signed.zip
+
+      # The file in the repository must carry the release that shipped. This job starts on
+      # a tag, which leaves the checkout on no branch, so the step reads main and writes the
+      # generated file over the one that main holds.
+      #
+      # The commit takes the type docs, which cliff.toml skips, therefore this commit never
+      # reaches the changelog of the next release.
+      - name: Write the changelog back to main
+        run: |
+          cp CHANGELOG.md "${RUNNER_TEMP}/CHANGELOG.md"
+          git fetch --no-tags origin main
+          git checkout -f -B main origin/main
+          cp "${RUNNER_TEMP}/CHANGELOG.md" CHANGELOG.md
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "CHANGELOG.md on main already carries the notes of ${GITHUB_REF_NAME}."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit --only CHANGELOG.md -m "docs: write the changelog of ${GITHUB_REF_NAME}"
+          git push origin main
