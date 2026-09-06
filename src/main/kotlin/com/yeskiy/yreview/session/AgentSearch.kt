@@ -21,10 +21,11 @@ data class AgentInstall(val path: String?, val source: AgentSource) {
  *
  * The PATH comes first, because most installers write a launcher there. The well known
  * folders follow, because an IDE that starts from a desktop launcher can hold a shorter
- * PATH than the terminal of the same user.
+ * PATH than the terminal of the same user. Both ways apply the same test to a file, so a
+ * file that the operating system cannot start counts as found in neither way.
  *
  * Every function is pure. The caller passes the environment as text, the folder list, and
- * the two file tests, so one test drives every platform on any machine.
+ * the one file test, so one test drives every platform on any machine.
  *
  * A search reports a file. A user whose command is a shell function keeps that function,
  * because a shell function has no file and no PATH entry, and no search finds it. For that
@@ -39,14 +40,13 @@ object AgentSearch {
         windows: Boolean,
         folders: List<Path>,
         runnable: (Path) -> Boolean,
-        exists: (Path) -> Boolean,
     ): AgentInstall {
         if (spec.commands.isEmpty()) return AgentInstall.NOTHING
         val onPath = spec.commands.firstNotNullOfOrNull { command ->
             PathLookup.find(command, path, File.pathSeparatorChar, windows, pathExt, runnable)
         }
         if (onPath != null) return AgentInstall(onPath.toAbsolutePath().toString(), AgentSource.PATH)
-        val file = candidates(spec, windows, pathExt, folders).firstOrNull(exists)
+        val file = candidates(spec, windows, pathExt, folders).firstOrNull(runnable)
         return file?.let { AgentInstall(it.toString(), AgentSource.FOLDER) } ?: AgentInstall.NOTHING
     }
 
@@ -57,9 +57,8 @@ object AgentSearch {
         windows: Boolean,
         folders: List<Path>,
         runnable: (Path) -> Boolean,
-        exists: (Path) -> Boolean,
     ): Map<AgentId, AgentInstall> =
-        specs.associate { it.id to one(it, path, pathExt, windows, folders, runnable, exists) }
+        specs.associate { it.id to one(it, path, pathExt, windows, folders, runnable) }
 
     /**
      * Every file that one folder can hold for one agent. [PathLookup.names] builds the

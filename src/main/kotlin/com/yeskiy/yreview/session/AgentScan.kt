@@ -80,7 +80,6 @@ class AgentScan {
                 windows = platform == Platform.WINDOWS,
                 folders = AgentFolders.of(platform, AgentFolders.places()),
                 runnable = ::runnable,
-                exists = { Files.isRegularFile(it) },
             ),
             scanned = true,
         )

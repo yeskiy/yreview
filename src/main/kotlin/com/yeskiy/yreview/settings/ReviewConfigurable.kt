@@ -96,6 +96,14 @@ class ReviewConfigurable(private val project: Project) : Configurable {
     /** True while the page fills the box itself. A new model fires the listener of the box. */
     private var filling = false
 
+    /**
+     * True after the user picked an agent in the box.
+     *
+     * A fill of the box is no pick. The page fills the box when it opens, and again when a
+     * search finds an agent, and both fills run behind [filling].
+     */
+    private var picked = false
+
     override fun getDisplayName(): String = ProductName.TEXT
 
     override fun createComponent(): JComponent {
@@ -235,8 +243,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             channel.isSelected != settings().channel ||
             sessionWindow.isSelected != shown() ||
             maximize.isSelected != MaximizeSettings.getInstance().full ||
-            selectedAgent().id != settings().agentOrDefault() ||
-            !settings().agentChosen ||
+            agentModified() ||
             commandsChanged() ||
             remote.text.trim() != settings().remote ||
             refspec.isSelected != settings().writeRefspec ||
@@ -250,7 +257,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         typed[selectedAgent().id] = command.text
         typed.forEach { (id, text) -> settings().setCommand(id, text) }
         AgentCatalog.ALL.forEach { typed[it.id] = settings().command(it.id) }
-        settings().agent = selectedAgent().id
+        if (picked || settings().agentChosen) settings().agent = selectedAgent().id
         settings().remote = remote.text
         settings().writeRefspec = refspec.isSelected
         settings().editorMarks = editorMarks.isSelected
@@ -271,6 +278,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         maximize.isSelected = MaximizeSettings.getInstance().full
         typed.clear()
         AgentCatalog.ALL.forEach { typed[it.id] = settings().command(it.id) }
+        picked = false
         shown = settings().agentOrDefault()
         fillAgents()
         showAgent()
@@ -316,8 +324,13 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         }
     }
 
-    /** Every switch of the box keeps what the user typed for the agent it leaves. */
+    /**
+     * Every switch of the box keeps what the user typed for the agent it leaves.
+     *
+     * Only a pick of the user reaches this method, so the flag it sets carries a choice.
+     */
     private fun switchAgent() {
+        picked = true
         typed[shown] = command.text
         showAgent()
     }
@@ -351,6 +364,17 @@ class ReviewConfigurable(private val project: Project) : Configurable {
     }
 
     private fun selectedAgent(): AgentSpec = agents.selectedItem as? AgentSpec ?: AgentCatalog.of(AgentCatalog.DEFAULT)
+
+    /**
+     * True while the box names another agent than the store holds, or while the user
+     * picked one for a project that holds no choice.
+     *
+     * The box always names one agent, because a combo box cannot show an empty choice. A
+     * project with no choice therefore shows the default, and that picture alone is no
+     * choice of the user.
+     */
+    private fun agentModified(): Boolean =
+        settings().agent?.let { selectedAgent().id != it } ?: picked
 
     private fun commandsChanged(): Boolean {
         typed[selectedAgent().id] = command.text

@@ -16,11 +16,10 @@ class AgentSearchTest {
 
     private fun one(
         path: String? = null,
-        exists: (Path) -> Boolean = { false },
         runnable: (Path) -> Boolean = { false },
         spec: AgentSpec = claude,
         windows: Boolean = false,
-    ) = AgentSearch.one(spec, path, null, windows, folders, runnable, exists)
+    ) = AgentSearch.one(spec, path, null, windows, folders, runnable)
 
     @Test
     fun `an empty machine reports nothing`() {
@@ -33,7 +32,7 @@ class AgentSearchTest {
 
     @Test
     fun `the PATH answer wins over a folder`() {
-        val install = one(path = "/usr/bin", runnable = { true }, exists = { true })
+        val install = one(path = "/usr/bin", runnable = { true })
 
         assertTrue(install.found)
         assertEquals(AgentSource.PATH, install.source)
@@ -44,11 +43,26 @@ class AgentSearchTest {
     fun `a folder answers when the PATH holds nothing`() {
         val wanted = Path.of("/opt/homebrew/bin/claude")
 
-        val install = one(exists = { it == wanted })
+        val install = one(runnable = { it == wanted })
 
         assertTrue(install.found)
         assertEquals(AgentSource.FOLDER, install.source)
         assertEquals(wanted.toString(), install.path)
+    }
+
+    @Test
+    fun `a file the PATH search rejects is not found again in a folder`() {
+        // One file stands on the PATH and in a known folder, and the system cannot start it.
+        val install = AgentSearch.one(
+            claude,
+            "/opt/homebrew/bin",
+            null,
+            windows = false,
+            folders = listOf(Path.of("/opt/homebrew/bin")),
+            runnable = { false },
+        )
+
+        assertFalse(install.found)
     }
 
     @Test
@@ -62,8 +76,7 @@ class AgentSearchTest {
             ".COM;.EXE;.CMD",
             windows = true,
             folders = listOf(Path.of("C:/Volta/bin")),
-            runnable = { false },
-            exists = { it == volta },
+            runnable = { it == volta },
         )
 
         assertTrue(install.found)
@@ -75,7 +88,7 @@ class AgentSearchTest {
     fun `the second name of an agent still answers`() {
         val wanted = Path.of("/home/dev/.local/bin/agent")
 
-        val install = one(spec = cursor, exists = { it == wanted })
+        val install = one(spec = cursor, runnable = { it == wanted })
 
         assertTrue(install.found)
         assertEquals(wanted.toString(), install.path)
@@ -83,14 +96,14 @@ class AgentSearchTest {
 
     @Test
     fun `an agent that names no command is never found`() {
-        val install = one(spec = AgentCatalog.of(AgentId.CUSTOM), runnable = { true }, exists = { true })
+        val install = one(spec = AgentCatalog.of(AgentId.CUSTOM), runnable = { true })
 
         assertFalse(install.found)
     }
 
     @Test
     fun `one scan answers for every agent of the catalog`() {
-        val answers = AgentSearch.all(AgentCatalog.ALL, null, null, false, folders, { false }, { false })
+        val answers = AgentSearch.all(AgentCatalog.ALL, null, null, false, folders) { false }
 
         assertEquals(AgentId.entries.toSet(), answers.keys)
         assertTrue(answers.values.none { it.found })
@@ -100,7 +113,7 @@ class AgentSearchTest {
     fun `a scan that found two agents names them`() {
         val wanted = setOf(Path.of("/opt/homebrew/bin/claude"), Path.of("/opt/homebrew/bin/opencode"))
 
-        val answers = AgentSearch.all(AgentCatalog.ALL, null, null, false, folders, { false }) { it in wanted }
+        val answers = AgentSearch.all(AgentCatalog.ALL, null, null, false, folders) { it in wanted }
 
         assertEquals(setOf(AgentId.CLAUDE, AgentId.OPENCODE), answers.filterValues { it.found }.keys)
     }
