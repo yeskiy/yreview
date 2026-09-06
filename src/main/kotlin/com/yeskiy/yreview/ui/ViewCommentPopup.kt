@@ -8,7 +8,6 @@ import com.intellij.ui.components.JBLabel
 import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
-import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoredComment
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -54,7 +53,7 @@ object ViewCommentPopup {
         val popup = ReviewPopup.build(panel, body, TITLE, Dimension(JBUI.scale(420), JBUI.scale(200)))
         resolveButton.addActionListener {
             popup.closeOk(null)
-            resolve(project, root, stored)
+            CommentResolve.run(project, root, stored)
         }
         closeButton.addActionListener { popup.cancel() }
         popup.show(point)
@@ -68,10 +67,4 @@ object ViewCommentPopup {
 
     private fun line(text: String): JBLabel =
         JBLabel(text, UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.BRIGHTER)
-
-    private fun resolve(project: Project, root: VirtualFile, stored: StoredComment) {
-        ReviewService.getInstance(project).resolveComment(root, stored).shareError?.let {
-            ShareFailure.report(project, TITLE, it)
-        }
-    }
 }
