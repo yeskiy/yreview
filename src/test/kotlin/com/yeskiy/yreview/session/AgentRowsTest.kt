@@ -72,6 +72,22 @@ class AgentRowsTest {
     }
 
     @Test
+    fun `no sentence about a search that found nothing states a fact about the machine`() {
+        // The plugin tested a search path. A session starts through a login shell, which
+        // reads a longer path, so a missing answer is no fact about the machine.
+        val missed = AgentCatalog.ALL.filter { it.product }
+            .flatMap { listOf(AgentRows.row(it, false), AgentRows.place(it, answer())) }
+            .plus(AgentRows.NOTHING_FOUND)
+
+        missed.forEach { assertFalse(it.contains("this machine"), it) }
+    }
+
+    @Test
+    fun `the sentence of an empty search points at the command field`() {
+        assertTrue(AgentRows.NOTHING_FOUND.contains("full path"), AgentRows.NOTHING_FOUND)
+    }
+
+    @Test
     fun `a found tool says nothing about the desktop application`() {
         val text = AgentRows.row(AgentCatalog.of(AgentId.CODEX), true)
 
@@ -181,13 +197,13 @@ class AgentRowsTest {
     }
 
     @Test
-    fun `the settings line of a product reads this machine`() {
+    fun `the settings line of a product names the find, or the search that missed it`() {
         assertEquals(
             "This machine holds Claude Code at /usr/bin/claude.",
             AgentRows.place(claude, answer(AgentId.CLAUDE)),
         )
         assertEquals(
-            "The plugin did not find Claude Code on this machine. ${claude.hint}",
+            "The plugin did not find Claude Code on the search path of this IDE. ${claude.hint}",
             AgentRows.place(claude, answer()),
         )
         assertEquals(AgentRows.SEARCHING, AgentRows.place(claude, AgentScan.Answer.NOT_YET))

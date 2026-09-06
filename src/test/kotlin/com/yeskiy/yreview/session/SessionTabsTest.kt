@@ -11,6 +11,7 @@ import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.TestActionEvent
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.toolWindow.ToolWindowHeadlessManagerImpl
+import com.intellij.ui.components.JBPanelWithEmptyText
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.settings.ReviewSettings
 
@@ -246,6 +247,61 @@ class SessionTabsTest : BasePlatformTestCase() {
         assertEquals("Aider 1 (starting)", label())
         settle()
     }
+
+    fun `test a close of the last tab leaves a tab that waits`() {
+        settings().agent = AgentId.AIDER
+        openTabs()
+
+        closeFirstTab()
+
+        assertEquals(1, window.contentManager.contentCount)
+        assertEquals("Aider 1 (not started)", label())
+    }
+
+    fun `test the tab that follows the close names the button to press`() {
+        settings().agent = AgentId.AIDER
+        openTabs()
+
+        closeFirstTab()
+
+        assertEquals(
+            "Press Start in the title bar to open a session with the comment channel.",
+            hint(),
+        )
+    }
+
+    fun `test a close of one tab of two opens no tab`() {
+        settings().agent = AgentId.AIDER
+        val tabs = openTabs()
+        tabs.open(start = false)
+        assertEquals(2, window.contentManager.contentCount)
+
+        closeFirstTab()
+
+        assertEquals(1, window.contentManager.contentCount)
+    }
+
+    fun `test a close that follows the disposal opens no tab`() {
+        settings().agent = AgentId.AIDER
+        val tabs = openTabs()
+
+        Disposer.dispose(tabs)
+        closeFirstTab()
+
+        assertEquals(0, window.contentManager.contentCount)
+    }
+
+    /** Closes the first tab the way the cross of that tab does. */
+    private fun closeFirstTab() =
+        window.contentManager.removeContent(window.contentManager.getContent(0)!!, true)
+
+    /** The second line of the empty screen of the first tab. It names the next step. */
+    private fun hint(): String = panel().components
+        .filterIsInstance<JBPanelWithEmptyText>()
+        .single()
+        .emptyText
+        .secondaryComponent
+        .toString()
 
     private companion object {
         const val LONG_NAME = "rewrite the whole authentication layer"

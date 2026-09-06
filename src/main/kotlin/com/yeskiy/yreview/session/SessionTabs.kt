@@ -37,6 +37,11 @@ private class SessionTab(val number: Int, val panel: SessionPanel, val content: 
  * content carries the panel as its disposer, and the platform disposes a content when it
  * leaves the window.
  *
+ * A close of the last tab opens one tab again. The platform builds the content of a window
+ * once, so a window that loses every tab would stay empty for the life of the project. The
+ * new tab starts nothing, because the user just ended a session, and its empty screen names
+ * the button that starts the next one.
+ *
  * The second title bar button reads the tab the user looks at. It starts the session of
  * that tab while none runs, and it ends the running one. A session that ends keeps its tab
  * and its output, so the user reads the last lines and starts again in the same tab.
@@ -51,10 +56,14 @@ class SessionTabs(
 
     private val tabs = mutableListOf<SessionTab>()
 
+    /** True after the project closed this window. Every later close then opens no tab. */
+    private var closing = false
+
     init {
         toolWindow.contentManager.addContentManagerListener(object : ContentManagerListener {
             override fun contentRemoved(event: ContentManagerEvent) {
                 tabs.removeAll { it.content === event.content }
+                if (!closing && tabs.isEmpty()) open(start = false)
             }
         })
         project.messageBus.connect(this).subscribe(SESSION_NAMES, SessionNameListener { refreshAll() })
@@ -66,6 +75,7 @@ class SessionTabs(
      * once.
      */
     override fun dispose() {
+        closing = true
         tabs.toList().forEach { it.panel.dispose() }
         tabs.clear()
     }
@@ -83,7 +93,8 @@ class SessionTabs(
      * Opens one tab, and starts the session in it while [start] is true.
      *
      * The window opens the first tab with the switch of the settings page. The plus button
-     * opens every later tab with a start, because a user who presses plus asked for one.
+     * opens every later tab with a start, because a user who presses plus asked for one. The
+     * tab that follows a close of the last tab starts nothing.
      *
      * The panel reaches the window before the session starts. A panel that no parent laid
      * out holds no size, the terminal reads that size, and a terminal of 80 columns by 24

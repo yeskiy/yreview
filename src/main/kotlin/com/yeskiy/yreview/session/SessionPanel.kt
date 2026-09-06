@@ -171,6 +171,7 @@ class SessionPanel(
 
     init {
         SessionRegistry.getInstance(project).add(sessionKey, stableName(), SessionReach.None)
+        project.messageBus.connect(this).subscribe(SESSION_NAMES, SessionNameListener { onChoice() })
         add(status, BorderLayout.SOUTH)
         showState()
     }
@@ -622,6 +623,18 @@ class SessionPanel(
         !settings().agentChosen -> showSelector()
         settings().agentOrDefault() == AgentId.NONE -> showIdle(AgentRows.NO_AGENT, "")
         else -> showIdle(NO_SESSION, if (autoStart) AUTO_START else PRESS_START)
+    }
+
+    /**
+     * Reads the choice of the project again, because something wrote one.
+     *
+     * A tab that holds a terminal keeps it. That terminal shows a session that runs, or the
+     * output of a session that ended, and no empty screen may cover it. A tab that waits
+     * shows the state of the new choice, so the chooser goes as soon as a choice stands.
+     */
+    private fun onChoice() {
+        if (terminal != null || starting) return
+        showState()
     }
 
     /**

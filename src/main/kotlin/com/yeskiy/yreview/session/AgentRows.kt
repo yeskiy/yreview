@@ -6,6 +6,10 @@ package com.yeskiy.yreview.session
  * The text lives away from the panel, so a test reads every sentence with no window on
  * screen. No sentence ever says that an agent is not installed. A wrapper that is a shell
  * function has no file, so no scan can find it, and the user can still run it.
+ *
+ * A sentence about a search that missed names the search path of this IDE, and never the
+ * machine. The plugin tested that path alone. A session starts through a login shell, and
+ * that shell reads a longer path, so an agent that no search found can still run.
  */
 object AgentRows {
 
@@ -14,8 +18,8 @@ object AgentRows {
     const val SEARCHING = "The plugin is looking for the installed agents."
 
     const val NOTHING_FOUND =
-        "The plugin found no command line agent on this machine. " +
-            "Open Settings, Tools, Yreview to name a command of your own, or to choose No agent."
+        "The plugin found no agent on the search path of this IDE. " +
+            "Open Settings, Tools, Yreview to type the full path of your agent, or to choose No agent."
 
     const val OTHER_AGENTS = "Another agent, a command of your own, or No agent, in Settings, Tools, Yreview."
 
@@ -34,7 +38,7 @@ object AgentRows {
      */
     fun row(spec: AgentSpec, found: Boolean): String {
         if (!spec.product) return "${spec.label}. ${spec.hint}"
-        val place = if (found) "found on this machine" else "not found on this machine"
+        val place = if (found) "found on this machine" else "not found on the search path of this IDE"
         val send = when (spec.push) {
             PushKind.CHANNEL, PushKind.LOCAL_HTTP -> "Send and Copy both work."
             PushKind.NONE -> "Copy only, because it takes no message into a running session."
@@ -84,7 +88,7 @@ object AgentRows {
         if (spec.push == PushKind.NONE) noPush(spec) else "No ${spec.label} session reads this project"
 
     /**
-     * What the settings page says about this machine, under the command field.
+     * What the settings page says about the search, under the command field.
      *
      * A choice that names no product carries the hint alone. No search looks for such a
      * choice, so no sentence may report that this machine holds it or misses it.
@@ -93,6 +97,6 @@ object AgentRows {
         !spec.product -> spec.hint
         !answer.scanned -> SEARCHING
         answer.of(spec.id).found -> "This machine holds ${spec.label} at ${answer.of(spec.id).path}."
-        else -> "The plugin did not find ${spec.label} on this machine. ${spec.hint}"
+        else -> "The plugin did not find ${spec.label} on the search path of this IDE. ${spec.hint}"
     }
 }
