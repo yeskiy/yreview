@@ -174,4 +174,57 @@ class FolderMigrationTest {
     fun `a repository beside the folder may not take the records`() {
         assertFalse(FolderMigration.maySettle("E:/Projects/other", "E:/Projects/site"))
     }
+
+    // --- The lookup that may write ---
+
+    @Test
+    fun `a lookup that may write moves the records`() {
+        assertTrue(FolderMigration.mayMove(writes = true, "E:/Projects/site", "E:/Projects/site"))
+    }
+
+    @Test
+    fun `a lookup that may not write leaves the records where they are`() {
+        assertFalse(FolderMigration.mayMove(writes = false, "E:/Projects/site", "E:/Projects/site"))
+    }
+
+    @Test
+    fun `a lookup that may write still asks where the repository is rooted`() {
+        assertFalse(FolderMigration.mayMove(writes = true, "E:/Projects/site", "E:/Projects/site/api"))
+    }
+
+    // --- What the user reads after the copy ---
+
+    @Test
+    fun `a copy that failed warns and asks for no new read`() {
+        val notice = FolderMigration.notice(MigrationReport(0, "The note of x did not take 1 record line."), FOLDER, "site", null)
+
+        assertTrue(notice.warning)
+        assertFalse(notice.refresh)
+        assertTrue(notice.text.contains("did not take 1 record line"), notice.text)
+    }
+
+    @Test
+    fun `a copy whose folder stays warns and names the folder`() {
+        val notice = FolderMigration.notice(MigrationReport(2, null), FOLDER, "site", null)
+
+        assertTrue(notice.warning, "the user must read that the old folder is still there")
+        assertTrue(notice.refresh, "the records sit in the git notes, so every reader reads them again")
+        assertTrue(notice.text.contains(FOLDER.resolve(FolderStore.FOLDER).toString()), notice.text)
+    }
+
+    @Test
+    fun `a copy that moved the folder says where the folder went`() {
+        val kept = FOLDER.resolve(".git").resolve("y-review").resolve("migrated-1")
+
+        val notice = FolderMigration.notice(MigrationReport(2, null), FOLDER, "site", kept)
+
+        assertFalse(notice.warning)
+        assertTrue(notice.refresh)
+        assertTrue(notice.text.contains("2 review comments"), notice.text)
+        assertTrue(notice.text.contains(kept.toString()), notice.text)
+    }
+
+    private companion object {
+        val FOLDER: Path = Path.of("E:/Projects/site")
+    }
 }

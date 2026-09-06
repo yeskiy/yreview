@@ -268,12 +268,18 @@ class ReviewToolset : McpToolset {
         return ReviewPayloads.opened(prepared.id, "diff", prepared.path, prepared.line, prepared.revision)
     }
 
-    /** Every store of the project, the git repositories and the folder stores alike. */
+    /**
+     * Every store of the project, the git repositories and the folder stores alike.
+     *
+     * The lookup never moves a folder store into the git notes. That move writes a note and
+     * it moves a folder on the disk, and a tool of this set answers a question of an agent.
+     * A user who opens the tool window starts the move.
+     */
     private fun reposOf(project: Project): List<Repo> {
         val service = ReviewService.getInstance(project)
         val heads = GitRepositoryManager.getInstance(project).repositories
             .associate { it.root.path to it.currentRevision }
-        return service.storeRoots().map { store ->
+        return service.storeRoots(migrate = false).map { store ->
             val head = if (store.kind == StoreKind.GIT) heads[store.root.path] else FolderStore.WORKTREE
             Repo(store, head, service.bookFor(store))
         }

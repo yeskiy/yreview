@@ -26,7 +26,7 @@ class ShareLogThreadsTest {
             Thread {
                 runCatching {
                     start.await()
-                    (0 until PER_WRITER).forEach { index -> log.markUnshared("c$writer-$index") }
+                    (0 until PER_WRITER).forEach { index -> log.markUnshared("c$writer-$index", ROOT, REF) }
                 }.onFailure { failure.compareAndSet(null, it) }
             }
         }
@@ -36,7 +36,7 @@ class ShareLogThreadsTest {
         writers.forEach { it.join(DEADLINE_MS) }
 
         assertTrue(failure.get() == null, "no thread may fail: ${failure.get()}")
-        assertEquals(WRITERS * PER_WRITER, log.getState().unshared.size)
+        assertEquals(WRITERS * PER_WRITER, log.getState().marks.size)
     }
 
     @Test
@@ -45,11 +45,11 @@ class ShareLogThreadsTest {
         val failure = AtomicReference<Throwable?>(null)
         val stopped = AtomicBoolean(false)
         val writer = Thread {
-            runCatching { (0 until MARKS).forEach { log.markUnshared("c$it") } }
+            runCatching { (0 until MARKS).forEach { log.markUnshared("c$it", ROOT, REF) } }
                 .onFailure { failure.compareAndSet(null, it) }
         }
         val reader = Thread {
-            runCatching { while (!stopped.get()) log.getState().unshared.forEach { it.length } }
+            runCatching { while (!stopped.get()) log.getState().marks.forEach { it.id.length } }
                 .onFailure { failure.compareAndSet(null, it) }
         }
 
@@ -67,5 +67,7 @@ class ShareLogThreadsTest {
         const val PER_WRITER = 250
         const val MARKS = 2000
         const val DEADLINE_MS = 60_000L
+        const val ROOT = "/home/user/project"
+        const val REF = "refs/notes/devtools/discuss"
     }
 }

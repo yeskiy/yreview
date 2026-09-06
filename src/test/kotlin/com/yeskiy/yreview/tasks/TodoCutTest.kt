@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class TodoCutTest {
 
@@ -11,6 +12,27 @@ class TodoCutTest {
         val range = TodoCut.of(text, start, start + comment.length)
         return text.removeRange(range.start, range.end)
     }
+
+    /**
+     * Removes the lines of one row of the tree, and answers null when the row stays.
+     *
+     * [first] and [last] are the lines the row covers, counted from zero.
+     */
+    private fun rowCut(text: String, comment: String, first: Int, last: Int): String? {
+        val cut = rowOf(text, comment, first, last) ?: return null
+        return text.removeRange(cut.start, cut.end)
+    }
+
+    private fun rowOf(text: String, comment: String, first: Int, last: Int): TextCut? {
+        val start = text.indexOf(comment)
+        return TodoCut.row(text, start, start + comment.length, lineStart(text, first), lineEnd(text, last))
+    }
+
+    private fun lineStart(text: String, line: Int): Int =
+        text.lineSequence().take(line).sumOf { it.length + 1 }
+
+    private fun lineEnd(text: String, line: Int): Int =
+        lineStart(text, line) + text.lineSequence().elementAt(line).length
 
     @Test
     fun `a comment alone on its line takes the whole line`() {
@@ -104,5 +126,66 @@ class TodoCutTest {
         val second = TextCut(10, 20)
 
         assertEquals(listOf(second, first), TodoCut.apart(listOf(first, second)))
+    }
+
+    // --- The lines of one row ---
+
+    private val doc = "/**\n * Docs\n * TODO: fix this\n * More docs\n */\nfun a() {}\n"
+
+    @Test
+    fun `a row inside a comment takes the line of the row only`() {
+        assertEquals(
+            "/**\n * Docs\n * More docs\n */\nfun a() {}\n",
+            rowCut(doc, doc.substringBefore("\nfun"), 2, 2),
+        )
+    }
+
+    @Test
+    fun `a row over several lines takes every one of them`() {
+        val text = "/**\n * Docs\n * TODO: fix this\n *     and this too\n */\n"
+
+        assertEquals("/**\n * Docs\n */\n", rowCut(text, text.trimEnd('\n'), 2, 3))
+    }
+
+    @Test
+    fun `a documentation tag inside the lines of the row goes with the row`() {
+        val text = "/**\n * TODO: fix this\n *   @param name the name\n * More docs\n */\n"
+
+        assertEquals("/**\n * More docs\n */\n", rowCut(text, text.trimEnd('\n'), 1, 2))
+    }
+
+    @Test
+    fun `a row that fills the whole comment takes the whole comment`() {
+        val text = "/**\n * TODO: fix this\n */\nfun a() {}\n"
+
+        assertEquals("fun a() {}\n", rowCut(text, text.substringBefore("\nfun"), 1, 1))
+    }
+
+    @Test
+    fun `a row on the line that opens the comment leaves the comment alone`() {
+        val text = "/* TODO: fix this\n   another note */\nfun a() {}\n"
+
+        assertNull(rowOf(text, text.substringBefore("\nfun"), 0, 0))
+    }
+
+    @Test
+    fun `a row on the line that closes the comment leaves the comment alone`() {
+        val text = "/* another note\n   TODO: fix this */\nfun a() {}\n"
+
+        assertNull(rowOf(text, text.substringBefore("\nfun"), 1, 1))
+    }
+
+    @Test
+    fun `a row of a comment alone on its line still takes the whole line`() {
+        val text = "fun a() {\n    // TODO: drop this\n    work()\n}\n"
+
+        assertEquals("fun a() {\n    work()\n}\n", rowCut(text, "// TODO: drop this", 1, 1))
+    }
+
+    @Test
+    fun `a row of a comment that follows code still keeps the code`() {
+        val text = "val x = 1   // TODO: drop this\nwork()\n"
+
+        assertEquals("val x = 1\nwork()\n", rowCut(text, "// TODO: drop this", 0, 0))
     }
 }

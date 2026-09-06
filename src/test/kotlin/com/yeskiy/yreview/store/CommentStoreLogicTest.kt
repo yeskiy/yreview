@@ -219,4 +219,37 @@ class CommentStoreLogicTest {
             assertNull(book(repo).find("0000000000000000000000000000000000000000"))
         }
     }
+
+    @Test
+    fun `findAt returns the comment of that key`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            val wanted = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "fix this")
+
+            assertEquals(wanted.id, book(repo).findAt(head, wanted.id)?.id)
+        }
+    }
+
+    @Test
+    fun `findAt returns a comment whose key git cannot resolve`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            val wanted = book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "fix this")
+
+            val found = book(repo).findAt(FolderStore.WORKTREE, wanted.id)
+
+            assertEquals(wanted.id, found?.id, "a migrated comment still names the key of its old folder store")
+            assertEquals("fix this", found?.comment?.description)
+        }
+    }
+
+    @Test
+    fun `findAt returns nothing for an unknown id`() {
+        TempRepo().use { repo ->
+            val head = repo.commit("a.kt", "one")
+            book(repo).add(NoteRefs.LOCAL, head, "a.kt", Range(startLine = 1, endLine = 1), "x")
+
+            assertNull(book(repo).findAt(FolderStore.WORKTREE, "0000000000000000000000000000000000000000"))
+        }
+    }
 }

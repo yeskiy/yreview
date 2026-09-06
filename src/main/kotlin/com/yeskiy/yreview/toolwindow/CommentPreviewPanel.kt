@@ -166,8 +166,7 @@ class CommentPreviewPanel(
             if (task.kind != TaskKind.COMMENT || task.rootPath.isEmpty()) return null
             val root = LocalFileSystem.getInstance().findFileByPath(task.rootPath) ?: return null
             val stored = ReviewService.getInstance(project).bookForRoot(root)
-                .list(task.revision)
-                .firstOrNull { it.id == task.id }
+                .findAt(task.revision, task.id)
                 ?: return null
             return PreviewComment(root, stored)
         }

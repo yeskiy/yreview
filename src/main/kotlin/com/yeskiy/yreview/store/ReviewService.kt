@@ -105,10 +105,15 @@ class ReviewService(private val project: Project) {
 
     fun folderNotesOf(root: VirtualFile): FolderNotes = FolderNotes(Path.of(root.path))
 
-    /** Every git root, and then every folder that already holds a store. */
-    fun storeRoots(): List<StoreRoot> =
+    /**
+     * Every git root, and then every folder that already holds a store.
+     *
+     * A caller that answers a read of an agent passes false for [migrate]. See
+     * [migrateFolderIfNeeded] for what the migration writes.
+     */
+    fun storeRoots(migrate: Boolean = true): List<StoreRoot> =
         GitRepositoryManager.getInstance(project).repositories.map { StoreRoot(StoreKind.GIT, it.root) } +
-            folderStoreRoots().map { StoreRoot(StoreKind.FOLDER, it) }
+            folderStoreRoots(migrate).map { StoreRoot(StoreKind.FOLDER, it) }
 
     /**
      * Every folder root that still holds records.
@@ -117,9 +122,9 @@ class ReviewService(private val project: Project) {
      * drops a root which a repository now covers. A root that the filter dropped first would
      * never migrate, and its records would stay in the folder for good.
      */
-    fun folderStoreRoots(): List<VirtualFile> {
+    fun folderStoreRoots(migrate: Boolean = true): List<VirtualFile> {
         val roots = candidateFolderRoots()
-        roots.forEach { migrateFolderIfNeeded(it) }
+        roots.forEach { migrateFolderIfNeeded(it, migrate) }
         return roots
             .filter { storeAt(it).kind == StoreKind.FOLDER }
             .filter { root -> NoteRefs.ALL.any { folderNotesOf(root).commitsWithNotes(it).isNotEmpty() } }
@@ -138,13 +143,17 @@ class ReviewService(private val project: Project) {
      * [FolderOwnership] answers whether the folder belongs to the plugin at all. A folder
      * that git tracks came with the repository, so it stays where it is.
      *
-     * [FolderMigration.maySettle] answers whether this repository is the right target. A
-     * repository that is rooted above the folder reads every record path from its own root,
-     * so the records stay in the folder and the tool window reads them there.
+     * [FolderMigration.mayMove] answers whether this lookup may move the records at all, and
+     * whether this repository is the right target. A repository that is rooted above the
+     * folder reads every record path from its own root, so the records stay in the folder
+     * and the tool window reads them there.
+     *
+     * A caller that answers a read of an agent passes false for [writes], because this
+     * method writes the git notes and moves a folder.
      */
-    fun migrateFolderIfNeeded(root: VirtualFile) {
+    fun migrateFolderIfNeeded(root: VirtualFile, writes: Boolean = true) {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(root) ?: return
-        if (!FolderMigration.maySettle(repository.root.path, root.path)) return
+        if (!FolderMigration.mayMove(writes, repository.root.path, root.path)) return
         val head = repository.currentRevision ?: return
         val folder = folderNotesOf(root)
         if (NoteRefs.ALL.none { folder.commitsWithNotes(it).isNotEmpty() }) return
@@ -153,21 +162,25 @@ class ReviewService(private val project: Project) {
         try {
             val runner = ideGitRunner(project, repository.root)
             val report = FolderMigration.copy(folder, NotesGateway(runner), NoteRefs.ALL, head)
-            if (report.problem != null) {
-                ReviewNotice.warn(project, "The plugin did not move the review comments of ${root.name}. ${report.problem}")
-                return
-            }
-            val kept = GitDir.reviewFolder(runner)?.resolve("migrated-${System.currentTimeMillis()}")
-            if (kept == null || !moveFolder(root, kept)) return
-            ReviewNotice.say(
-                project,
-                "The plugin moved ${report.moved} review comment${if (report.moved == 1) "" else "s"} " +
-                    "into the git notes of ${repository.root.name}. The old folder now sits at $kept.",
+            val notice = FolderMigration.notice(
+                report,
+                Path.of(root.path),
+                repository.root.name,
+                movedTo(runner, report, root),
             )
-            notifyChanged()
+            if (notice.warning) ReviewNotice.warn(project, notice.text) else ReviewNotice.say(project, notice.text)
+            if (notice.refresh) notifyChanged()
         } finally {
             migrating.remove(root.path)
         }
+    }
+
+    /** The new place of the old folder, and null while the folder stays where it is. */
+    private fun movedTo(runner: GitRunner, report: MigrationReport, root: VirtualFile): Path? {
+        if (report.problem != null) return null
+        return GitDir.reviewFolder(runner)
+            ?.resolve("migrated-${System.currentTimeMillis()}")
+            ?.takeIf { moveFolder(root, it) }
     }
 
     /** The old folder goes into the git directory, which git never tracks, so it needs no ignore entry. */
@@ -175,14 +188,7 @@ class ReviewService(private val project: Project) {
         Files.createDirectories(target.parent)
         Files.move(Path.of(root.path).resolve(FolderStore.FOLDER), target)
         true
-    }.getOrElse {
-        ReviewNotice.warn(
-            project,
-            "The plugin copied the review comments, and it left the folder at " +
-                "${root.path}/${FolderStore.FOLDER}.",
-        )
-        false
-    }
+    }.getOrDefault(false)
 
     private fun candidateFolderRoots(): List<VirtualFile> {
         val local = LocalFileSystem.getInstance()
@@ -278,10 +284,10 @@ class ReviewService(private val project: Project) {
         val result = runShare(root, stored.ref)
         val log = ShareLog.getInstance(project)
         if (result.ok) {
-            log.clear()
+            log.clear(root.path, stored.ref)
             return null
         }
-        log.markUnshared(stored.id)
+        log.markUnshared(stored.id, root.path, stored.ref)
         return result.message
     }
 

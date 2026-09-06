@@ -65,6 +65,16 @@ class CommentBook(
     fun commits(refs: List<String> = NoteRefs.ALL): List<String> =
         refs.flatMap { gateway.commitsWithNotes(it) }.distinct()
 
+    /**
+     * The record with this id, looked for under [commit] first.
+     *
+     * A record names the commit it belongs to, and a migration keeps that name. A record
+     * that came from a folder store therefore names a key that git cannot resolve. The
+     * search then walks every key of the store, so the record still answers.
+     */
+    fun findAt(commit: String, id: String, refs: List<String> = NoteRefs.ALL): StoredComment? =
+        list(commit, refs).firstOrNull { it.id == id } ?: find(id, refs)
+
     /** The record with this id, searched over every commit that carries a note. */
     fun find(id: String, refs: List<String> = NoteRefs.ALL): StoredComment? =
         commits(refs).firstNotNullOfOrNull { commit ->
