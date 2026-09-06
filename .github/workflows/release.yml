@@ -107,13 +107,29 @@ jobs:
         run: ./gradlew publishPlugin --console=plain
 
       # The GitHub CLI is on every hosted runner, so this needs no third-party action.
-      # The changelog plugin reads the newest released section of CHANGELOG.md, so an empty
-      # Unreleased heading above that section never reaches the release body. The tag names
-      # the release, therefore the body carries no header line and no link list.
+      # The tag names the release, therefore the body carries no header line and no link
+      # list.
+      #
+      # Two guards stand here, because the old step could pass while it shipped the wrong
+      # text. It asked for no version, so the task answered the newest released section,
+      # which stays the same when nobody promotes the Unreleased heading. The only check
+      # was test -s, and a section of an earlier version is not empty, so a release could
+      # carry the notes of the version before it and report success.
       - name: Read the change notes of this version
         run: |
-          ./gradlew getChangelog --no-header --no-links --output-file build/tmp/release-notes.md --console=plain
+          version="${GITHUB_REF_NAME#v}"
+          # The notes must belong to the tag that is being released. A missing section
+          # stops the release instead of falling back to an earlier one.
+          ./gradlew getChangelog --project-version="$version" --no-header --no-links --output-file build/tmp/release-notes.md --console=plain
           test -s build/tmp/release-notes.md
+          # Anything left under Unreleased means the promotion never ran, so the notes of
+          # this tag are short by everything written since the last release.
+          ./gradlew getChangelog --unreleased --no-header --no-links --output-file build/tmp/unreleased.md --console=plain
+          if [ -s build/tmp/unreleased.md ]; then
+            echo "CHANGELOG.md still holds entries under Unreleased." >&2
+            echo "Move them under $version before you tag the release." >&2
+            exit 1
+          fi
 
       - name: Create the GitHub release
         env:
