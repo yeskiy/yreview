@@ -768,14 +768,16 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     /**
-     * The rules and the tasks go to the review folder on every send, whatever the route is.
+     * The rules and the tasks go to the review folder of this window on every send,
+     * whatever the route is.
      *
      * A git repository keeps that folder inside its git directory. A folder store has no
      * git directory, so it keeps the files beside its own records.
      */
     private fun writeFiles(store: StoreRoot, repository: RepositoryTasks, tasks: List<ReviewTask>): HandoffFiles? {
         val gitDir = if (store.kind == StoreKind.GIT) GitDir.of(ideGitRunner(project, store.root)) else null
-        val folder = HandoffPlace.of(store.kind, Path.of(repository.root.path), gitDir) ?: return null
+        val root = Path.of(repository.root.path)
+        val folder = HandoffPlace.of(store.kind, root, gitDir, project.basePath.orEmpty()) ?: return null
         val files = HandoffFiles(folder)
         return try {
             files.write(
@@ -786,7 +788,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
                     tasks = tasks,
                 )
             )
-            DoneWatch.getInstance(project).watch(files)
+            watchDone(files, HandoffPlace.shared(store.kind, root, gitDir))
             files
         } catch (failure: IOException) {
             logger.warn(
@@ -796,6 +798,17 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             SessionLog.getInstance(project).record(SessionRecord.Failure.of("write the task files", failure))
             null
         }
+    }
+
+    /**
+     * The plugin reads the done file of this window, and the done file that a build before
+     * this release wrote in [shared]. An agent that still reports a finished task in the
+     * older file therefore still closes that task.
+     */
+    private fun watchDone(files: HandoffFiles, shared: Path?) {
+        val watch = DoneWatch.getInstance(project)
+        watch.watch(files.done)
+        shared?.let { watch.watch(it.resolve(HandoffFiles.DONE_NAME)) }
     }
 
     // --- Copy ---

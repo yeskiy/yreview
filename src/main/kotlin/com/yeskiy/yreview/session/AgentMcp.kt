@@ -54,13 +54,41 @@ object AgentMcp {
             is McpRoute.Flag, McpRoute.Keys, McpRoute.AddCommand, is McpRoute.UserFile, McpRoute.None -> emptyMap()
         }
 
-    /** The command that registers the server, for a route that asks first. Null for any other. */
-    fun addCommand(spec: AgentSpec, javaPath: String, serverPath: String): List<String>? =
+    /**
+     * The command that registers the server, for a route that asks first. Null for any other.
+     *
+     * [program] is the launcher of the agent. The plugin starts it with no shell, so the
+     * caller passes the answer of [program] and never a name that only a shell resolves.
+     */
+    fun addCommand(
+        spec: AgentSpec,
+        javaPath: String,
+        serverPath: String,
+        program: String = spec.defaultCommand,
+    ): List<String>? =
         if (spec.mcp != McpRoute.AddCommand) {
             null
         } else {
-            listOf(spec.defaultCommand, "mcp", "add", AgentLaunch.SERVER_NAME, "--") + server(javaPath, serverPath)
+            listOf(program, "mcp", "add", AgentLaunch.SERVER_NAME, "--") + server(javaPath, serverPath)
         }
+
+    /**
+     * The launcher that a press on Add starts.
+     *
+     * The command of the settings page comes first, because that page promises that a full
+     * path in the command field works. The path of the search comes next, because an IDE
+     * that starts from a desktop launcher can hold a shorter PATH than the terminal of the
+     * user, and a bare name then starts nothing.
+     *
+     * [typed] holds the bare name of the agent while the user typed no command of their
+     * own. That name says nothing about this machine, so the found path wins over it.
+     * [found] is null when the search found no file.
+     */
+    fun program(spec: AgentSpec, typed: String, found: String?): String {
+        val text = typed.trim()
+        if (text.isNotEmpty() && text != spec.defaultCommand) return text
+        return found ?: spec.defaultCommand
+    }
 
     /** The document the plugin writes, for a route that asks first. Null for any other. */
     fun userFile(spec: AgentSpec, javaPath: String, serverPath: String): String? =

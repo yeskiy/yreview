@@ -141,6 +141,33 @@ class AgentMcpTest {
     }
 
     @Test
+    fun `the add command runs the path that the search found`() {
+        val spec = spec(AgentId.ANTIGRAVITY)
+
+        assertEquals(
+            listOf(
+                "/opt/homebrew/bin/agy", "mcp", "add", "y-review", "--",
+                java, "-cp", jar, "com.yeskiy.yreview.channel.MainKt",
+            ),
+            AgentMcp.addCommand(spec, java, jar, AgentMcp.program(spec, "agy", "/opt/homebrew/bin/agy")),
+        )
+    }
+
+    @Test
+    fun `a command that the user typed wins over the path of the search`() {
+        assertEquals(
+            "/home/me/bin/agy",
+            AgentMcp.program(spec(AgentId.ANTIGRAVITY), " /home/me/bin/agy ", "/opt/homebrew/bin/agy"),
+        )
+    }
+
+    @Test
+    fun `the bare name stands while the search found nothing`() {
+        assertEquals("agy", AgentMcp.program(spec(AgentId.ANTIGRAVITY), "agy", null))
+        assertEquals("agy", AgentMcp.program(spec(AgentId.ANTIGRAVITY), "  ", null))
+    }
+
+    @Test
     fun `only antigravity has an add command`() {
         AgentId.entries.filter { it != AgentId.ANTIGRAVITY }.forEach {
             assertNull(AgentMcp.addCommand(spec(it), java, jar), it.name)

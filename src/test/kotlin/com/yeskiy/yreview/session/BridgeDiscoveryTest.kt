@@ -9,6 +9,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class BridgeDiscoveryTest {
@@ -47,12 +48,59 @@ class BridgeDiscoveryTest {
     }
 
     @Test
-    fun `a backslash path gives the same file name as a slash path`() {
+    fun `a backslash path gives another file name than a slash path`() {
         withHome { home ->
-            assertEquals(
+            assertNotEquals(
                 BridgeDiscovery.fileFor(home, "E:/work/demo-repo"),
                 BridgeDiscovery.fileFor(home, "E:\\work\\demo-repo")
             )
+        }
+    }
+
+    /**
+     * The writer reads USERPROFILE first, and so does the reader. The test moves user.home
+     * away from the profile folder, because a machine on which the two agree would pass
+     * whatever rule each side follows.
+     */
+    @Test
+    fun `the writer of the bridge file and the reader of it name one home folder`() {
+        val real = System.getProperty("user.home")
+        System.setProperty("user.home", "E:/a-home-that-no-user-has")
+        try {
+            assertEquals(
+                BridgeDiscovery.fileFor(BridgeDiscovery.homeDirectory(), "E:/work/demo-repo"),
+                DiscoveryFile.forProject("E:/work/demo-repo").path,
+            )
+        } finally {
+            System.setProperty("user.home", real)
+        }
+    }
+
+    @Test
+    fun `a file that names another project is refused`() {
+        withHome { home ->
+            val target = BridgeDiscovery.fileFor(home, "E:/Project")
+            target.parent.createDirectories()
+            target.writeText(
+                "{\"url\":\"http://127.0.0.1:52431\",\"token\":\"$token\"," +
+                    "\"projectPath\":\"E:/Other\",\"pid\":1234}"
+            )
+
+            assertIs<BridgeLookup.Unavailable>(BridgeDiscovery.find(home, "E:/Project"))
+        }
+    }
+
+    @Test
+    fun `a file that names this project is taken`() {
+        withHome { home ->
+            val target = BridgeDiscovery.fileFor(home, "E:/Project")
+            target.parent.createDirectories()
+            target.writeText(
+                "{\"url\":\"http://127.0.0.1:52431\",\"token\":\"$token\"," +
+                    "\"projectPath\":\"E:/Project\",\"pid\":1234}"
+            )
+
+            assertIs<BridgeLookup.Available>(BridgeDiscovery.find(home, "E:/Project"))
         }
     }
 

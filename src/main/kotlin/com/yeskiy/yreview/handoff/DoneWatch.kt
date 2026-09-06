@@ -12,6 +12,7 @@ import com.yeskiy.yreview.tasks.CloseReport
 import com.yeskiy.yreview.tasks.TaskCompletion
 import com.yeskiy.yreview.tasks.TaskLabels
 import com.yeskiy.yreview.ui.ReviewNotice
+import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -35,8 +36,8 @@ class DoneWatch(private val project: Project) : Disposable {
 
     private var future: ScheduledFuture<*>? = null
 
-    fun watch(files: HandoffFiles) {
-        logs.computeIfAbsent(files.done.toString()) { DoneLog(files.done) }
+    fun watch(done: Path) {
+        logs.computeIfAbsent(done.toString()) { DoneLog(done) }
         synchronized(lock) {
             if (future != null) return
             future = AppExecutorUtil.getAppScheduledExecutorService()

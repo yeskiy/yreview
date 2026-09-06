@@ -23,6 +23,8 @@ class ChannelConfigTest {
 
     private val serverPath = "C:\\Users\\one\\plugins\\y-review\\channel\\y-review-channel.jar"
 
+    private val product = "IU"
+
     private fun text() = ChannelConfig.text(AgentId.CLAUDE, javaPath, serverPath)
 
     private fun entry(text: String) =
@@ -84,9 +86,9 @@ class ChannelConfigTest {
     @Test
     fun `a written file stands at the stable path and holds the text`() {
         withHome { home ->
-            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
 
-            assertEquals(ConfigFile.path(home, AgentId.CLAUDE), file)
+            assertEquals(ConfigFile.path(home, AgentId.CLAUDE, product), file)
             assertTrue(file.isRegularFile())
             assertEquals(text(), file.readText())
         }
@@ -95,8 +97,8 @@ class ChannelConfigTest {
     @Test
     fun `two sessions of one agent write the same file and it stays`() {
         withHome { home ->
-            val first = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
-            val second = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            val first = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
+            val second = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
 
             assertEquals(first, second)
             assertTrue(second.isRegularFile())
@@ -106,8 +108,8 @@ class ChannelConfigTest {
     @Test
     fun `two agents write two files of their own shape`() {
         withHome { home ->
-            val claude = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
-            val opencode = ChannelConfig.write(AgentId.OPENCODE, javaPath, serverPath, home)
+            val claude = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
+            val opencode = ChannelConfig.write(AgentId.OPENCODE, javaPath, serverPath, home, product)
 
             assertNotEquals(claude, opencode)
             assertTrue(claude.readText().contains("mcpServers"))
@@ -116,13 +118,26 @@ class ChannelConfigTest {
     }
 
     @Test
+    fun `two jetbrains products write two files`() {
+        withHome { home ->
+            val idea = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
+            val other = "C:\\Program Files\\JetBrains\\PyCharm\\jbr\\bin\\java.exe"
+            val pycharm = ChannelConfig.write(AgentId.CLAUDE, other, serverPath, home, "PY")
+
+            assertNotEquals(idea, pycharm)
+            assertEquals(text(), idea.readText())
+            assertTrue(pycharm.readText().contains("PyCharm"))
+        }
+    }
+
+    @Test
     fun `the same content twice leaves the file alone`() {
         withHome { home ->
-            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
             Files.setLastModifiedTime(file, FileTime.fromMillis(0))
             val before = Files.getLastModifiedTime(file)
 
-            ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
 
             assertEquals(before, Files.getLastModifiedTime(file))
             assertEquals(text(), file.readText())
@@ -132,12 +147,12 @@ class ChannelConfigTest {
     @Test
     fun `changed content writes the file again`() {
         withHome { home ->
-            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
             Files.setLastModifiedTime(file, FileTime.fromMillis(0))
             val before = Files.getLastModifiedTime(file)
             val moved = "C:\\Program Files\\JetBrains\\jbr-26\\bin\\java.exe"
 
-            ChannelConfig.write(AgentId.CLAUDE, moved, serverPath, home)
+            ChannelConfig.write(AgentId.CLAUDE, moved, serverPath, home, product)
 
             assertEquals(ChannelConfig.text(AgentId.CLAUDE, moved, serverPath), file.readText())
             assertNotEquals(before, Files.getLastModifiedTime(file))
@@ -147,7 +162,7 @@ class ChannelConfigTest {
     @Test
     fun `a write leaves no temporary file beside the target`() {
         withHome { home ->
-            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home)
+            val file = ChannelConfig.write(AgentId.CLAUDE, javaPath, serverPath, home, product)
 
             Files.list(file.parent).use { stream ->
                 assertEquals(listOf(file), stream.toList())

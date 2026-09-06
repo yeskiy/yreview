@@ -71,18 +71,31 @@ class DiscoveryFile(val path: Path) {
         /**
          * Builds the name of the discovery file of one project.
          *
-         * A backslash becomes a slash first, so one project keeps one name in both
-         * spellings of its path. The end of the path stays readable, because a person
-         * finds the project by the name of its folder. The hash reads the whole path
-         * before the plugin replaces any character. Two projects that differ only in a
-         * hyphen or an underscore therefore get two names. The name stays inside 80
-         * characters, and every file system accepts that length.
+         * The end of the path stays readable, because a person finds the project by the
+         * name of its folder. The hash reads the whole path, character by character, and
+         * the plugin folds nothing first. A backslash is a plain character of a name on
+         * Linux and on macOS, so a fold would give the two paths a/b and a\b one name and
+         * one bridge. Two projects that differ only in a hyphen or an underscore get two
+         * names for the same reason. The name stays inside 80 characters, and every file
+         * system accepts that length.
          */
-        fun fileName(projectPath: String): String {
-            val path = projectPath.replace('\\', '/')
-            return NOT_ALPHANUMERIC.replace(path, "-").takeLast(READABLE_LENGTH) +
-                "-" + hashOf(path) + ".json"
-        }
+        fun fileName(projectPath: String): String =
+            NOT_ALPHANUMERIC.replace(projectPath, "-").takeLast(READABLE_LENGTH) +
+                "-" + hashOf(projectPath) + ".json"
+
+        /**
+         * The home folder of the user.
+         *
+         * Windows sets USERPROFILE, and the vmoptions file of an IDE can point user.home
+         * at another folder. The writer of this file and the reader of it must name one
+         * folder, so both read this rule.
+         */
+        fun homeDirectory(): Path =
+            homeDirectory(System.getenv("USERPROFILE"), System.getProperty("user.home"))
+
+        /** [profile] is USERPROFILE, which only Windows sets. [fallback] is user.home. */
+        fun homeDirectory(profile: String?, fallback: String): Path =
+            Path.of(profile?.takeIf { it.isNotBlank() } ?: fallback)
 
         private fun hashOf(path: String): String =
             MessageDigest.getInstance("SHA-256")
@@ -92,7 +105,7 @@ class DiscoveryFile(val path: Path) {
 
         fun forProject(
             projectPath: String,
-            home: Path = Path.of(System.getProperty("user.home")),
+            home: Path = homeDirectory(),
         ): DiscoveryFile = DiscoveryFile(home.resolve(".y-review").resolve("bridge").resolve(fileName(projectPath)))
     }
 }

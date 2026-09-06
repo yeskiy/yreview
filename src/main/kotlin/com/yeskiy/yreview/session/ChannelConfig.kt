@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.session
 
+import com.intellij.openapi.application.ApplicationInfo
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.IOException
@@ -76,16 +77,20 @@ object ChannelConfig {
         javaPath: String,
         serverPath: String,
         home: Path = BridgeDiscovery.homeDirectory(),
+        product: String = productCode(),
     ): Path {
-        val target = ConfigFile.path(home, id)
+        val target = ConfigFile.path(home, id, product)
         val wanted = text(id, javaPath, serverPath)
         if (!ConfigFile.needsWrite(onDisk(target), wanted)) return target
         Files.createDirectories(target.parent)
-        val temporary = Files.createTempFile(target.parent, ConfigFile.fileName(id), TEMPORARY_SUFFIX)
+        val temporary = Files.createTempFile(target.parent, ConfigFile.fileName(id, product), TEMPORARY_SUFFIX)
         Files.writeString(temporary, wanted)
         move(temporary, target)
         return target
     }
+
+    /** The build code of the running IDE, for example IU or PY. It is empty for a build that names none. */
+    private fun productCode(): String = ApplicationInfo.getInstance().build.productCode
 
     /** Null when no file stands there, and null when a read of it fails. */
     private fun onDisk(target: Path): String? =

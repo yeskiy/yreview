@@ -33,8 +33,8 @@ class DiscoveryFileTest {
     }
 
     @Test
-    fun `hashes the path with the slashes of the backslash spelling`() {
-        assertEquals("C--work-app2-1ccc5d63b732c6b3.json", DiscoveryFile.fileName("C:\\work\\app2"))
+    fun `hashes the path exactly as the caller wrote it`() {
+        assertEquals("C--work-app2-953588982ca807bc.json", DiscoveryFile.fileName("C:\\work\\app2"))
     }
 
     @Test
@@ -46,11 +46,21 @@ class DiscoveryFileTest {
     }
 
     @Test
-    fun `two spellings of one path get one name`() {
-        assertEquals(
-            DiscoveryFile.fileName("E:/work/repo"),
-            DiscoveryFile.fileName("E:\\work\\repo"),
-        )
+    fun `two paths that differ only in a separator get two names`() {
+        // A backslash is a plain character of a name on Linux and on macOS, so the two
+        // paths a/b and a\b name two projects there.
+        assertNotEquals(DiscoveryFile.fileName("a/b"), DiscoveryFile.fileName("a\\b"))
+    }
+
+    @Test
+    fun `the home folder of windows comes from the profile variable`() {
+        assertEquals(Path.of("D:/profiles/one"), DiscoveryFile.homeDirectory("D:/profiles/one", "E:/home/one"))
+    }
+
+    @Test
+    fun `a home folder without a profile variable comes from the java property`() {
+        assertEquals(Path.of("E:/home/one"), DiscoveryFile.homeDirectory(null, "E:/home/one"))
+        assertEquals(Path.of("E:/home/one"), DiscoveryFile.homeDirectory("  ", "E:/home/one"))
     }
 
     @Test

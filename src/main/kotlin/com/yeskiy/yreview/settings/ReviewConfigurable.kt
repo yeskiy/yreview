@@ -14,6 +14,7 @@ import com.intellij.ui.dsl.listCellRenderer.textListCellRenderer
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.gutter.CommentGutter
+import com.yeskiy.yreview.handoff.HandoffPlace
 import com.yeskiy.yreview.session.AgentCatalog
 import com.yeskiy.yreview.session.AgentId
 import com.yeskiy.yreview.session.AgentLaunch
@@ -383,11 +384,19 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         val java = javaPath() ?: return
         val server = serverPath() ?: return
         when (val route = spec.mcp) {
-            McpRoute.AddCommand -> startCommand(spec, AgentMcp.addCommand(spec, java, server).orEmpty())
+            McpRoute.AddCommand ->
+                startCommand(spec, AgentMcp.addCommand(spec, java, server, addProgram(spec)).orEmpty())
             is McpRoute.UserFile -> finishAdd(spec, writeFile(route.path, AgentMcp.userFile(spec, java, server).orEmpty()))
             else -> finishAdd(spec, "This agent needs no write.")
         }
     }
+
+    /**
+     * The launcher that a press on Add starts. The command field of this page wins, and
+     * the path of the search stands in when the field holds the bare name alone.
+     */
+    private fun addProgram(spec: AgentSpec): String =
+        AgentMcp.program(spec, command.text, AgentScan.getInstance().latest().of(spec.id).path)
 
     /**
      * Runs the command on a pooled thread, because a command can ask for input.
@@ -459,7 +468,7 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         val found = JavaRuntime.locate()
             ?.let { "This IDE runs the server with the Java at $it." }
             ?: "This IDE names no Java runtime, so a session starts without the channel."
-        return "Every send writes AGENT.md and tasks.json in .git/y-review. " +
+        return HandoffPlace.FILES_TEXT + " " +
             "The channel decides only whether the tasks also reach a running session at once. " +
             "With the channel off, the plugin opens no port, and the send copies the prompt to the clipboard. " +
             "The plugin ships the channel server, and the Java runtime of the IDE runs it. $found"

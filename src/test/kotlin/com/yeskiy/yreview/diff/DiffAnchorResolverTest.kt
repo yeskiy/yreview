@@ -8,10 +8,12 @@ import kotlin.test.assertTrue
 private class FakeFacts(
     private val before: Pair<String, String>? = null,
     private val after: Pair<String, String>? = null,
+    private val working: String? = after?.second,
     private val headValue: String? = null,
 ) : RevisionFacts {
     override fun beforeRevision() = before
     override fun afterRevision() = after
+    override fun afterPath() = working
     override fun head() = headValue
 }
 
@@ -53,6 +55,23 @@ class DiffAnchorResolverTest {
     @Test
     fun `a new file has no left anchor`() {
         val facts = FakeFacts(before = null, after = "9de1122" to "a.kt", headValue = "9de1122")
+        assertNull(DiffAnchorResolver.resolve(facts, DiffSide.LEFT))
+    }
+
+    @Test
+    fun `a file that git does not track yet anchors the right side at head`() {
+        val facts = FakeFacts(before = null, after = null, working = "new.kt", headValue = "9de1122")
+        val anchor = DiffAnchorResolver.resolve(facts, DiffSide.RIGHT)!!
+
+        assertEquals("9de1122", anchor.commit)
+        assertEquals("new.kt", anchor.path)
+        assertTrue(anchor.dirty)
+    }
+
+    @Test
+    fun `a file that git does not track yet still has no left anchor`() {
+        val facts = FakeFacts(before = null, after = null, working = "new.kt", headValue = "9de1122")
+
         assertNull(DiffAnchorResolver.resolve(facts, DiffSide.LEFT))
     }
 
