@@ -13,7 +13,6 @@ import com.intellij.ui.components.JBPanelWithEmptyText
 import com.intellij.util.concurrency.AppExecutorUtil
 import com.intellij.util.ui.JBUI
 import com.yeskiy.yreview.bridge.BridgeService
-import com.yeskiy.yreview.bridge.BridgeToken
 import com.yeskiy.yreview.bridge.OpenCodeClient
 import com.yeskiy.yreview.bridge.OpenCodeTitle
 import com.yeskiy.yreview.bridge.SessionKey
@@ -30,6 +29,23 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 import javax.swing.JPanel
 import javax.swing.JTextArea
+
+/**
+ * What one start of a session reads off the machine and writes onto it.
+ *
+ * The panel builds this away from the thread that draws the window, and the mount then
+ * reads it. Every field of it is the answer of a lookup, of a write, or of a port bind.
+ */
+private class SessionSetup(
+    val bridge: BridgeLookup,
+    val agent: AgentSpec,
+    val server: ChannelServer.Answer,
+    val javaPath: String?,
+    /** The configuration file of the agent, or null while this session carries no channel. */
+    val configFile: Path?,
+    /** The loopback server of this session, or null while it runs none. */
+    val local: LocalServer?,
+)
 
 /**
  * The content of one tab of the session tool window. It holds a terminal that runs one
@@ -208,8 +224,13 @@ class SessionPanel(
 
     /**
      * The bridge opens a port and writes a file, so the wait for it stays off this thread.
-     * The terminal mounts on this thread again, after the bridge answers or after the wait
-     * ends. A second press during the wait does nothing.
+     * The setup of the session follows it there, because it writes two files and binds one
+     * port. The terminal mounts on this thread again, after that work ends. A second press
+     * during the wait does nothing, because [starting] holds until the mount.
+     *
+     * A tab that closes during the work leaves no password on the disk. [dispose] sets its
+     * flag first and removes the file after it. This thread reads that flag after the
+     * write. One of the two paths therefore always removes the file.
      *
      * [again] is true for the start that follows a lost port. Such a start keeps the count
      * of the press that opened the chain. The status line then names the reason.
@@ -223,9 +244,13 @@ class SessionPanel(
         onState(SessionState.STARTING)
         if (terminal == null) status.text = BRIDGE_WAIT
         ApplicationManager.getApplication().executeOnPooledThread {
-            val bridge = awaitBridge(basePath)
+            val setup = prepare(awaitBridge(basePath))
+            if (gone.value(null)) {
+                dropSecret()
+                return@executeOnPooledThread
+            }
             ApplicationManager.getApplication()
-                .invokeLater({ mount(basePath, bridge, again) }, gone)
+                .invokeLater({ mount(basePath, setup, again) }, gone)
         }
     }
 
@@ -304,36 +329,61 @@ class SessionPanel(
     /** The file of this tab. One session owns one file, and a new start replaces it. */
     private fun secretFile() = SecretFile.forSession(sessionKey)
 
-    private fun mount(basePath: String, bridge: BridgeLookup, again: Boolean) {
-        starting = false
-        if (isRunning) return
+    /**
+     * Reads the machine and writes the files that one start needs.
+     *
+     * The call stands on a pooled thread. It looks for the channel server and for the Java
+     * runtime, it writes the configuration file of the agent, it binds a port, and it
+     * writes the password file. Every one of those holds a thread for as long as the disk
+     * takes. The thread that draws the window must therefore run none of them.
+     */
+    private fun prepare(bridge: BridgeLookup): SessionSetup {
+        val agent = AgentCatalog.of(settings().agentOrDefault())
         val server = channelServer()
         val javaPath = javaPath()
-        val agent = AgentCatalog.of(settings().agentOrDefault())
-        val written = writeConfig(agent, bridge, server, javaPath)
-        httpPort = if (agent.push == PushKind.LOCAL_HTTP) FreePort.pick() else null
-        val password = httpPort?.let { BridgeToken.newToken() }
-        val passwordFile = password?.let { writePassword(it) }
-        if (passwordFile == null) httpPort = null
-        httpPassword = password.takeIf { passwordFile != null }
+        return SessionSetup(
+            bridge = bridge,
+            agent = agent,
+            server = server,
+            javaPath = javaPath,
+            configFile = writeConfig(agent, bridge, server, javaPath),
+            local = LocalServer.of(agent) { writePassword(it) },
+        )
+    }
+
+    /**
+     * Puts the terminal of one start on screen. It runs on the thread that draws the
+     * window, because a terminal component goes into this panel.
+     *
+     * A tab that already runs a session keeps that session, and the password of the start
+     * that stops here leaves the disk.
+     */
+    private fun mount(basePath: String, setup: SessionSetup, again: Boolean) {
+        starting = false
+        if (isRunning) {
+            dropSecret()
+            return
+        }
+        httpPort = setup.local?.port
+        httpPassword = setup.local?.password
         SessionRegistry.getInstance(project)
-            .setReach(sessionKey, SessionReach.of(agent, httpPort, httpPassword))
+            .setReach(sessionKey, SessionReach.of(setup.agent, httpPort, httpPassword))
         val plan = SessionPlan.of(
             basePath,
-            bridge,
-            agent,
-            settings().command(agent.id),
-            server,
-            javaPath,
-            written?.toString(),
+            setup.bridge,
+            setup.agent,
+            settings().command(setup.agent.id),
+            setup.server,
+            setup.javaPath,
+            setup.configFile?.toString(),
             sessionKey,
             httpPort,
-            passwordFile,
+            setup.local?.passwordFile,
         )
         val started = openTerminal(plan)
         if (started == null) {
             forget()
-            record(plan, server, javaPath, written, terminalStarted = false)
+            record(plan, setup.server, setup.javaPath, setup.configFile, terminalStarted = false)
             return failed(NO_TERMINAL)
         }
         terminal?.let { drop(it) }
@@ -342,18 +392,18 @@ class SessionPanel(
         session = started
         mountedAt = System.currentTimeMillis()
         tries += 1
-        runningAgent = agent
-        lastAgent = agent
+        runningAgent = setup.agent
+        lastAgent = setup.agent
         watch(started)
         started.watchTitle { raw ->
             ApplicationManager.getApplication()
-                .invokeLater({ nameFromAgent(AgentTitle.of(agent, raw)) }, gone)
+                .invokeLater({ nameFromAgent(AgentTitle.of(setup.agent, raw)) }, gone)
         }
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)
         status.text = if (again) "$PORT_TAKEN ${plan.status}" else plan.status
-        record(plan, server, javaPath, written, terminalStarted = true)
-        watchName(agent, plan.workingDirectory)
+        record(plan, setup.server, setup.javaPath, setup.configFile, terminalStarted = true)
+        watchName(setup.agent, plan.workingDirectory)
         revalidate()
         repaint()
         IdeFocusManager.getInstance(project).requestFocus(started.view.preferredFocusableComponent, true)
