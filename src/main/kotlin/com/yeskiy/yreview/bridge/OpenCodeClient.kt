@@ -1,5 +1,7 @@
 package com.yeskiy.yreview.bridge
 
+import com.intellij.openapi.diagnostic.logger
+import com.yeskiy.yreview.diagnostic.Redact
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.net.URI
@@ -43,10 +45,21 @@ object OpenCodeClient {
 
     private val JSON = Json
 
+    private val logger = logger<OpenCodeClient>()
+
     @Serializable
     private data class Prompt(val text: String)
 
-    private val client: HttpClient = HttpClient.newBuilder()
+    /**
+     * The client of every call. It speaks HTTP version 1.1, and it asks for nothing else.
+     *
+     * A client of the default version asks a plain HTTP server to change to version 2.
+     * The OpenCode server takes such a request and does the work, and then it sends no
+     * answer. The call runs into its deadline, and the plugin reads a failure after an
+     * append that the server already made.
+     */
+    val client: HttpClient = HttpClient.newBuilder()
+        .version(HttpClient.Version.HTTP_1_1)
         .connectTimeout(Duration.ofSeconds(TIMEOUT_SECONDS))
         .build()
 
@@ -57,12 +70,24 @@ object OpenCodeClient {
 
     /** Null after a good push, or the text of the problem. The text never holds the password. */
     fun push(port: Int, password: String, text: String): String? {
-        val append = post(port, password, APPEND_PATH, appendBody(text)) ?: return problem(APPEND_PATH)
+        val append = post(port, password, APPEND_PATH, appendBody(text))
+            .getOrElse { return report(APPEND_PATH, password, it) }
         if (append != OK) return "$APPEND_PATH answered $append."
-        val submit = post(port, password, SUBMIT_PATH, "") ?: return problem(SUBMIT_PATH)
+        val submit = post(port, password, SUBMIT_PATH, "")
+            .getOrElse { return report(SUBMIT_PATH, password, it) }
         if (submit != OK) return "$SUBMIT_PATH answered $submit."
         return null
     }
+
+    /**
+     * The text of a call that gave no answer. It names the path and the cause.
+     *
+     * The password travels in a header, so no address and no message of a failure holds
+     * it. The plugin does not write the message of a failure, so the text drops the
+     * password anyway.
+     */
+    fun problem(path: String, password: String, failure: Throwable): String =
+        hide(password, "The OpenCode session did not answer at $path. The cause is ${cause(failure)}.")
 
     /**
      * The sessions that this server holds, or null after any failure.
@@ -82,8 +107,8 @@ object OpenCodeClient {
         if (answer.statusCode() == OK) OpenCodeTitle.parse(answer.body()) else null
     }.getOrNull()
 
-    /** The status of the answer, or null when the call itself failed. */
-    private fun post(port: Int, password: String, path: String, body: String): Int? = runCatching {
+    /** The status of the answer, or the failure of a call that got no answer. */
+    private fun post(port: Int, password: String, path: String, body: String): Result<Int> = runCatching {
         client.send(
             HttpRequest.newBuilder(URI("http://$LOOPBACK:$port$path"))
                 .timeout(Duration.ofSeconds(TIMEOUT_SECONDS))
@@ -93,8 +118,24 @@ object OpenCodeClient {
                 .build(),
             HttpResponse.BodyHandlers.discarding(),
         ).statusCode()
-    }.getOrNull()
+    }
 
-    /** The message names the path only. A cause can carry the address and the credentials. */
-    private fun problem(path: String): String = "The OpenCode session did not answer at $path."
+    /**
+     * Writes one failed call to the log of the IDE, and answers the text for the user.
+     *
+     * The log line holds a clean copy of the failure, so a reader gets the chain of causes
+     * and the stack trace. The user and the reader of the log learn the same reason.
+     */
+    private fun report(path: String, password: String, failure: Throwable): String =
+        problem(path, password, failure).also { logger.warn(it, Redact.failure(failure, Redact.homes(), null)) }
+
+    /** The name of the class of a failure, and the message when the failure holds one. */
+    private fun cause(failure: Throwable): String {
+        val name = failure.javaClass.simpleName.ifEmpty { failure.javaClass.name }
+        return failure.message?.trim()?.takeIf { it.isNotEmpty() }?.let { "$name: $it" } ?: name
+    }
+
+    /** Takes the password out of one text. An empty password matches every place, so it stays. */
+    private fun hide(password: String, text: String): String =
+        if (password.isEmpty()) text else text.replace(password, Redact.SECRET_MARK)
 }

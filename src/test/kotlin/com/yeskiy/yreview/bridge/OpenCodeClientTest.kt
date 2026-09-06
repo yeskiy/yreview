@@ -2,6 +2,7 @@ package com.yeskiy.yreview.bridge
 
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
+import com.yeskiy.yreview.diagnostic.Redact
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -14,6 +15,7 @@ import java.util.concurrent.Executors
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -210,5 +212,43 @@ class OpenCodeClientTest {
     @Test
     fun `a port that nothing listens on answers null and throws nothing`() {
         assertNull(OpenCodeClient.sessions(deadPort(), "s3cret"))
+    }
+
+    @Test
+    fun `a call that got no answer names the cause`() {
+        val problem = assertNotNull(OpenCodeClient.push(deadPort(), "s3cret", "do the work"))
+
+        assertTrue(problem.startsWith("The OpenCode session did not answer at ${OpenCodeClient.APPEND_PATH}."), problem)
+        assertTrue(Regex("""The cause is \w+Exception""").containsMatchIn(problem), problem)
+    }
+
+    @Test
+    fun `the text of a failed call names the path and the cause`() {
+        assertEquals(
+            "The OpenCode session did not answer at ${OpenCodeClient.APPEND_PATH}. " +
+                "The cause is IllegalStateException: the pipe broke.",
+            OpenCodeClient.problem(OpenCodeClient.APPEND_PATH, "s3cret", IllegalStateException("the pipe broke")),
+        )
+    }
+
+    @Test
+    fun `a failure that carries no message names the class alone`() {
+        assertEquals(
+            "The OpenCode session did not answer at ${OpenCodeClient.SUBMIT_PATH}. " +
+                "The cause is IllegalStateException.",
+            OpenCodeClient.problem(OpenCodeClient.SUBMIT_PATH, "s3cret", IllegalStateException()),
+        )
+    }
+
+    @Test
+    fun `a cause that repeats the password loses it`() {
+        val problem = OpenCodeClient.problem(
+            OpenCodeClient.APPEND_PATH,
+            "the-secret-value",
+            IllegalStateException("the header Basic the-secret-value failed"),
+        )
+
+        assertFalse(problem.contains("the-secret-value"), problem)
+        assertTrue(problem.contains(Redact.SECRET_MARK), problem)
     }
 }
