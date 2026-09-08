@@ -64,6 +64,9 @@ commit_parsers = [
   { message = "^perf", group = "Changed" },
   { message = "^refactor", group = "Changed" },
   { message = "^revert", group = "Changed" },
+  # The description of the plugin stands in plugin.xml and reaches the Marketplace listing,
+  # so a change to it is a change a user reads. Every other docs commit stays out.
+  { message = '^docs\(marketplace\)', group = "Changed" },
   { message = "^docs", skip = true },
   { message = "^style", skip = true },
   { message = "^test", skip = true },
