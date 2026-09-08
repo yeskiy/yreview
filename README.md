@@ -5,8 +5,8 @@
 # Yreview
 
 [![License](https://img.shields.io/github/license/yeskiy/yreview)](https://github.com/yeskiy/yreview/blob/main/LICENSE)
-[![JetBrains Marketplace](https://img.shields.io/jetbrains/plugin/v/com.yeskiy.yreview)](https://plugins.jetbrains.com/plugin/com.yeskiy.yreview)
-[![Downloads](https://img.shields.io/jetbrains/plugin/d/com.yeskiy.yreview)](https://plugins.jetbrains.com/plugin/com.yeskiy.yreview)
+[![JetBrains Marketplace](https://img.shields.io/jetbrains/plugin/v/com.yeskiy.yreview)](https://plugins.jetbrains.com/plugin/34134-yreview)
+[![Downloads](https://img.shields.io/jetbrains/plugin/d/com.yeskiy.yreview)](https://plugins.jetbrains.com/plugin/34134-yreview)
 [![Build](https://img.shields.io/github/actions/workflow/status/yeskiy/yreview/build.yml?branch=main)](https://github.com/yeskiy/yreview/actions/workflows/build.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=yeskiy_yreview&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=yeskiy_yreview)
 [![Known Vulnerabilities](https://snyk.io/test/github/yeskiy/yreview/badge.svg)](https://snyk.io/test/github/yeskiy/yreview)
@@ -138,8 +138,10 @@ The plugin depends on the bundled Git plugin. It needs no Node.js and no account
 
 ## Install
 
-**From the JetBrains Marketplace.** Open Settings, Plugins, Marketplace. Search for
-`Yreview`. Press Install, then restart the IDE.
+**From the JetBrains Marketplace.** Open the
+[plugin page](https://plugins.jetbrains.com/plugin/34134-yreview) and press Install. You can
+also search for `Yreview` under Settings, Plugins, Marketplace. Restart the IDE after the
+install.
 
 **From an archive.** Download `y-review-<version>.zip` from the
 [releases page](https://github.com/yeskiy/yreview/releases). Open Settings, Plugins, press
