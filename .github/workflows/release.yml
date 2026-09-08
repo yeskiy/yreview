@@ -34,6 +34,7 @@ jobs:
     # that needs it, and not on the workflow, so a job added later starts with no right.
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - name: Free the disk
         uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
@@ -44,7 +45,7 @@ jobs:
       # The whole history comes down, because git-cliff reads every commit and every tag.
       #
       # This checkout keeps the token in .git/config, because the last step pushes the
-      # changelog to main. Every checkout in build.yml drops the token instead, because no
+      # changelog branch. Every checkout in build.yml drops the token instead, because no
       # job there writes to the repository.
       - name: Check out the tag
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -199,9 +200,22 @@ jobs:
       # a tag, which leaves the checkout on no branch, so the step reads main and writes the
       # generated file over the one that main holds.
       #
+      # A branch ruleset on main asks for a pull request. The GitHub Actions app cannot hold
+      # a bypass of that ruleset, because a personal repository has no organization to name
+      # the app in. The API answers "must be part of the ruleset source or owner
+      # organization". For this reason the step pushes a side branch and merges a pull
+      # request. The ruleset covers the default branch alone, so the push of the side branch
+      # passes. The rule asks for zero approving reviews, so the merge needs no person.
+      #
+      # The checkout moves back to main before the merge. The gh command deletes the local
+      # branch, and a branch that is not checked out needs no other git step.
+      #
       # The commit takes the type docs, which cliff.toml skips, therefore this commit never
-      # reaches the changelog of the next release.
+      # reaches the changelog of the next release. The squash carries the same subject, so
+      # the commit on main keeps that type.
       - name: Write the changelog back to main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cp CHANGELOG.md "${RUNNER_TEMP}/CHANGELOG.md"
           git fetch --no-tags origin main
@@ -211,7 +225,14 @@ jobs:
             echo "CHANGELOG.md on main already carries the notes of ${GITHUB_REF_NAME}."
             exit 0
           fi
+          branch="chore/changelog-${GITHUB_REF_NAME}"
+          subject="docs: write the changelog of ${GITHUB_REF_NAME}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit --only CHANGELOG.md -m "docs: write the changelog of ${GITHUB_REF_NAME}"
-          git push origin main
+          git checkout -B "$branch"
+          git commit --only CHANGELOG.md -m "$subject"
+          git push origin "$branch"
+          git checkout main
+          gh pr create --base main --head "$branch" --title "$subject" \
+            --body "The release of ${GITHUB_REF_NAME} wrote this file from the commit messages."
+          gh pr merge "$branch" --squash --delete-branch --subject "$subject" --body ""
