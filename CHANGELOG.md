@@ -6,6 +6,12 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-08
+
+### Changed
+
+- Drop the privacy paragraph from the plugin description
+
 ## [1.0.0] - 2026-09-06
 
 ### Added
@@ -74,6 +80,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Record the characters a comment covers inside a line
 - Give every task a short handle for an agent to read
 - Put the yeskiy logo on the plugin icon
+- Write the changelog from the commit messages
 
 ### Changed
 
@@ -153,6 +160,10 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Keep the prompt off the line the user was typing
 - Keep Send and Copy out of the toolbar overflow
 - List the sqids library among the redistributed components
+- Keep every expression out of the shell of a workflow
+- Mark gradlew executable
+- Stop two tests from reading the platform they run on
 
-[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/yeskiy/yreview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yeskiy/yreview/commits/v1.0.0
