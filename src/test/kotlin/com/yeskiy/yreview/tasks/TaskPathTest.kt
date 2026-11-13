@@ -71,4 +71,23 @@ class TaskPathTest {
         assertEquals("", TaskPath.resolve(".."))
         assertFalse(TaskPath.isUnder("E:/../..", "E:/work/demo-repo/Parser.kt"))
     }
+
+    @Test
+    fun `a note path that climbs out of the repository is refused`() {
+        assertFalse(TaskPath.isRelativeUnder(root, "../../../../Users/victim/.ssh/id_rsa"))
+        assertFalse(TaskPath.isRelativeUnder(root, """src\..\..\secret.txt"""))
+    }
+
+    @Test
+    fun `an absolute note path is refused`() {
+        assertFalse(TaskPath.isRelativeUnder(root, "C:/Users/victim/.ssh/id_rsa"))
+        assertFalse(TaskPath.isRelativeUnder(root, "/etc/passwd"))
+        assertFalse(TaskPath.isRelativeUnder(root, """\\server\share\secret.txt"""))
+    }
+
+    @Test
+    fun `a relative note path inside the repository is accepted`() {
+        assertTrue(TaskPath.isRelativeUnder(root, "src/main/Parser.kt"))
+        assertTrue(TaskPath.isRelativeUnder(root, "src/../README.md"))
+    }
 }

@@ -32,6 +32,7 @@ import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.store.ideGitRunner
 import com.yeskiy.yreview.tasks.HandleMatch
 import com.yeskiy.yreview.tasks.TaskHandles
+import com.yeskiy.yreview.tasks.TaskPath
 import git4idea.repo.GitRepositoryManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -208,10 +209,15 @@ class ReviewToolset : McpToolset {
         id: String,
     ): String {
         val project = coroutineContext.project
-        val prepared = withContext(Dispatchers.IO) {
-            val hit = (locate(project, id) as? Found.One)?.hit ?: return@withContext null
-            val location = hit.stored.comment.location ?: return@withContext null
+        val step = withContext(Dispatchers.IO) {
+            val missing = Refusal(ReviewPayloads.error("No review comment has the id $id."))
+            val hit = (locate(project, id) as? Found.One)?.hit ?: return@withContext missing
+            val location = hit.stored.comment.location ?: return@withContext missing
             val root = hit.repo.store.root
+            // Another person writes the note, so its path can climb out of the repository.
+            if (!TaskPath.isRelativeUnder(root.path, location.path)) return@withContext Refusal(
+                ReviewPayloads.error("The comment $id names a file outside its repository. The IDE opens nothing.")
+            )
             val file = root.findFileByRelativePath(location.path)
                 ?: LocalFileSystem.getInstance().refreshAndFindFileByPath("${root.path}/${location.path}")
             // A folder store carries no commit, so its key equals the head and the IDE opens
@@ -228,7 +234,11 @@ class ReviewToolset : McpToolset {
                 file = file,
                 olderText = older,
             )
-        } ?: return ReviewPayloads.error("No review comment has the id $id.")
+        }
+        val prepared = when (step) {
+            is Refusal -> return step.payload
+            is Prepared -> step
+        }
 
         return withContext(Dispatchers.EDT) { show(project, prepared) }
     }
@@ -243,6 +253,11 @@ class ReviewToolset : McpToolset {
 
     private class Hit(val repo: Repo, val stored: StoredComment)
 
+    /** What the read of one comment gave: a refusal, or the place the IDE shows. */
+    private sealed interface Step
+
+    private class Refusal(val payload: String) : Step
+
     private class Prepared(
         val id: String,
         val path: String,
@@ -250,7 +265,7 @@ class ReviewToolset : McpToolset {
         val revision: String,
         val file: VirtualFile?,
         val olderText: String?,
-    )
+    ) : Step
 
     private fun show(project: Project, prepared: Prepared): String {
         if (prepared.olderText == null) {

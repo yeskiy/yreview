@@ -27,6 +27,17 @@ object TaskPath {
     }
 
     /**
+     * True when [relative], a path from a note, names a file under [rootPath].
+     * An absolute path is never relative, so the answer for it is false.
+     */
+    fun isRelativeUnder(rootPath: String, relative: String): Boolean =
+        !isAbsolute(relative) && isUnder(rootPath, "$rootPath$SEPARATOR$relative")
+
+    /** A path that starts at the root of a disk, at a drive letter, or at a network share. */
+    private fun isAbsolute(path: String): Boolean =
+        path.startsWith(SEPARATOR) || path.startsWith('\\') || DRIVE.containsMatchIn(path)
+
+    /**
      * The same path, with one separator, and with every step that moves already made.
      *
      * A step of two dots at the top of a path climbs nothing, because no folder stands
@@ -49,4 +60,6 @@ object TaskPath {
         }
 
     private const val SEPARATOR = '/'
+
+    private val DRIVE = Regex("^[A-Za-z]:")
 }
