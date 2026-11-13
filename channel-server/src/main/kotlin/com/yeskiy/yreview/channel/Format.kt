@@ -4,8 +4,9 @@ package com.yeskiy.yreview.channel
  * Turns one batch into the text and the attributes that the model reads.
  *
  * The first line of a comment names the id, the file, the range, and the revision. The
- * lines after it hold the comment. A blank line divides two comments. A comment on a part
- * of a line names the character position of each end.
+ * lines after it hold the comment, and each one starts with [QUOTE]. A body line therefore
+ * never starts a block, and a header inside a comment text stays text. A blank line divides
+ * two comments. A comment on a part of a line names the character position of each end.
  *
  * The id reaches the model whole. The plugin already shortens it to about 9 characters, and
  * a second cut would give the model a text that names no task.
@@ -13,6 +14,13 @@ package com.yeskiy.yreview.channel
 object Format {
 
     private const val SHORT_LENGTH = 7
+
+    /** The mark at the start of every line of a comment text. */
+    const val QUOTE = "> "
+
+    private val LINE_BREAK = Regex("\r\n|[\r\u2028\u2029]")
+
+    private val C1_CONTROLS = 0x80..0x9f
 
     private val META_KEY = Regex("^[A-Za-z0-9_]+$")
 
@@ -34,7 +42,17 @@ object Format {
 
     private fun format(comment: ReviewComment, headCommit: String): String =
         "[${comment.id}] ${comment.path}:${range(comment)}" +
-            " @${revisionLabel(comment, headCommit)}${sideLabel(comment)}\n${comment.text.trim()}"
+            " @${revisionLabel(comment, headCommit)}${sideLabel(comment)}" +
+            body(comment.text).let { if (it.isEmpty()) "" else "\n$it" }
+
+    /** The text with no control character except the line feed and the tab, and every line quoted. */
+    private fun body(text: String): String = text.replace(LINE_BREAK, "\n")
+        .filterNot { it != '\n' && it != '\t' && (BatchSchema.isControl(it) || it.code in C1_CONTROLS) }
+        .trim()
+        .takeIf { it.isNotEmpty() }
+        ?.lines()
+        ?.joinToString("\n") { if (it.isBlank()) QUOTE.trimEnd() else "$QUOTE$it" }
+        .orEmpty()
 
     fun batchContent(batch: ReviewBatch): String =
         batch.comments.joinToString("\n\n") { format(it, batch.commit) }

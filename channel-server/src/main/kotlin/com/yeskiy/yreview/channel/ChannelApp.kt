@@ -18,15 +18,16 @@ class ChannelApp(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    private val bridge = BridgeClient(
+    private val bridge: BridgeClient = BridgeClient(
         bridgeUrl = config.bridgeUrl,
         token = config.token,
         sessionKey = config.sessionKey,
         onError = onError,
         retryDelayMs = retryDelayMs,
+        onLost = { reason -> channel.notice(reason) },
     )
 
-    private val channel = ReviewChannel { ids -> bridge.resolve(ids) }
+    private val channel: ReviewChannel = ReviewChannel { ids -> bridge.resolve(ids) }
 
     suspend fun connect(transport: Transport) {
         channel.connect(transport)

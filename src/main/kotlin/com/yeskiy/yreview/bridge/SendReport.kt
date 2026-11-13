@@ -70,6 +70,7 @@ object SendMessages {
     fun of(report: SendReport): Notice = when {
         report.problem != null -> Notice(report.problem + copied(report), warning = true)
         report.tasks == 0 && report.dropped == 0 -> Notice("This repository has no open task.", warning = false)
+        report.tasks == 0 -> Notice("The IDE sent nothing." + lost(report), warning = true)
         report.route.clipboardReason != null -> Notice(
             "${reason(report)}, so the IDE wrote ${TaskLabels.count(report.tasks, "task")} " +
                 "to ${report.folder} and copied the prompt to the clipboard." + lost(report),

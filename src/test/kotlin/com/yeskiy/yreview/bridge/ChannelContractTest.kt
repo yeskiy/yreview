@@ -163,7 +163,7 @@ class ChannelContractTest {
         val params = notification["params"]!!.jsonObject
         assertEquals(
             "[c3f9a12aabbccddeeff00112233445566778899a] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
-                "This branch never runs when the input is empty. Add the guard before the loop.",
+                "> This branch never runs when the input is empty. Add the guard before the loop.",
             params["content"]!!.jsonPrimitive.content,
         )
         val meta = params["meta"]!!.jsonObject
@@ -183,7 +183,7 @@ class ChannelContractTest {
 
         assertEquals(
             "[c3f9a12aabbccddeeff00112233445566778899a] src/main/kotlin/Parser.kt:88:4-94:9 @HEAD\n" +
-                "This branch never runs when the input is empty. Add the guard before the loop.",
+                "> This branch never runs when the input is empty. Add the guard before the loop.",
             notification["params"]!!.jsonObject["content"]!!.jsonPrimitive.content,
         )
     }

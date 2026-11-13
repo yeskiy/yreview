@@ -45,6 +45,7 @@ class BridgeClient(
     private val onError: (Throwable) -> Unit,
     private val retryDelayMs: Long = DEFAULT_RETRY_DELAY_MS,
     private val resolveTimeoutMs: Long = DEFAULT_RESOLVE_TIMEOUT_MS,
+    private val onLost: suspend (String) -> Unit = {},
 ) {
 
     private val running = AtomicBoolean(false)
@@ -138,13 +139,14 @@ class BridgeClient(
     }
 
     /**
-     * Reads the stream until it ends. The reader keeps the part of a message that is still
-     * incomplete, because one read gives any number of bytes.
+     * Reads the stream until it ends, and drains the buffer only after a read with a line break.
+     * An event over [MAX_EVENT_CHARS] is skipped to its end and gives one report.
      */
     private suspend fun read(body: InputStream) {
         val source = InputStreamReader(body, StandardCharsets.UTF_8)
         val chunk = CharArray(READ_SIZE)
         val carry = StringBuilder()
+        var skipping = false
         while (running.get()) {
             val count = withContext(Dispatchers.IO) {
                 try {
@@ -155,29 +157,46 @@ class BridgeClient(
                 }
             }
             if (count < 0) return
-            if (carry.length + count > MAX_EVENT_CHARS) {
-                carry.setLength(0)
-                onError(IOException("the bridge sent an event that is too large, so it was dropped"))
-                continue
-            }
             carry.appendRange(chunk, 0, count)
-            val drained = drainEvents(carry.toString())
-            carry.setLength(0)
-            carry.append(drained.rest)
-            drained.events.forEach { handle(it) }
+            if (skipping) skipping = !dropToEventEnd(carry)
+            if (skipping) continue
+            if ((0 until count).any { chunk[it] == '\n' || chunk[it] == '\r' }) {
+                val drained = drainEvents(carry.toString())
+                carry.setLength(0)
+                carry.append(drained.rest)
+                drained.events.forEach { handle(it) }
+            }
+            if (carry.length > MAX_EVENT_CHARS) {
+                carry.delete(0, carry.length - EVENT_END_TAIL)
+                skipping = !dropToEventEnd(carry)
+                lost("the bridge sent an event of more than $MAX_EVENT_CHARS characters, so the channel dropped it")
+            }
         }
+    }
+
+    /** True when the buffer held the end of the dropped event. The buffer then keeps what follows it. */
+    private fun dropToEventEnd(carry: StringBuilder): Boolean {
+        val end = EVENT_END.find(carry)
+        carry.delete(0, end?.range?.last?.plus(1) ?: (carry.length - EVENT_END_TAIL).coerceAtLeast(0))
+        return end != null
+    }
+
+    /** A lost event reaches the log and the model, so the person learns that it did not arrive. */
+    private suspend fun lost(reason: String) {
+        onError(IOException(reason))
+        runCatching { onLost(reason) }.onFailure { if (it is CancellationException) throw it else onError(it) }
     }
 
     private suspend fun handle(data: String) {
         val parsed = runCatching { Json.parseToJsonElement(data) }
         if (parsed.isFailure) {
             val reason = parsed.exceptionOrNull()?.message ?: "the value is not JSON"
-            onError(IOException("the bridge sent an event that is not JSON: $reason"))
+            lost("the bridge sent an event that is not JSON: $reason")
             return
         }
         when (val batch = BatchSchema.parse(data)) {
             is BatchParse.Bad ->
-                onError(IOException("the bridge sent a batch that does not match the contract: ${batch.reason}"))
+                lost("the bridge sent a batch that does not match the contract: ${batch.reason}")
 
             is BatchParse.Ok -> runCatching { onBatch.get()?.invoke(batch.batch) }
                 .onFailure { if (it is CancellationException) throw it else onError(it) }
@@ -206,7 +225,13 @@ class BridgeClient(
          */
         const val DEFAULT_RESOLVE_TIMEOUT_MS = 60_000L
 
+        /** The longest event the channel reads. The plugin splits a batch so that each event stays under it. */
         const val MAX_EVENT_CHARS = 4_000_000
+
+        /** The characters a buffer keeps, so an event end split over two reads is still found. */
+        private const val EVENT_END_TAIL = 3
+
+        private val EVENT_END = Regex("\r?\n\r?\n")
 
         private const val CONNECT_TIMEOUT_SECONDS = 10L
 

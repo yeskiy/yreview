@@ -145,6 +145,16 @@ class SendMessagesTest {
     }
 
     @Test
+    fun `reports no success when the builder left out every task`() {
+        val notice = SendMessages.of(
+            SendReport(tasks = 0, batches = 0, streams = 0, dropped = 2, dropReason = BatchBuilder.TEXT_REASON, targetName = "Claude 2")
+        )
+
+        assertEquals("The IDE sent nothing. 2 tasks were dropped, because the task has no text.", notice.text)
+        assertTrue(notice.warning)
+    }
+
+    @Test
     fun `names the one session that took the tasks`() {
         val notice = SendMessages.of(SendReport(tasks = 3, batches = 1, streams = 1, targetName = "Claude 2"))
 

@@ -19,8 +19,8 @@ data class BatchPlan(val batches: List<ReviewBatch>, val dropped: List<DroppedTa
 /**
  * Turns the tasks of one repository into the batches the channel accepts.
  *
- * The channel drops a batch that breaks one rule of its schema, and it drops it in
- * silence. The builder therefore checks every value here and leaves out a task it cannot
+ * The channel drops a whole batch that breaks one rule of its schema or passes the size of
+ * one event. The builder therefore checks every value here and leaves out a task it cannot
  * carry, rather than losing the whole batch for one bad row. Every task the builder
  * leaves out arrives in [BatchPlan.dropped], so the caller reports the loss.
  */
@@ -30,23 +30,43 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
         if (!isRevision(commit)) {
             return BatchPlan(emptyList(), tasks.map { DroppedTask(it.id, COMMIT_REASON) })
         }
-        val checked = tasks.map { it to problemOf(it) }
+        val rows = tasks.map { task -> rowOf(task) }
+        val name = branchName(branch)
         return BatchPlan(
-            checked.filter { it.second == null }
-                .map { commentOf(it.first) }
-                .chunked(MAX_COMMENTS)
-                .map { ReviewBatch(newBatchId(), branchName(branch), commit, it) },
-            checked.mapNotNull { (task, problem) -> problem?.let { DroppedTask(task.id, it) } },
+            groups(name, commit, rows.mapNotNull { it.comment }).map { ReviewBatch(newBatchId(), name, commit, it) },
+            rows.mapNotNull { row -> row.problem?.let { DroppedTask(row.id, it) } },
         )
     }
+
+    /** The text is checked after the filter, because that is the text the channel reads. */
+    private fun rowOf(task: ReviewTask): Row = problemOf(task)?.let { Row(task.id, null, it) }
+        ?: commentOf(task).let { if (it.text.isEmpty()) Row(task.id, null, TEXT_REASON) else Row(task.id, it, null) }
+
+    private data class Row(val id: String, val comment: BatchComment?, val problem: String?)
 
     private fun problemOf(task: ReviewTask): String? = when {
         !ID.matches(task.id) -> ID_REASON
         !isRevision(task.revision) -> REVISION_REASON
         task.path.isEmpty() || task.path.length > MAX_PATH || task.path.any { TaskText.isAnyControl(it) } -> PATH_REASON
-        task.text.isBlank() -> TEXT_REASON
         else -> null
     }
+
+    /** The comments in groups that each fit one batch and one channel event of [MAX_EVENT_CHARS], frame included. */
+    private fun groups(branch: String, commit: String, comments: List<BatchComment>): List<List<BatchComment>> {
+        val frame = BatchJson.encode(ReviewBatch(SIZE_ID, branch, commit, emptyList())).length + EVENT_FRAME
+        return comments.fold(mutableListOf<Group>()) { groups, comment ->
+            val size = BatchJson.encode(comment).length + 1
+            val last = groups.lastOrNull()
+            if (last != null && last.comments.size < MAX_COMMENTS && frame + last.size + size <= MAX_EVENT_CHARS) {
+                groups[groups.lastIndex] = Group(last.comments + comment, last.size + size)
+            } else {
+                groups += Group(listOf(comment), size)
+            }
+            groups
+        }.map { it.comments }
+    }
+
+    private data class Group(val comments: List<BatchComment>, val size: Int)
 
     private fun commentOf(task: ReviewTask): BatchComment = BatchComment(
         id = task.id,
@@ -68,6 +88,15 @@ class BatchBuilder(private val newBatchId: () -> String = { randomBatchId() }) {
         const val MAX_PATH = 1024
         const val MAX_BRANCH = 255
         const val MAX_LINE = 10_000_000
+
+        // The same limit stands in channel-server BridgeClient.kt. Keep the two copies equal.
+        const val MAX_EVENT_CHARS = 4_000_000
+
+        /** The characters of "data: " and of the blank line that ends one event. */
+        private const val EVENT_FRAME = 8
+
+        /** A batch id of the longest length the channel accepts, so a size count never falls short. */
+        private val SIZE_ID = "x".repeat(200)
 
         const val ID_REASON = "the identifier breaks the channel rule"
         const val REVISION_REASON = "the revision is not a git revision"

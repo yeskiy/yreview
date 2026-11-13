@@ -39,4 +39,6 @@ object BatchJson {
 
     /** Writes the batch on one line, because one Server-Sent Event carries one batch. */
     fun encode(batch: ReviewBatch): String = json.encodeToString(ReviewBatch.serializer(), batch)
+
+    fun encode(comment: BatchComment): String = json.encodeToString(BatchComment.serializer(), comment)
 }

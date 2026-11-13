@@ -102,6 +102,41 @@ class BatchBuilderTest {
     }
 
     @Test
+    fun `leaves out a task whose text holds control characters alone and keeps the batch`() {
+        val plan = builder().build(
+            "main",
+            commit,
+            listOf(task(id = "bad1", text = "\u0001\u0002$escape"), task(id = "bad2", text = " \u0007\t"), task(id = "good")),
+        )
+
+        assertEquals(listOf("good"), plan.batches.single().comments.map { it.id })
+        assertEquals(listOf("bad1", "bad2"), plan.dropped.map { it.id })
+        assertEquals(BatchBuilder.TEXT_REASON, plan.reason)
+        assertTrue(plan.batches.flatMap { it.comments }.all { it.text.isNotEmpty() })
+    }
+
+    @Test
+    fun `makes no batch when every text is control characters alone`() {
+        val plan = builder().build("main", commit, listOf(task(id = "bad1", text = "\u0001"), task(id = "bad2", text = "\u0002")))
+
+        assertTrue(plan.batches.isEmpty())
+        assertEquals(0, plan.tasks)
+        assertEquals(2, plan.dropped.size)
+    }
+
+    @Test
+    fun `splits a batch at the schema maximum so every event stays under the channel limit`() {
+        val largest = (1..BatchBuilder.MAX_COMMENTS).map { task(id = "id$it", text = "\"".repeat(BatchBuilder.MAX_TEXT)) }
+        val plan = builder().build("main", commit, largest)
+        val sizes = plan.batches.map { "data: ${BatchJson.encode(it)}\n\n".length }
+
+        assertTrue(plan.batches.size > 1, "a batch of $sizes characters must split")
+        assertTrue(sizes.all { it <= BatchBuilder.MAX_EVENT_CHARS }, "event sizes $sizes")
+        assertEquals(largest.map { it.id }, plan.batches.flatMap { it.comments }.map { it.id })
+        assertTrue(plan.dropped.isEmpty())
+    }
+
+    @Test
     fun `carries a comment that a migration moved out of a folder store`() {
         val plan = builder().build("main", commit, listOf(task(revision = FolderStore.WORKTREE)))
 

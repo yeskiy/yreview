@@ -47,7 +47,9 @@ sealed interface BatchParse {
  * The contract between the plugin and the channel.
  *
  * The same rule stands in BatchBuilder.kt. Keep the two copies equal. The rules guard the
- * text that reaches the model, so a line break never leaves a field of one comment.
+ * text that reaches the model, so a line break never leaves a field of one comment. The text
+ * may hold lines, and [Format] quotes each one. One event also stays under
+ * [BridgeClient.MAX_EVENT_CHARS], so the plugin splits a large batch.
  */
 object BatchSchema {
 

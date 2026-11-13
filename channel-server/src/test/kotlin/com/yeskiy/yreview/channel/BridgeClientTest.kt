@@ -5,6 +5,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
 import java.util.Collections
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -40,6 +41,8 @@ class BridgeClientTest {
 
     private val errors: MutableList<Throwable> = Collections.synchronizedList(mutableListOf())
 
+    private val lost: MutableList<String> = Collections.synchronizedList(mutableListOf())
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private var client: BridgeClient? = null
@@ -51,6 +54,7 @@ class BridgeClientTest {
         onError = { errors.add(it) },
         retryDelayMs = 20,
         resolveTimeoutMs = RESOLVE_TIMEOUT_MS,
+        onLost = { lost.add(it) },
     ).also {
         client = it
         it.start(scope) { pushed -> batches.add(pushed) }
@@ -110,6 +114,49 @@ class BridgeClientTest {
 
         assertEquals(1, errors.size)
         assertContains(errors[0].message.orEmpty(), "not JSON")
+    }
+
+    @Test
+    fun `tells the model once about a batch at the schema maximum and reads the next batch`() {
+        val largest = batch.copy(
+            comments = (1..BatchSchema.MAX_COMMENTS).map { batch.comments[0].copy(id = "c$it", text = "\"".repeat(BatchSchema.MAX_TEXT)) },
+        )
+        assertTrue(Json.encodeToString(largest).length > BridgeClient.MAX_EVENT_CHARS)
+        connect()
+        bridge.waitForStream()
+        bridge.push(largest)
+        bridge.push(batch)
+        FakeBridge.waitFor("the good batch") { batches.size == 1 }
+
+        assertEquals("b7f2a91", batches.single().batchId)
+        assertEquals(1, lost.size)
+        assertContains(lost[0], "more than ${BridgeClient.MAX_EVENT_CHARS} characters")
+        assertEquals(1, errors.size)
+    }
+
+    @Test
+    fun `reads a batch just under the event limit`() {
+        val text = "x".repeat(BatchSchema.MAX_TEXT)
+        val count = (BridgeClient.MAX_EVENT_CHARS - 1000) / (Json.encodeToString(batch.comments[0].copy(text = text)).length + 1)
+        val large = batch.copy(comments = (1..count).map { batch.comments[0].copy(id = "c$it", text = text) })
+        assertTrue(Json.encodeToString(large).length < BridgeClient.MAX_EVENT_CHARS)
+        connect()
+        bridge.waitForStream()
+        bridge.push(large)
+        FakeBridge.waitFor("the large batch") { batches.size == 1 }
+
+        assertEquals(count, batches.single().comments.size)
+        assertTrue(lost.isEmpty())
+    }
+
+    @Test
+    fun `tells the model about an event that is not JSON`() {
+        connect()
+        bridge.waitForStream()
+        bridge.pushRaw("this is not json")
+        FakeBridge.waitFor("the lost event") { lost.isNotEmpty() }
+
+        assertContains(lost.single(), "not JSON")
     }
 
     @Test

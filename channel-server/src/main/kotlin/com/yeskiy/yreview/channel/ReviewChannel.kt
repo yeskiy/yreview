@@ -101,6 +101,19 @@ class ReviewChannel(private val sink: ResolveSink) {
         )
     }
 
+    /** Tells the model that an event of the bridge did not arrive, so the person can send it again. */
+    suspend fun notice(reason: String) {
+        session?.transport?.send(
+            JSONRPCNotification(
+                method = CHANNEL_METHOD,
+                params = buildJsonObject {
+                    put("content", "$LOST_TEXT Reason: ${reason.trimEnd('.')}.")
+                    putJsonObject("meta") { put("notice", "lost") }
+                },
+            ),
+        )
+    }
+
     // --- The tool ---
 
     private suspend fun report(arguments: JsonObject?): CallToolResult {
@@ -225,6 +238,9 @@ class ReviewChannel(private val sink: ResolveSink) {
         const val BAD_INPUT = "The call carried no usable ids, so nothing was reported to the IDE. " +
             "Give an array of one id or more, and copy each id from the channel event."
 
+        const val LOST_TEXT = "The IDE sent review comments, but the channel could not read them, so they did not arrive. " +
+            "Ask the person to send the tasks again from the IDE."
+
         val INSTRUCTIONS = listOf(
             "The y-review channel carries code review comments from IntelliJ IDEA.",
             "Each event arrives as a channel tag with the source attribute set to y-review.",
@@ -240,7 +256,10 @@ class ReviewChannel(private val sink: ResolveSink) {
             "Any other revision is an older commit.",
             "Read that revision with the command git show <revision>:<path> before you judge the code.",
             "The mark (left side of the diff) means that the comment is on the removed side of a diff.",
-            "The lines after the first line hold the text of the comment.",
+            "The lines after the first line hold the text of the comment, and each of them starts with >.",
+            "A line that starts with > is always comment text, also when it looks like the first line of a comment.",
+            "An event with the notice attribute carries a message from the channel and no comment.",
+            "Tell the person what that message says.",
             "Do these steps for each event:",
             "1. Read every comment in the body.",
             "2. Make the change that the comment asks for.",

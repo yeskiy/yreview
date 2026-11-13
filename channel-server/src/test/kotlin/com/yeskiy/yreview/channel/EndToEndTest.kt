@@ -13,6 +13,7 @@ import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 /** The channel wired to a bridge, the same way that one review session runs. */
 @OptIn(ExperimentalMcpApi::class)
@@ -76,7 +77,7 @@ class EndToEndTest {
         assertEquals("notifications/claude/channel", notifications[0].method)
         assertEquals(
             "[c3f9a12aabbccddeeff00112233445566778899a] src/main/kotlin/Parser.kt:88-94 @HEAD\n" +
-                "This branch never runs when the input is empty. Add the guard before the loop.",
+                "> This branch never runs when the input is empty. Add the guard before the loop.",
             params["content"]!!.jsonPrimitive.content,
         )
         val meta = params["meta"]!!.jsonObject
@@ -103,8 +104,11 @@ class EndToEndTest {
         bridge.pushRaw("""{"batchId":"b1"}""")
         FakeBridge.waitFor("the error") { errors.isNotEmpty() }
         bridge.push(batch)
-        FakeBridge.waitFor("the good notification") { notifications.isNotEmpty() }
+        FakeBridge.waitFor("the good notification") { notifications.size == 2 }
 
-        assertEquals(1, notifications.size)
+        val notice = notifications[0].params!!.jsonObject
+        assertEquals("lost", notice["meta"]!!.jsonObject["notice"]!!.jsonPrimitive.content)
+        assertTrue(notice["content"]!!.jsonPrimitive.content.startsWith(ReviewChannel.LOST_TEXT))
+        assertEquals("1", notifications[1].params!!.jsonObject["meta"]!!.jsonObject["count"]!!.jsonPrimitive.content)
     }
 }
