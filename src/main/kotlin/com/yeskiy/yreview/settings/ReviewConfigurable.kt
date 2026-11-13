@@ -28,7 +28,6 @@ import com.yeskiy.yreview.session.McpRoute
 import com.yeskiy.yreview.session.SESSION_NAMES
 import com.yeskiy.yreview.store.NotesSharing
 import java.awt.Font
-import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.DefaultComboBoxModel
 import javax.swing.JButton
@@ -136,8 +135,8 @@ class ReviewConfigurable(private val project: Project) : Configurable {
             }
             row {
                 comment(
-                    "The plugin adds " + NotesSharing.FETCH_REFSPEC + " to the fetch list of that remote " +
-                        "once, so the notes other people write come back with the next fetch. " +
+                    "The plugin asks before it adds " + NotesSharing.FETCH_REFSPEC + " to the fetch list " +
+                        "of that remote, and it writes .git/config only after you click Add. " +
                         "With the box clear the plugin writes no git configuration, " +
                         "and you add that line by hand."
                 )
@@ -465,15 +464,11 @@ class ReviewConfigurable(private val project: Project) : Configurable {
         addState.text = problem ?: "The plugin registered the review server for ${spec.label}."
     }
 
-    /** Null after a good write, or the text of the problem. */
+    /** Null after a good write, or the text of the problem. The other servers of the file stay. */
     private fun writeFile(relative: String, text: String): String? {
         val base = project.basePath ?: return "This project has no directory."
-        return runCatching {
-            val file = Path.of(base).resolve(relative)
-            Files.createDirectories(file.parent)
-            Files.writeString(file, text)
-            null
-        }.getOrElse { "The file was not written. ${it.message.orEmpty()}" }
+        return runCatching { McpFile.write(Path.of(base).resolve(relative), text) }
+            .getOrElse { "The file was not written. ${it.message.orEmpty()}" }
     }
 
     private fun javaPath(): String? = JavaRuntime.locate()
