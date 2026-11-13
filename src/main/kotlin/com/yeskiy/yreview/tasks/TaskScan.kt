@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.util.TextRange
@@ -18,10 +19,12 @@ import com.yeskiy.yreview.settings.ShareLog
 import com.yeskiy.yreview.store.AnchorRules
 import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.FolderStore
+import com.yeskiy.yreview.store.GitRunner
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoreRoot
+import com.yeskiy.yreview.store.ideGitRunner
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 
@@ -56,6 +59,7 @@ object TaskScan {
         val repositories = GitRepositoryManager.getInstance(project).repositories
         val roots = repositories.map { it.root.path }
         return repositories.mapNotNull { repository ->
+            ProgressManager.checkCanceled()
             repositoryTasks(project, repository, roots, onlyFile, showResolved)
         } + folderTasks(project, onlyFile, showResolved)
     }
@@ -124,8 +128,12 @@ object TaskScan {
             .filter { wanted == null || it.path == wanted }
     }
 
+    /** The records of one git repository through [NoteScan], or null when git gave no full answer. */
+    internal fun gitRecords(git: GitRunner, root: String, showResolved: Boolean, checkCanceled: () -> Unit): List<ScanRecord>? =
+        NoteScan.read(git, root, NoteRefs.ALL, checkCanceled)?.let { records(CommentBook(it, author = ""), showResolved) }
+
     /** The records of one store, as the switch of the tab asks for them. */
-    private fun records(book: CommentBook, showResolved: Boolean): List<ScanRecord> =
+    internal fun records(book: CommentBook, showResolved: Boolean): List<ScanRecord> =
         book.commits(NoteRefs.ALL).flatMap { commit ->
             CommentPick.of(
                 book.open(commit, NoteRefs.ALL),
@@ -157,7 +165,10 @@ object TaskScan {
     ): List<ReviewTask> {
         val log = ShareLog.getInstance(project)
         val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, root, '/') }
-        return records(ReviewService.getInstance(project).bookForRoot(root), showResolved)
+        return (
+            gitRecords(ideGitRunner(project, root), root.path, showResolved) { ProgressManager.checkCanceled() }
+                ?: records(ReviewService.getInstance(project).bookForRoot(root), showResolved)
+            )
             .mapNotNull { record -> CommentTask.of(record, root.path, log.isUnshared(record.stored.id)) }
             .filter { wanted == null || it.path == wanted }
     }
