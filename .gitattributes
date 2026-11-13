@@ -1,0 +1,2 @@
+# The shared vectors keep LF, so a byte compare gives the same result on every system.
+spec/vectors/*.json text eol=lf

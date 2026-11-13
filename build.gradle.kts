@@ -136,6 +136,8 @@ tasks.test {
     useJUnitPlatform()
     // Two tests read the real jar, so the jar must exist before the tests start.
     inputs.files(channelServer.get())
+    // The shared vectors are test data, so a change to them runs the tests again.
+    inputs.dir("spec/vectors")
     systemProperty(
         "y.review.channel.jar",
         layout.projectDirectory.file("channel-server/build/channel/y-review-channel.jar").asFile.absolutePath,
