@@ -76,7 +76,7 @@ object NoteScan {
         val result = git.run(
             "grep", "-z", "-a", "-G", "--no-color", "--no-line-number", "--no-column", "-e", "^", *tips.toTypedArray(),
         )
-        if (!result.answered || (result.exitCode != 0 && result.exitCode != NO_MATCH)) return null
+        if (!result.ran || (result.exitCode != 0 && result.exitCode != NO_MATCH)) return null
         return result.stdout.split('\n')
             .mapNotNull { record ->
                 val name = record.substringBefore('\u0000', "")
