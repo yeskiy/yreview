@@ -1,5 +1,11 @@
 package com.yeskiy.yreview.tasks
 
+import com.intellij.openapi.progress.EmptyProgressIndicator
+import com.intellij.openapi.progress.ProcessCanceledException
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.ProgressManager
+import com.intellij.openapi.util.Computable
+
 /**
  * What one tab of the review window knows about the scan of its scope.
  *
@@ -40,6 +46,38 @@ fun <T> readScope(read: () -> T?): ScanOutcome<T> =
     } catch (failure: Throwable) {
         ScanOutcome(null, failure)
     }
+
+/** The progress indicator of the newest scan of one tab. A new scan cancels the older one. */
+class ScanRuns {
+
+    private val lock = Any()
+
+    private var current: ProgressIndicator? = null
+
+    /** Cancels the older scan and gives the indicator of the new scan. */
+    fun next(): ProgressIndicator = synchronized(lock) {
+        current?.cancel()
+        EmptyProgressIndicator().also { current = it }
+    }
+
+    /** Cancels the open scan. The tab calls it when it closes. */
+    fun cancel() {
+        synchronized(lock) { current?.cancel() }
+    }
+
+    /**
+     * Runs [read] under [indicator], so the cancel checks of the scan see a cancel.
+     * A canceled read gives null.
+     */
+    fun <T> run(indicator: ProgressIndicator, read: () -> T?): ScanOutcome<T>? {
+        val outcome = try {
+            ProgressManager.getInstance().runProcess(Computable { readScope(read) }, indicator)
+        } catch (canceled: ProcessCanceledException) {
+            null
+        }
+        return outcome.takeUnless { indicator.isCanceled }
+    }
+}
 
 /**
  * The scan state of one tab.

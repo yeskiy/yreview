@@ -30,6 +30,7 @@ import com.intellij.openapi.actionSystem.UiDataProvider
 import com.intellij.openapi.actionSystem.ToggleAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.diagnostic.ControlFlowException
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
@@ -127,6 +128,7 @@ import com.yeskiy.yreview.tasks.CloseReport
 import com.yeskiy.yreview.tasks.RemoveReport
 import com.yeskiy.yreview.tasks.RepositoryTasks
 import com.yeskiy.yreview.tasks.ReviewTask
+import com.yeskiy.yreview.tasks.ScanRuns
 import com.yeskiy.yreview.tasks.ScanState
 import com.yeskiy.yreview.tasks.SendScope
 import com.yeskiy.yreview.tasks.SendTarget
@@ -241,6 +243,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private val state = ScanState()
 
+    private val runs = ScanRuns()
+
     private val preview = CommentPreviewPanel(project) { tab().showResolved }
 
     private val previewTicket = PreviewTicket()
@@ -322,6 +326,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     override fun dispose() {
         closed = true
+        runs.cancel()
     }
 
     /** The tab that holds this panel. The changelist tab writes the list name on it. */
@@ -402,15 +407,20 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      *
      * The read runs on a pooled thread, and it reports back once on every path. The tab
      * therefore leaves the loading state after a failure too, and not only after a result.
+     *
+     * Each read runs under its own indicator, and a newer reload cancels the older read. A
+     * canceled read reports nothing, because the newer read owns the tree.
      */
     private fun reload() {
         val onlyFile = if (scope == TaskScope.CURRENT_FILE) openFile() else null
         val chosen = chosenScope()
         val ticket = state.start(DumbService.getInstance(project).isDumb)
+        val indicator = runs.next()
         showState()
         ApplicationManager.getApplication().executeOnPooledThread {
-            val outcome = readScope { scan(onlyFile, chosen) }
-            outcome.failure?.let { logger.warn("the review tool window could not read the tasks", it) }
+            val outcome = runs.run(indicator) { scan(onlyFile, chosen) } ?: return@executeOnPooledThread
+            outcome.failure?.takeUnless { it is ControlFlowException }
+                ?.let { logger.warn("the review tool window could not read the tasks", it) }
             ApplicationManager.getApplication().invokeLater({ settle(ticket, outcome.rows) }, expired())
         }
     }
