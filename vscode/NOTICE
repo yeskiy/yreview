@@ -1,0 +1,9 @@
+Yreview for VS Code
+Copyright 2026 Yehor Brodskiy
+
+Licensed under the Apache License, Version 2.0. The LICENSE file holds the full text.
+
+The extension bundle redistributes the third-party component below.
+
+MIT License
+  sqids 0.3.0 (https://github.com/sqids/sqids-javascript)

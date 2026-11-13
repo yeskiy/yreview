@@ -1,0 +1,112 @@
+# The VS Code extension. Each job reads the sources only, holds no secret, and writes nothing.
+name: Build the VS Code extension
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "vscode/**"
+      - "spec/**"
+      - ".github/workflows/build-vscode.yml"
+  pull_request:
+    paths:
+      - "vscode/**"
+      - "spec/**"
+      - ".github/workflows/build-vscode.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+
+  test:
+    name: Test on ${{ matrix.os }} with VS Code ${{ matrix.vscode }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, vscode: stable }
+          - { os: ubuntu-latest, vscode: "1.101.0" }
+          - { os: windows-latest, vscode: stable }
+          - { os: macos-latest, vscode: stable }
+    defaults:
+      run:
+        working-directory: vscode
+    env:
+      VSCODE_TEST_VERSION: ${{ matrix.vscode }}
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install the exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check the types
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check the format
+        run: npm run format:check
+
+      - name: Check the prose
+        run: npm run prose
+
+      - name: Run the unit tests
+        run: npm run test:unit
+
+      - name: Run the integration tests on Linux
+        if: runner.os == 'Linux'
+        run: xvfb-run -a npm run test:integration
+
+      - name: Run the integration tests
+        if: runner.os != 'Linux'
+        run: npm run test:integration
+
+  package:
+    name: Package the extension
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install the exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Package the VSIX
+        run: npx vsce package --no-dependencies --out yreview.vsix
+
+      - name: Keep the VSIX
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: yreview-vsix
+          path: vscode/yreview.vsix
