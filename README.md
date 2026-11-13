@@ -130,7 +130,7 @@ each agent, and which flags it adds.
 
 | Item                 | Version                             | Needed                                                                              |
 |----------------------|-------------------------------------|-------------------------------------------------------------------------------------|
-| IntelliJ IDEA        | 2026.2 or newer, build 262 or newer | Yes. The plugin declares no upper build limit.                                      |
+| IntelliJ IDEA        | 2026.2 or 2026.3, build 262 to 263  | Yes. The plugin declares build 263.* as its upper limit.                            |
 | Git                  | Any current version, on the PATH    | Yes. The plugin runs the `git` program of your machine.                             |
 | A command line agent | Any current version                 | No. Without one every comment feature works, and only the review session stays out. |
 

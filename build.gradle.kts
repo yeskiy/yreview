@@ -66,15 +66,17 @@ intellijPlatform {
         version = project.version.toString()
         ideaVersion {
             sinceBuild = "262"
+            untilBuild = "263.*"
         }
     }
 
-    // The verifier reads one IDE, IntelliJ IDEA.
+    // The verifier reads IntelliJ IDEA 2026.2 and 2026.3, the two releases that sinceBuild
+    // and untilBuild cover.
     //
     // recommended() reads the product release feed and answers every release of the
     // current product between sinceBuild and untilBuild, over the release, the EAP and the
     // RC channel. That list changes on the day JetBrains publishes a build, so a release
-    // run could meet an IDE that no run met before. One named version keeps every run equal.
+    // run could meet an IDE that no run met before. Named versions keep every run equal.
     //
     // The code IU answers the type IntellijIdea from version 2026.2, where JetBrains put
     // the two editions of IntelliJ IDEA into one distribution. An earlier version answers
@@ -82,6 +84,7 @@ intellijPlatform {
     pluginVerification {
         ides {
             create(IntelliJPlatformType.IntellijIdea, "2026.2.2")
+            create(IntelliJPlatformType.IntellijIdea, "2026.3")
         }
     }
 
