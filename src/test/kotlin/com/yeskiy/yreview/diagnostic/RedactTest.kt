@@ -173,6 +173,51 @@ class RedactTest {
         assertEquals(Redact.CAUSES, depth(Redact.failure(first, listOf(home), project)))
     }
 
+    @Test
+    fun `a repository root outside the project becomes a mark`() {
+        val text = Redact.text(
+            "git failed in D:/repos/shared-lib/.git",
+            listOf(home),
+            listOf(project),
+            listOf("D:/repos/shared-lib"),
+        )
+
+        assertEquals("git failed in ${Redact.REPOSITORY_MARK}/.git", text)
+    }
+
+    @Test
+    fun `a repository inside the home folder keeps the longer match`() {
+        val text = Redact.text("C:/Users/alice/code/lib/a.kt", listOf(home), emptyList(), listOf("C:/Users/alice/code/lib"))
+
+        assertEquals("${Redact.REPOSITORY_MARK}/a.kt", text)
+    }
+
+    @Test
+    fun `a project inside a repository keeps the longer match`() {
+        val text = Redact.text(
+            "E:/mono/apps/web/a.kt and E:/mono/b.kt",
+            listOf(home),
+            listOf("E:/mono/apps/web"),
+            listOf("E:/mono"),
+        )
+
+        assertEquals("${Redact.PROJECT_MARK}/a.kt and ${Redact.REPOSITORY_MARK}/b.kt", text)
+    }
+
+    @Test
+    fun `every open project goes out of the text`() {
+        val text = Redact.text("E:/one/a.kt and F:/two/b.kt", listOf(home), listOf("E:/one", "F:/two"), emptyList())
+
+        assertEquals("${Redact.PROJECT_MARK}/a.kt and ${Redact.PROJECT_MARK}/b.kt", text)
+    }
+
+    @Test
+    fun `a failure loses the repository root`() {
+        val clean = Redact.failure(java.io.IOException("D:/repos/lib is locked"), listOf(home), emptyList(), listOf("D:/repos/lib"))
+
+        assertEquals("java.io.IOException: ${Redact.REPOSITORY_MARK} is locked", clean.toString())
+    }
+
     private fun depth(failure: Throwable): Int =
         failure.cause?.let { 1 + depth(it) } ?: 0
 }

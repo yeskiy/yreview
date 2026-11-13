@@ -29,11 +29,10 @@ object IssueForm {
     /** The address, and whether the form carries the text already. */
     data class Form(val url: String, val prefilled: Boolean)
 
-    fun title(type: String, message: String, projectPath: String?): String =
-        clean(
-            if (message.isBlank()) type else "$type: ${message.take(TITLE_LENGTH)}",
-            projectPath,
-        ).lines().first()
+    /** The cut runs after the redaction. A cut path would otherwise not match and stay. */
+    fun title(type: String, message: String, projectPath: String?, homes: List<String> = Redact.homes()): String =
+        clean(message, projectPath, homes).lines().first()
+            .let { if (it.isBlank()) type else "$type: ${it.take(TITLE_LENGTH)}" }
 
     /**
      * The text of the issue. Every event of the dialog goes in, because the dialog groups
@@ -73,8 +72,8 @@ object IssueForm {
 
     private fun cut(stack: String): String = stack.lines().take(STACK_LINES).joinToString("\n")
 
-    private fun clean(value: String, projectPath: String?): String =
-        Redact.text(value, Redact.homes(), projectPath)
+    private fun clean(value: String, projectPath: String?, homes: List<String> = Redact.homes()): String =
+        Redact.text(value, homes, projectPath)
 
     private fun encode(value: String): String = URLEncoder.encode(value, StandardCharsets.UTF_8)
 }

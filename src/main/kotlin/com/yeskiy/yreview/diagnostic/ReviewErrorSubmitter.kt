@@ -7,8 +7,6 @@ import com.intellij.openapi.diagnostic.ErrorReportSubmitter
 import com.intellij.openapi.diagnostic.IdeaLoggingEvent
 import com.intellij.openapi.diagnostic.SubmittedReportInfo
 import com.intellij.openapi.ide.CopyPasteManager
-import com.intellij.openapi.project.Project
-import com.intellij.openapi.project.ProjectManager
 import com.intellij.util.Consumer
 import com.yeskiy.yreview.settings.ProductName
 import java.awt.Component
@@ -53,19 +51,12 @@ class ReviewErrorSubmitter : ErrorReportSubmitter() {
     }
 
     /**
-     * The folder of the project the error came from.
-     *
-     * The error dialog of the IDE hands this class the component of the dialog, and the data
-     * context of that component carries the project. A dialog that names no project leaves
-     * one open project as the only answer, and several open projects leave none.
+     * The folder of the project of the dialog, or null. [Redact] also takes out the folders of
+     * every open project and repository, so a null leaks no path.
      */
     private fun projectPathOf(component: Component): String? = runCatching {
         DataManager.getInstance().getDataContext(component).getData(CommonDataKeys.PROJECT)
-            ?: singleProject()
     }.getOrNull()?.basePath
-
-    private fun singleProject(): Project? =
-        ProjectManager.getInstance().openProjects.singleOrNull()
 
     /** A failure in the reader of the versions must not stop the report. */
     private fun machine(): MachineFacts = runCatching { DiagnosticReport.machine() }.getOrElse { EMPTY_MACHINE }

@@ -109,6 +109,17 @@ class IssueFormTest {
     }
 
     @Test
+    fun `the title cut runs after the redaction`() {
+        val home = "C:/Users/alexandra"
+        val message = "x".repeat(IssueForm.TITLE_LENGTH - "C:/Users/alexand".length) + "$home/AppData/state.json"
+
+        val title = IssueForm.title("IOException", message, project, listOf(home))
+
+        assertFalse(title.contains("alexand"), title)
+        assertTrue(title.contains("x~/AppData"), title)
+    }
+
+    @Test
     fun `a long form gives the plain address back`() {
         val form = IssueForm.form(base, "IOException", "x".repeat(IssueForm.MAX_URL))
 

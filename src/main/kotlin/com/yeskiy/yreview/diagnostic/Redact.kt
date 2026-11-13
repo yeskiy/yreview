@@ -6,7 +6,7 @@ import com.yeskiy.yreview.session.ShellCommand
  * Takes the machine of the user out of a diagnostic text.
  *
  * A report goes to a public issue tracker. It must name no user, no folder layout, no
- * remote and no secret. The project path goes first, because a project can sit inside the
+ * remote and no secret. The longest folder goes first, because a project can sit inside the
  * home folder, and the longer match then wins.
  *
  * The rules run over plain text, so one call cleans a whole report, whatever field the
@@ -21,6 +21,8 @@ object Redact {
     const val HOME_MARK = "~"
 
     const val PROJECT_MARK = "<project>"
+
+    const val REPOSITORY_MARK = "<repository>"
 
     const val REMOTE_MARK = "<remote>"
 
@@ -58,19 +60,34 @@ object Redact {
 
     fun text(value: String, home: String, projectPath: String?): String = text(value, listOf(home), projectPath)
 
+    /**
+     * Cleans [value] of [projectPath], and also of the folder of every open project and of
+     * every git repository of them. A caller therefore cannot forget a folder.
+     */
+    fun text(value: String, homes: List<String>, projectPath: String?): String =
+        text(value, homes, listOfNotNull(projectPath) + OpenPlaces.projects(), OpenPlaces.repositories())
+
     /** Both slash forms reach this function, and Windows compares a path without case. */
-    fun text(value: String, homes: List<String>, projectPath: String?): String {
-        val withProject = projectPaths(projectPath).fold(value.replace('\\', '/')) { text, path ->
-            replace(text, path, PROJECT_MARK)
-        }
-        val withHome = homes.fold(withProject) { text, home ->
-            replace(text, home.replace('\\', '/'), HOME_MARK)
-        }
-        return secrets(addresses(withHome))
-    }
+    fun text(value: String, homes: List<String>, projects: List<String>, repositories: List<String>): String =
+        secrets(addresses(needles(homes, projects, repositories).fold(value.replace('\\', '/')) { text, (needle, mark) ->
+            replace(text, needle, mark)
+        }))
 
     /**
-     * Every spelling one project folder has in a report.
+     * Each folder with its mark, the longest first, so a short parent cannot cut the match of
+     * a longer child. For one folder, a project wins over a repository, and both win over a home.
+     */
+    private fun needles(homes: List<String>, projects: List<String>, repositories: List<String>) =
+        (projects.flatMap(::spellings).map { it to PROJECT_MARK } +
+            repositories.flatMap(::spellings).map { it to REPOSITORY_MARK } +
+            homes.map { it.replace('\\', '/') to HOME_MARK })
+            .map { (needle, mark) -> needle.trimEnd('/') to mark }
+            .filter { it.first.isNotEmpty() }
+            .distinctBy { it.first.lowercase() }
+            .sortedByDescending { it.first.length }
+
+    /**
+     * Every spelling one folder has in a report.
      *
      * The IDE inside WSL answers a base path such as /mnt/e/work/demo-repo. A session plan
      * writes the same folder as E:/work/demo-repo, because the IDE server refuses a WSL
@@ -78,8 +95,8 @@ object Redact {
      * spellings name the folder of the user. A path that is already a Windows path or a
      * plain POSIX path keeps one spelling.
      */
-    private fun projectPaths(projectPath: String?): List<String> =
-        projectPath?.let { listOf(it.replace('\\', '/'), ShellCommand.windowsPath(it)).distinct() }.orEmpty()
+    private fun spellings(path: String): List<String> =
+        listOf(path.replace('\\', '/'), ShellCommand.windowsPath(path)).distinct()
 
     /**
      * The same failure, with the same reason, and without the path it failed on.
@@ -90,13 +107,16 @@ object Redact {
      * copy keeps it whole and the reader still sees where the work stopped.
      */
     fun failure(value: Throwable, homes: List<String>, projectPath: String?): Throwable =
-        failure(value, homes, projectPath, CAUSES)
+        failure(value, homes, listOfNotNull(projectPath) + OpenPlaces.projects(), OpenPlaces.repositories())
 
-    private fun failure(value: Throwable, homes: List<String>, projectPath: String?, left: Int): Throwable =
+    fun failure(value: Throwable, homes: List<String>, projects: List<String>, repositories: List<String>): Throwable =
+        failure(value, CAUSES) { text(it, homes, projects, repositories) }
+
+    private fun failure(value: Throwable, left: Int, clean: (String) -> String): Throwable =
         Clean(
             value.javaClass.name,
-            value.message?.let { text(it, homes, projectPath) },
-            value.cause?.takeIf { left > 0 }?.let { failure(it, homes, projectPath, left - 1) },
+            value.message?.let(clean),
+            value.cause?.takeIf { left > 0 }?.let { failure(it, left - 1, clean) },
         ).also { it.stackTrace = value.stackTrace }
 
     /**
