@@ -31,6 +31,9 @@ import git4idea.repo.GitRepositoryManager
 /** Where one TODO line sits, so the task record names the file and the commit. */
 private data class TodoPlace(val path: String, val filePath: String, val rootPath: String, val commit: String)
 
+/** One TODO item before it gets its identifier, with its place in the file. */
+private data class TodoHit(val offset: Int, val task: ReviewTask)
+
 /** The tasks of one repository, and the commit they belong to. */
 data class RepositoryTasks(val root: VirtualFile, val commit: String, val tasks: List<ReviewTask>)
 
@@ -64,12 +67,9 @@ object TaskScan {
         } + folderTasks(project, onlyFile, showResolved)
     }
 
-    /** The identifiers of the TODO lines that are still in the source. */
-    fun openTodoIds(project: Project): Set<String> =
-        read(project, null).flatMap { it.tasks }
-            .filter { it.kind == TaskKind.TODO }
-            .map { it.id }
-            .toSet()
+    /** The TODO items that are still in the source. */
+    fun openTodos(project: Project): List<ReviewTask> =
+        read(project, null).flatMap { it.tasks }.filter { it.kind == TaskKind.TODO }
 
     private fun repositoryTasks(
         project: Project,
@@ -182,14 +182,15 @@ object TaskScan {
     ): List<ReviewTask> =
         ReadAction.nonBlocking<List<ReviewTask>> {
             val helper = PsiTodoSearchHelper.getInstance(project)
+            val repository = TodoIds.repositoryOf(project.basePath, root.path)
             val found = mutableListOf<ReviewTask>()
             if (onlyFile != null) {
                 PsiManager.getInstance(project).findFile(onlyFile)
-                    ?.let { found += fileTodos(helper, it, root, roots, commit) }
+                    ?.let { found += fileTodos(helper, it, root, roots, commit, repository) }
             } else {
                 helper.processFilesWithTodoItems(
                     Processor { file ->
-                        found += fileTodos(helper, file, root, roots, commit)
+                        found += fileTodos(helper, file, root, roots, commit, repository)
                         true
                     }
                 )
@@ -197,41 +198,51 @@ object TaskScan {
             found.toList()
         }.inSmartMode(project).executeSynchronously()
 
-    private fun fileTodos(
+    /** The TODO items of one file. Each identifier needs the items before it, so the file reads whole. */
+    internal fun fileTodos(
         helper: PsiTodoSearchHelper,
         file: PsiFile,
         root: VirtualFile,
         roots: List<String>,
         commit: String,
+        repository: String,
     ): List<ReviewTask> {
         if (helper.getTodoItemsCount(file) == 0) return emptyList()
         val source = file.virtualFile ?: return emptyList()
         if (!AnchorRules.ownsFile(root.path, source.path, roots)) return emptyList()
         val path = VfsUtilCore.getRelativePath(source, root, '/') ?: return emptyList()
         val document = PsiDocumentManager.getInstance(file.project).getDocument(file) ?: return emptyList()
-        return helper.findTodoItems(file)
-            .mapNotNull { item -> todoTask(item, document, TodoPlace(path, source.path, root.path, commit)) }
+        val place = TodoPlace(path, source.path, root.path, commit)
+        return TodoIds.assign(
+            repository,
+            helper.findTodoItems(file).mapNotNull { item -> todoHit(item, document, place) }
+                .sortedBy { it.offset }
+                .map { it.task },
+        )
     }
 
-    private fun todoTask(item: TodoItem, document: Document, place: TodoPlace): ReviewTask? {
+    private fun todoHit(item: TodoItem, document: Document, place: TodoPlace): TodoHit? {
         val ranges = (listOf(item.textRange) + item.additionalTextRanges).filter { inside(document, it) }
         if (ranges.isEmpty()) return null
         val text = ranges.map { document.getText(it).trim() }.filter { it.isNotEmpty() }.joinToString(LINE_BREAK)
         if (text.isEmpty()) return null
         val startLine = document.getLineNumber(ranges.first().startOffset) + 1
         val endLine = document.getLineNumber(ranges.last().endOffset) + 1
-        return ReviewTask(
-            id = TaskIds.forTodo(place.path, startLine),
-            kind = TaskKind.TODO,
-            path = place.path,
-            startLine = startLine,
-            endLine = endLine,
-            text = text,
-            pattern = TodoWord.of(text),
-            patternRule = item.pattern?.patternString.orEmpty(),
-            filePath = place.filePath,
-            rootPath = place.rootPath,
-            revision = place.commit,
+        return TodoHit(
+            ranges.first().startOffset,
+            ReviewTask(
+                id = "",
+                kind = TaskKind.TODO,
+                path = place.path,
+                startLine = startLine,
+                endLine = endLine,
+                text = text,
+                pattern = TodoWord.of(text),
+                patternRule = item.pattern?.patternString.orEmpty(),
+                filePath = place.filePath,
+                rootPath = place.rootPath,
+                revision = place.commit,
+            ),
         )
     }
 

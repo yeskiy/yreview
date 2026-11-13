@@ -45,7 +45,7 @@ object ResolveRequest {
                 return ResolveParse.Bad(
                     "An id must be a short handle in the form y followed by letters and digits, " +
                         "a comment id of 40 lowercase hexadecimal characters, " +
-                        "or a todo id in the form todo-<40 hexadecimal characters>-<line>."
+                        "or a todo id in the form todo-<40 hexadecimal characters>-<number>."
                 )
             }
             text

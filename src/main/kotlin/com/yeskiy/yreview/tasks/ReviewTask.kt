@@ -100,8 +100,20 @@ object TaskIds {
 
     fun isTodo(id: String): Boolean = id.startsWith(TODO_PREFIX)
 
-    /** The identifier of one TODO line. It changes when the line moves, and that is correct. */
-    fun forTodo(path: String, line: Int): String = "$TODO_PREFIX${sha1(path)}-$line"
+    /**
+     * The identifier of one TODO item. [order] counts the earlier items of the same file
+     * that hold the same text, so two equal items stay apart and a line move keeps the value.
+     */
+    fun forTodo(repository: String, path: String, text: String, order: Int): String =
+        "$TODO_PREFIX${sha1(listOf(repository, path, normalTodoText(text)).joinToString("\n"))}-$order"
+
+    /** The identifier an older build gave the TODO item on [line]. It finds the values of an older build. */
+    fun legacyTodo(path: String, line: Int): String = "$TODO_PREFIX${sha1(path)}-$line"
+
+    /** The text of a TODO item with each run of white space as one space. */
+    fun normalTodoText(text: String): String = text.trim().split(WHITE_SPACE).joinToString(" ")
+
+    private val WHITE_SPACE = Regex("\\s+")
 
     private fun sha1(value: String): String =
         MessageDigest.getInstance("SHA-1").digest(value.toByteArray()).joinToString("") { "%02x".format(it) }
@@ -110,7 +122,7 @@ object TaskIds {
 /** The tasks of one send, as the file protocol writes them. */
 @Serializable
 data class TaskDocument(
-    val version: Int = 1,
+    val version: Int = TodoMigration.VERSION,
     val repository: String,
     val commit: String,
     val generated: String,

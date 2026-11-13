@@ -11,7 +11,7 @@ sealed interface HandleKey {
     /** The first characters of the identifier of a comment. */
     data class CommentPrefix(val prefix: String) : HandleKey
 
-    /** The first characters of the path digest of a TODO, and the line it sits on. */
+    /** The first characters of the digest of a TODO, and the number after the digest. */
     data class TodoPrefix(val prefix: String, val line: Int) : HandleKey
 }
 
@@ -33,9 +33,9 @@ sealed interface HandleMatch {
  * wrong. A handle names the same task in about 9 characters.
  *
  * A handle is derived and never minted. It carries the first [KEY_CHARS] hexadecimal
- * characters of the identifier, which is 32 bits. A TODO handle carries the line as a
- * second number. Nothing is stored, so the same task reads the same handle on every machine
- * and after every restart.
+ * characters of the identifier, which is 32 bits. A TODO handle carries the number after
+ * the digest as a second number. Nothing is stored, so the same task reads the same handle
+ * after every restart.
  *
  * A handle is not the answer by itself. [keyOf] reads it, and [match] then searches the
  * identifiers the project really holds. A text that names nothing real finds no candidate.

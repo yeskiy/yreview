@@ -28,8 +28,13 @@ class HandoffFiles(val folder: Path) {
     fun write(document: TaskDocument) {
         Files.createDirectories(folder)
         replace(guide, AgentGuide.TEXT + "\n")
-        replace(tasks, TaskJson.encode(clean(document)) + "\n")
+        writeTasks(document)
         open(done)
+    }
+
+    /** Writes the task file alone. The migration of an older file uses it. */
+    fun writeTasks(document: TaskDocument) {
+        replace(tasks, TaskJson.encode(clean(document)) + "\n")
     }
 
     /** An agent reads this file in a terminal, so every task text follows the rule of [TaskText]. */

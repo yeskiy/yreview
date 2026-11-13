@@ -55,7 +55,7 @@ class TaskCompletionDumbTest : BasePlatformTestCase() {
             }
 
     private companion object {
-        val TODO_ID: String = TaskIds.forTodo("src/Main.kt", 12)
+        val TODO_ID: String = TaskIds.forTodo("", "src/Main.kt", "TODO: drop this", 0)
 
         const val DEADLINE_MS = 5_000L
     }

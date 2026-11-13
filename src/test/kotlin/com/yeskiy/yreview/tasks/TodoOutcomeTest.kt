@@ -13,16 +13,25 @@ import kotlin.test.assertTrue
  */
 class TodoOutcomeTest {
 
-    private val todo = TaskIds.forTodo("src/Main.kt", 12)
+    private fun open(id: String, path: String = "src/Main.kt", line: Int = 12) = ReviewTask(
+        id = id,
+        kind = TaskKind.TODO,
+        path = path,
+        startLine = line,
+        endLine = line,
+        text = "TODO: drop this",
+    )
+
+    private val todo = TaskIds.forTodo("", "src/Main.kt", "TODO: drop this", 0)
 
     private val handle = TaskHandles.of(todo)
 
-    private val other = TaskIds.forTodo("src/Other.kt", 40)
+    private val other = TaskIds.forTodo("", "src/Other.kt", "TODO: drop this", 0)
 
-    /** Two TODO lines that carry the same key and the same line, so one handle names both. */
-    private val twin = "${TaskIds.TODO_PREFIX}c3f9a12a${"0".repeat(32)}-12"
+    /** Two TODO lines that carry the same key and the same number, so one handle names both. */
+    private val twin = "${TaskIds.TODO_PREFIX}c3f9a12a${"0".repeat(32)}-0"
 
-    private val otherTwin = "${TaskIds.TODO_PREFIX}c3f9a12a${"f".repeat(32)}-12"
+    private val otherTwin = "${TaskIds.TODO_PREFIX}c3f9a12a${"f".repeat(32)}-0"
 
     private val twinHandle = TaskHandles.of(twin)
 
@@ -36,10 +45,19 @@ class TodoOutcomeTest {
 
     @Test
     fun `an identifier whose line is still in the source closed nothing`() {
-        val outcome = TodoOutcome.of(listOf(todo), open = listOf(todo), sent = setOf(handle))
+        val outcome = TodoOutcome.of(listOf(todo), open = listOf(open(todo)), sent = setOf(handle))
 
         assertEquals(emptyList(), outcome.closed)
         assertEquals(listOf(todo), outcome.stillOpen)
+    }
+
+    @Test
+    fun `new lines above a todo item keep it open`() {
+        // The window sent the item at line 12. Three imports then moved it to line 15.
+        val outcome = TodoOutcome.of(listOf(handle), open = listOf(open(todo, line = 15)), sent = setOf(handle))
+
+        assertEquals(emptyList(), outcome.closed)
+        assertEquals(listOf(handle), outcome.stillOpen)
     }
 
     @Test
@@ -60,8 +78,25 @@ class TodoOutcomeTest {
     }
 
     @Test
+    fun `a value of an older build names the item that is still at its path and line`() {
+        val legacy = TaskHandles.of(TaskIds.legacyTodo("src/Main.kt", 12))
+        val outcome = TodoOutcome.of(listOf(legacy), open = listOf(open(todo)), sent = setOf(legacy))
+
+        assertEquals(emptyList(), outcome.closed)
+        assertEquals(listOf(legacy), outcome.stillOpen)
+    }
+
+    @Test
+    fun `a value of an older build whose line went closed`() {
+        val legacy = TaskIds.legacyTodo("src/Main.kt", 12)
+        val outcome = TodoOutcome.of(listOf(legacy), open = emptyList(), sent = setOf(TaskHandles.of(legacy)))
+
+        assertEquals(listOf(legacy), outcome.closed)
+    }
+
+    @Test
     fun `a handle that names two tasks closes nothing`() {
-        val outcome = TodoOutcome.of(listOf(twinHandle), open = listOf(twin, otherTwin), sent = setOf(twinHandle))
+        val outcome = TodoOutcome.of(listOf(twinHandle), open = listOf(open(twin), open(otherTwin)), sent = setOf(twinHandle))
 
         assertEquals(emptyList(), outcome.closed)
         assertEquals(emptyList(), outcome.stillOpen)
@@ -69,7 +104,7 @@ class TodoOutcomeTest {
 
     @Test
     fun `a handle that names two tasks tells the agent what a comment id tells it`() {
-        val outcome = TodoOutcome.of(listOf(twinHandle), open = listOf(twin, otherTwin), sent = setOf(twinHandle))
+        val outcome = TodoOutcome.of(listOf(twinHandle), open = listOf(open(twin), open(otherTwin)), sent = setOf(twinHandle))
 
         assertEquals(listOf(TaskCompletion.ambiguous(twinHandle, 2)), outcome.problems)
         assertTrue(outcome.problems.single().contains(TaskCompletion.AMBIGUOUS))
@@ -77,7 +112,7 @@ class TodoOutcomeTest {
 
     @Test
     fun `an empty batch reads nothing`() {
-        val outcome = TodoOutcome.of(emptyList(), open = listOf(todo), sent = setOf(handle))
+        val outcome = TodoOutcome.of(emptyList(), open = listOf(open(todo)), sent = setOf(handle))
 
         assertEquals(emptyList(), outcome.closed)
         assertEquals(emptyList(), outcome.stillOpen)

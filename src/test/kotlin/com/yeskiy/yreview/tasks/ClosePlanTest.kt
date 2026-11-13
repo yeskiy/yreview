@@ -16,7 +16,7 @@ class ClosePlanTest {
 
     private val comment = "c3f9a12aabbccddeeff00112233445566778899a"
 
-    private val todo = TaskIds.forTodo("src/Main.kt", 12)
+    private val todo = TaskIds.forTodo("", "src/Main.kt", "TODO: drop this", 0)
 
     @Test
     fun `a ready index takes both kinds`() {

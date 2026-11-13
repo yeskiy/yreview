@@ -108,6 +108,9 @@ data class ClosePlan(
  * A short handle can name several TODO lines. Such a handle proves nothing about any one
  * of them, so it closes nothing and it reaches [problems] instead. The comment path says
  * the same sentence for the same case.
+ *
+ * A value of an older build names a path digest and a line. A value that names no current
+ * item goes through [TodoMigration.legacyMatch], so an item that is still there stays open.
  */
 data class TodoOutcome(
     val closed: List<String>,
@@ -117,8 +120,9 @@ data class TodoOutcome(
 
     companion object {
 
-        fun of(given: List<String>, open: List<String>, sent: Set<String>): TodoOutcome {
-            val matched = given.map { it to matchOf(it, open) }
+        fun of(given: List<String>, open: List<ReviewTask>, sent: Set<String>): TodoOutcome {
+            val ids = open.map { it.id }
+            val matched = given.map { it to matchOf(it, ids, open) }
             return TodoOutcome(
                 closed = matched.filter { it.second is HandleMatch.None && TaskHandles.of(it.first) in sent }
                     .map { it.first },
@@ -135,9 +139,10 @@ data class TodoOutcome(
          * A value that the plugin could never have written names nothing, and so does a
          * value whose line the scan no longer finds. Both answer [HandleMatch.None].
          */
-        private fun matchOf(text: String, ids: List<String>): HandleMatch {
+        private fun matchOf(text: String, ids: List<String>, open: List<ReviewTask>): HandleMatch {
             val key = TaskHandles.keyOf(text) ?: return HandleMatch.None
-            return TaskHandles.match(key, ids)
+            return TaskHandles.match(key, ids).takeUnless { it is HandleMatch.None }
+                ?: TodoMigration.legacyMatch(key, open)
         }
     }
 }
@@ -243,12 +248,13 @@ class TaskCompletion(private val project: Project) {
      * What the reported TODO identifiers of one batch prove.
      *
      * The scan reads the whole project once, the task file of this window reads once, and
-     * the match then runs in memory. Both reads cost far less than the scan of the index
-     * that stands in front of them.
+     * the match then runs in memory. The read of the task file first moves an older file to
+     * the current TODO identifiers, see [SentTasks.of].
      */
     private fun todoOutcome(given: List<String>): TodoOutcome {
         if (given.isEmpty()) return TodoOutcome(emptyList(), emptyList())
-        return TodoOutcome.of(given, TaskScan.openTodoIds(project).toList(), SentTasks.of(project))
+        val open = TaskScan.openTodos(project)
+        return TodoOutcome.of(given, open, SentTasks.of(project, open))
     }
 
     companion object {

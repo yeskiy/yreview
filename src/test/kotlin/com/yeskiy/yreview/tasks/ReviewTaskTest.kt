@@ -23,7 +23,7 @@ class ReviewTaskTest {
     )
 
     private val todo = ReviewTask(
-        id = TaskIds.forTodo("src/main/kotlin/Parser.kt", 88),
+        id = TaskIds.forTodo("", "src/main/kotlin/Parser.kt", "TODO: drop this once the anchor repair lands", 0),
         kind = TaskKind.TODO,
         path = "src/main/kotlin/Parser.kt",
         startLine = 88,
@@ -38,18 +38,37 @@ class ReviewTaskTest {
     }
 
     @Test
-    fun `gives a new identifier when the line moves`() {
-        assertNotEquals(TaskIds.forTodo("a/B.kt", 12), TaskIds.forTodo("a/B.kt", 13))
-    }
-
-    @Test
-    fun `gives the same identifier for the same line`() {
-        assertEquals(TaskIds.forTodo("a/B.kt", 12), TaskIds.forTodo("a/B.kt", 12))
+    fun `gives the same identifier for the same item`() {
+        assertEquals(TaskIds.forTodo("", "a/B.kt", "TODO: x", 0), TaskIds.forTodo("", "a/B.kt", "TODO: x", 0))
     }
 
     @Test
     fun `gives a new identifier when the file changes`() {
-        assertNotEquals(TaskIds.forTodo("a/B.kt", 12), TaskIds.forTodo("a/C.kt", 12))
+        assertNotEquals(TaskIds.forTodo("", "a/B.kt", "TODO: x", 0), TaskIds.forTodo("", "a/C.kt", "TODO: x", 0))
+    }
+
+    @Test
+    fun `gives a new identifier when the repository changes`() {
+        assertNotEquals(TaskIds.forTodo("lib", "a/B.kt", "TODO: x", 0), TaskIds.forTodo("app", "a/B.kt", "TODO: x", 0))
+    }
+
+    @Test
+    fun `gives a new identifier when the text or the order changes`() {
+        val first = TaskIds.forTodo("", "a/B.kt", "TODO: x", 0)
+        assertNotEquals(first, TaskIds.forTodo("", "a/B.kt", "TODO: y", 0))
+        assertNotEquals(first, TaskIds.forTodo("", "a/B.kt", "TODO: x", 1))
+    }
+
+    @Test
+    fun `reads each run of white space in the text as one space`() {
+        assertEquals(TaskIds.forTodo("", "a/B.kt", "TODO:  x\n  y ", 0), TaskIds.forTodo("", "a/B.kt", "TODO: x y", 0))
+    }
+
+    @Test
+    fun `keeps the form of an older identifier`() {
+        val legacy = TaskIds.legacyTodo("a/B.kt", 12)
+        assertTrue(TaskIds.isKnown(legacy), legacy)
+        assertTrue(legacy.endsWith("-12"), legacy)
     }
 
     @Test
@@ -150,7 +169,7 @@ class ReviewTaskTest {
     @Test
     fun `writes the head of the document`() {
         val text = TaskJson.encode(document(listOf(comment)))
-        assertTrue(text.contains(""""version": 1"""), text)
+        assertTrue(text.contains(""""version": 2"""), text)
         assertTrue(text.contains(""""repository": "E:/repo""""), text)
         assertTrue(text.contains(""""generated": "2026-08-21T02:40:00Z""""), text)
     }
