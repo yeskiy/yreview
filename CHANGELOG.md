@@ -6,6 +6,29 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-11-13
+
+### Added
+
+- Support IntelliJ IDEA 2026.3
+
+### Changed
+
+- Read all review notes of a ref in two git processes
+
+### Fixed
+
+- Land the release changelog through a pull request
+- Guard notes writes and bound every git run
+- Quote comment text and split batches under the event limit
+- Refuse to open a note path outside its repository
+- Merge the Cursor MCP entry into the existing file
+- Redact every open project and repository path before the cut
+- Stop reading the TODO configuration topic that 2026.3 removed
+- Read ran in the note scan
+- Cancel an older task scan when a newer reload starts
+- Give each TODO item an id that a line move does not change
+
 ## [1.0.1] - 2026-09-08
 
 ### Changed
@@ -164,6 +187,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Mark gradlew executable
 - Stop two tests from reading the platform they run on
 
-[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/yeskiy/yreview/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/yeskiy/yreview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yeskiy/yreview/commits/v1.0.0
