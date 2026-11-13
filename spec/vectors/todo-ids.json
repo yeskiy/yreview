@@ -1,0 +1,194 @@
+{
+    "repositoryOf": [
+        {
+            "basePath": "E:/work",
+            "rootPath": "E:/work",
+            "repository": ""
+        },
+        {
+            "basePath": "E:/work",
+            "rootPath": "E:/work/lib",
+            "repository": "lib"
+        },
+        {
+            "basePath": "E:/work",
+            "rootPath": "E:/work/lib/deep",
+            "repository": "lib/deep"
+        },
+        {
+            "basePath": "E:/work",
+            "rootPath": "E:/workshop",
+            "repository": "E:/workshop"
+        },
+        {
+            "basePath": null,
+            "rootPath": "E:/work",
+            "repository": "E:/work"
+        },
+        {
+            "basePath": "",
+            "rootPath": "/home/u/r",
+            "repository": "/home/u/r"
+        },
+        {
+            "basePath": "/home/u/p",
+            "rootPath": "/home/u/p/a",
+            "repository": "a"
+        }
+    ],
+    "normal": [
+        {
+            "text": "TODO: a",
+            "normal": "TODO: a"
+        },
+        {
+            "text": "  TODO:  a\tb  ",
+            "normal": "TODO: a b"
+        },
+        {
+            "text": "TODO:\u000bx",
+            "normal": "TODO: x"
+        },
+        {
+            "text": "\u001fTODO\u001c",
+            "normal": "TODO"
+        },
+        {
+            "text": "﻿TODO﻿",
+            "normal": "﻿TODO﻿"
+        },
+        {
+            "text": " TODO x ",
+            "normal": "TODO x"
+        },
+        {
+            "text": "TODO: x",
+            "normal": "TODO: x"
+        },
+        {
+            "text": "　TODO",
+            "normal": "TODO"
+        },
+        {
+            "text": "TODO: a\r\nb",
+            "normal": "TODO: a b"
+        },
+        {
+            "text": "TODOx",
+            "normal": "TODOx"
+        },
+        {
+            "text": "",
+            "normal": ""
+        },
+        {
+            "text": "   ",
+            "normal": ""
+        }
+    ],
+    "forTodo": [
+        {
+            "repository": "",
+            "path": "src/Main.kt",
+            "text": "TODO: a",
+            "order": 0,
+            "id": "todo-15bfecbf1f9f86db952c3370916d5a1498715782-0"
+        },
+        {
+            "repository": "",
+            "path": "src/Main.kt",
+            "text": "TODO: a",
+            "order": 1,
+            "id": "todo-15bfecbf1f9f86db952c3370916d5a1498715782-1"
+        },
+        {
+            "repository": "",
+            "path": "src/Main.kt",
+            "text": "  TODO:   a ",
+            "order": 0,
+            "id": "todo-15bfecbf1f9f86db952c3370916d5a1498715782-0"
+        },
+        {
+            "repository": "lib",
+            "path": "src/Main.kt",
+            "text": "TODO: a",
+            "order": 0,
+            "id": "todo-bb754145a8b3f5c7f55926933ab85b1a05d99f74-0"
+        },
+        {
+            "repository": "",
+            "path": "docs/über.md",
+            "text": "TODO: prüfen",
+            "order": 0,
+            "id": "todo-0a90f884506533f1e2cc3fd13cdb8a29be1a90a2-0"
+        },
+        {
+            "repository": "",
+            "path": "dir with space/a b.kt",
+            "text": "FIXME x",
+            "order": 0,
+            "id": "todo-1a180f95438e2d898f65b2c64566dc174ff42a75-0"
+        },
+        {
+            "repository": "",
+            "path": "a/b/c/d/e/f/g/h/i/j.kt",
+            "text": "TODO deep",
+            "order": 0,
+            "id": "todo-b545ace3bfeb0978b0c4a3d46fd158b7532c7d6c-0"
+        },
+        {
+            "repository": "E:/outside",
+            "path": "x.kt",
+            "text": "TODO",
+            "order": 0,
+            "id": "todo-f4322e538718a1ffd5ba694f532153975531b8bf-0"
+        },
+        {
+            "repository": "",
+            "path": "x.kt",
+            "text": "TODO 😀 漢字",
+            "order": 9999999,
+            "id": "todo-5b79220f6b2f8b0ac7bf4a54ffcbbc1a1a07a648-9999999"
+        }
+    ],
+    "assign": [
+        {
+            "repository": "",
+            "path": "src/Main.kt",
+            "texts": [
+                "TODO: a",
+                "TODO: a",
+                "TODO: b",
+                " TODO:  a "
+            ],
+            "ids": [
+                "todo-15bfecbf1f9f86db952c3370916d5a1498715782-0",
+                "todo-15bfecbf1f9f86db952c3370916d5a1498715782-1",
+                "todo-2955cec5852b2a50f1ed6fa79c6d4034e69d7b36-0",
+                "todo-15bfecbf1f9f86db952c3370916d5a1498715782-2"
+            ]
+        },
+        {
+            "repository": "lib",
+            "path": "src/Main.kt",
+            "texts": [
+                "TODO: a"
+            ],
+            "ids": [
+                "todo-bb754145a8b3f5c7f55926933ab85b1a05d99f74-0"
+            ]
+        }
+    ],
+    "legacy": [
+        {
+            "path": "src/Main.kt",
+            "line": 4,
+            "id": "todo-831e098b3d5e6d6ee3add3ecfc91ae1ff24b123e-4"
+        },
+        {
+            "path": "docs/über.md",
+            "line": 1,
+            "id": "todo-3e508ef761fb5f11f93dd774034ab26fea529ae5-1"
+        }
+    ]
+}

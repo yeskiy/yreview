@@ -1,0 +1,218 @@
+[
+    {
+        "id": "claude",
+        "label": "Claude Code",
+        "short": "Claude",
+        "commands": [
+            "claude"
+        ],
+        "push": "channel",
+        "mcp": {
+            "kind": "flag",
+            "flag": "--mcp-config",
+            "prefix": ""
+        },
+        "naming": {
+            "kind": "agent",
+            "command": "/rename"
+        },
+        "hint": "The official installer writes it to the PATH.",
+        "desktop": {
+            "label": "Claude Desktop",
+            "sharesConfig": false,
+            "note": "Claude Desktop is a different product with a configuration file of its own, and a terminal cannot run it."
+        }
+    },
+    {
+        "id": "opencode",
+        "label": "OpenCode",
+        "short": "OpenCode",
+        "commands": [
+            "opencode"
+        ],
+        "push": "local_http",
+        "mcp": {
+            "kind": "variable",
+            "name": "OPENCODE_CONFIG"
+        },
+        "naming": {
+            "kind": "agent",
+            "command": "/rename"
+        },
+        "hint": "It installs through npm, Homebrew, or Scoop.",
+        "desktop": null
+    },
+    {
+        "id": "codex",
+        "label": "OpenAI Codex CLI",
+        "short": "Codex",
+        "commands": [
+            "codex"
+        ],
+        "push": "none",
+        "mcp": {
+            "kind": "keys"
+        },
+        "naming": {
+            "kind": "user"
+        },
+        "hint": "It installs through npm or Homebrew.",
+        "desktop": {
+            "label": "the ChatGPT desktop application",
+            "sharesConfig": true,
+            "note": "The ChatGPT desktop application reads the same .codex/config.toml file, so a server registered here reaches it too. A terminal cannot run it."
+        }
+    },
+    {
+        "id": "antigravity",
+        "label": "Antigravity CLI",
+        "short": "Antigravity",
+        "commands": [
+            "agy"
+        ],
+        "push": "none",
+        "mcp": {
+            "kind": "addCommand"
+        },
+        "naming": {
+            "kind": "agent",
+            "command": "/rename"
+        },
+        "hint": "Google ships it as the follower of Gemini CLI.",
+        "desktop": {
+            "label": "the Antigravity editor",
+            "sharesConfig": true,
+            "note": "The Antigravity editor reads the same mcp_config.json file, so a server registered here reaches it too. A terminal cannot run it."
+        }
+    },
+    {
+        "id": "gemini",
+        "label": "Gemini CLI",
+        "short": "Gemini",
+        "commands": [
+            "gemini"
+        ],
+        "push": "none",
+        "mcp": {
+            "kind": "variable",
+            "name": "GEMINI_CLI_SYSTEM_DEFAULTS_PATH"
+        },
+        "naming": {
+            "kind": "user"
+        },
+        "hint": "It installs through npm. Google ended the consumer tiers on 2026-06-18.",
+        "desktop": null
+    },
+    {
+        "id": "copilot",
+        "label": "GitHub Copilot CLI",
+        "short": "Copilot",
+        "commands": [
+            "copilot"
+        ],
+        "push": "none",
+        "mcp": {
+            "kind": "flag",
+            "flag": "--additional-mcp-config",
+            "prefix": "@"
+        },
+        "naming": {
+            "kind": "agent",
+            "command": "/rename"
+        },
+        "hint": "It installs through npm or winget, and it needs a Copilot subscription.",
+        "desktop": null
+    },
+    {
+        "id": "cursor",
+        "label": "Cursor CLI",
+        "short": "Cursor",
+        "commands": [
+            "cursor-agent",
+            "agent"
+        ],
+        "push": "none",
+        "mcp": {
+            "kind": "userFile",
+            "path": ".cursor/mcp.json"
+        },
+        "naming": {
+            "kind": "agent",
+            "command": "/rename"
+        },
+        "hint": "The Cursor installer writes both names to the PATH.",
+        "desktop": {
+            "label": "the Cursor editor",
+            "sharesConfig": true,
+            "note": "The Cursor editor reads the same mcp.json file, so a server registered here reaches it too. A terminal cannot run it."
+        }
+    },
+    {
+        "id": "aider",
+        "label": "Aider",
+        "short": "Aider",
+        "commands": [
+            "aider"
+        ],
+        "push": "none",
+        "mcp": {
+            "kind": "none"
+        },
+        "naming": {
+            "kind": "user"
+        },
+        "hint": "It installs through pip or pipx. It reads no Model Context Protocol server.",
+        "desktop": null
+    },
+    {
+        "id": "amp",
+        "label": "Amp",
+        "short": "Amp",
+        "commands": [
+            "amp"
+        ],
+        "push": "none",
+        "mcp": {
+            "kind": "none"
+        },
+        "naming": {
+            "kind": "user"
+        },
+        "hint": "Sourcegraph ships it, and it needs a paid plan.",
+        "desktop": {
+            "label": "Amp for macOS",
+            "sharesConfig": false,
+            "note": "Amp for macOS is a separate application, and a terminal cannot run it."
+        }
+    },
+    {
+        "id": "custom",
+        "label": "Another agent",
+        "short": "Agent",
+        "commands": [],
+        "push": "none",
+        "mcp": {
+            "kind": "none"
+        },
+        "naming": {
+            "kind": "user"
+        },
+        "hint": "Name the command yourself. A shell function works, because a shell runs the command.",
+        "desktop": null
+    },
+    {
+        "id": "none",
+        "label": "No agent",
+        "short": "Session",
+        "commands": [],
+        "push": "none",
+        "mcp": {
+            "kind": "none"
+        },
+        "naming": {
+            "kind": "user"
+        },
+        "hint": "The window starts nothing. Copy the tasks and paste them where your agent runs.",
+        "desktop": null
+    }
+]

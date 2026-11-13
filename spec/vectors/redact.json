@@ -1,0 +1,141 @@
+[
+    {
+        "name": "project-inside-home",
+        "input": "C:\\Users\\alice\\proj\\src\\a.kt failed",
+        "homes": [
+            "C:\\Users\\alice"
+        ],
+        "projects": [
+            "C:/Users/alice/proj"
+        ],
+        "repositories": [],
+        "output": "<project>/src/a.kt failed"
+    },
+    {
+        "name": "home-only",
+        "input": "C:/Users/alice/.gitconfig",
+        "homes": [
+            "C:\\Users\\alice"
+        ],
+        "projects": [],
+        "repositories": [],
+        "output": "~/.gitconfig"
+    },
+    {
+        "name": "repository-outside-project",
+        "input": "D:/repos/lib/x.kt and E:/work/demo/y.kt",
+        "homes": [
+            "C:/Users/alice"
+        ],
+        "projects": [
+            "E:/work/demo"
+        ],
+        "repositories": [
+            "D:/repos/lib"
+        ],
+        "output": "<repository>/x.kt and <project>/y.kt"
+    },
+    {
+        "name": "longest-first",
+        "input": "C:/Users/alice/proj/sub/x and C:/Users/alice/proj/y",
+        "homes": [
+            "C:/Users/alice"
+        ],
+        "projects": [
+            "C:/Users/alice/proj/sub",
+            "C:/Users/alice/proj"
+        ],
+        "repositories": [],
+        "output": "<project>/x and <project>/y"
+    },
+    {
+        "name": "case-insensitive",
+        "input": "c:/users/ALICE/notes.txt",
+        "homes": [
+            "C:/Users/alice"
+        ],
+        "projects": [],
+        "repositories": [],
+        "output": "~/notes.txt"
+    },
+    {
+        "name": "wsl-spelling",
+        "input": "E:/work/demo/a.kt and /mnt/e/work/demo/b.kt",
+        "homes": [],
+        "projects": [
+            "/mnt/e/work/demo"
+        ],
+        "repositories": [],
+        "output": "<project>/a.kt and <project>/b.kt"
+    },
+    {
+        "name": "posix-home",
+        "input": "/home/bob/r/x",
+        "homes": [
+            "/home/bob"
+        ],
+        "projects": [],
+        "repositories": [
+            "/home/bob/r"
+        ],
+        "output": "<repository>/x"
+    },
+    {
+        "name": "scp-remote",
+        "input": "push to git@github.com:owner/repo.git failed",
+        "homes": [],
+        "projects": [],
+        "repositories": [],
+        "output": "push to <remote> failed"
+    },
+    {
+        "name": "url-with-user",
+        "input": "https://user:pw@example.com/owner/repo.git",
+        "homes": [],
+        "projects": [],
+        "repositories": [],
+        "output": "<remote>"
+    },
+    {
+        "name": "loopback-kept",
+        "input": "http://127.0.0.1:5000/events http://localhost:1/x http://[::1]:2/y",
+        "homes": [],
+        "projects": [],
+        "repositories": [],
+        "output": "http://127.0.0.1:5000/events http://localhost:1/x http://[::1]:2/y"
+    },
+    {
+        "name": "mail",
+        "input": "author bob.smith@example.org",
+        "homes": [],
+        "projects": [],
+        "repositories": [],
+        "output": "author <email>"
+    },
+    {
+        "name": "hex-run",
+        "input": "token ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12ab12 and short abc123",
+        "homes": [],
+        "projects": [],
+        "repositories": [],
+        "output": "token <secret> and short abc123"
+    },
+    {
+        "name": "token-value",
+        "input": "X-Y-Review-Token: Zm9vYmFyYmF6cXV4 token=abcdefgh.ijk",
+        "homes": [],
+        "projects": [],
+        "repositories": [],
+        "output": "X-Y-Review-Token: <secret> token=<secret>"
+    },
+    {
+        "name": "nothing-to-do",
+        "input": "The plugin stopped git after 120 s.",
+        "homes": [
+            "C:/Users/alice"
+        ],
+        "projects": [],
+        "repositories": [],
+        "output": "The plugin stopped git after 120 s."
+    }
+]

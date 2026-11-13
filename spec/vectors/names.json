@@ -1,0 +1,94 @@
+{
+    "discovery": [
+        {
+            "path": "E:/Projects/Opened/y-review",
+            "name": "E--Projects-Opened-y-review-2a26a402e27bb029.json"
+        },
+        {
+            "path": "C:\\Users\\a b\\proj",
+            "name": "C--Users-a-b-proj-a770768fb7150c37.json"
+        },
+        {
+            "path": "/home/user/work/demo-repo",
+            "name": "-home-user-work-demo-repo-7f27c5875adfe580.json"
+        },
+        {
+            "path": "/home/user/long-folder-name-long-folder-name-long-folder-name-long-folder-name-long-folder-name-long-folder-name-end",
+            "name": "ame-long-folder-name-long-folder-name-long-folder-name-end-007aab3a6d6068eb.json"
+        },
+        {
+            "path": "/tmp/😀",
+            "name": "-tmp---f7bd60f669a72585.json"
+        },
+        {
+            "path": "a😀b",
+            "name": "a-b-6fba5b2ea783ded0.json"
+        },
+        {
+            "path": "/a/b_c",
+            "name": "-a-b-c-df04c2002ded3c11.json"
+        },
+        {
+            "path": "/a/b-c",
+            "name": "-a-b-c-693a1a8db48c6699.json"
+        },
+        {
+            "path": "a\\b",
+            "name": "a-b-c62016d0f8ee3333.json"
+        },
+        {
+            "path": "a/b",
+            "name": "a-b-c14cddc033f64b9d.json"
+        },
+        {
+            "path": "",
+            "name": "-e3b0c44298fc1c14.json"
+        }
+    ],
+    "window": [
+        {
+            "path": "E:/Projects/Opened/y-review",
+            "name": "y-review-2a26a402"
+        },
+        {
+            "path": "C:\\Users\\a b\\proj",
+            "name": "proj-a770768f"
+        },
+        {
+            "path": "/home/user/work/demo-repo",
+            "name": "demo-repo-7f27c587"
+        },
+        {
+            "path": "/home/user/long-folder-name-long-folder-name-long-folder-name-long-folder-name-long-folder-name-long-folder-name-end",
+            "name": "ame-long-folder-name-end-007aab3a"
+        },
+        {
+            "path": "/tmp/😀",
+            "name": "--f7bd60f6"
+        },
+        {
+            "path": "a😀b",
+            "name": "a-b-6fba5b2e"
+        },
+        {
+            "path": "/a/b_c",
+            "name": "b-c-df04c200"
+        },
+        {
+            "path": "/a/b-c",
+            "name": "b-c-693a1a8d"
+        },
+        {
+            "path": "a\\b",
+            "name": "b-c62016d0"
+        },
+        {
+            "path": "a/b",
+            "name": "b-c14cddc0"
+        },
+        {
+            "path": "",
+            "name": "project-e3b0c442"
+        }
+    ]
+}

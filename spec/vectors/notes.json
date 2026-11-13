@@ -1,0 +1,88 @@
+[
+    {
+        "name": "append-layout",
+        "stdout": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}\n\n{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}\n",
+        "lines": [
+            "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}",
+            "{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}"
+        ],
+        "ids": [
+            "86a30a9ea805666e803cfee0327c8e2409012237",
+            "a2673c13f13a5b76a6da3cdba4f4574aac1e0a38"
+        ]
+    },
+    {
+        "name": "crlf",
+        "stdout": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}\r\n\r\n{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}\r\n",
+        "lines": [
+            "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}",
+            "{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}"
+        ],
+        "ids": [
+            "86a30a9ea805666e803cfee0327c8e2409012237",
+            "a2673c13f13a5b76a6da3cdba4f4574aac1e0a38"
+        ]
+    },
+    {
+        "name": "lone-cr",
+        "stdout": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}\r{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}",
+        "lines": [
+            "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}",
+            "{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}"
+        ],
+        "ids": [
+            "86a30a9ea805666e803cfee0327c8e2409012237",
+            "a2673c13f13a5b76a6da3cdba4f4574aac1e0a38"
+        ]
+    },
+    {
+        "name": "no-trailing-newline",
+        "stdout": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}",
+        "lines": [
+            "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}"
+        ],
+        "ids": [
+            "86a30a9ea805666e803cfee0327c8e2409012237"
+        ]
+    },
+    {
+        "name": "blank-lines",
+        "stdout": "\n \n\t\n{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}\n\n\n",
+        "lines": [
+            "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}"
+        ],
+        "ids": [
+            "86a30a9ea805666e803cfee0327c8e2409012237"
+        ]
+    },
+    {
+        "name": "blank-by-kotlin-rule",
+        "stdout": "\u001f\n \n{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}",
+        "lines": [
+            "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}"
+        ],
+        "ids": [
+            "86a30a9ea805666e803cfee0327c8e2409012237"
+        ]
+    },
+    {
+        "name": "broken-line-kept",
+        "stdout": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}\n{\"timestamp\":\n{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}",
+        "lines": [
+            "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"one\"}",
+            "{\"timestamp\":",
+            "{\"timestamp\":\"2\",\"author\":\"a@b.c\",\"description\":\"two\"}"
+        ],
+        "ids": [
+            "86a30a9ea805666e803cfee0327c8e2409012237",
+            null,
+            "a2673c13f13a5b76a6da3cdba4f4574aac1e0a38"
+        ]
+    },
+    {
+        "name": "empty",
+        "stdout": "",
+        "lines": [],
+        "ids": []
+    }
+]

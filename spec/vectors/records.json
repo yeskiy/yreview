@@ -1,0 +1,260 @@
+[
+    {
+        "name": "reference-open",
+        "line": "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\",\"path\":\"src/main/kotlin/Parser.kt\",\"range\":{\"startLine\":88,\"endLine\":94}}}",
+        "canonical": "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\",\"path\":\"src/main/kotlin/Parser.kt\",\"range\":{\"startLine\":88,\"endLine\":94}}}",
+        "id": "b1e2ffb6cbad1181ddfde2543019227ce316a288"
+    },
+    {
+        "name": "resolve-original",
+        "line": "{\"timestamp\":\"1787198000\",\"author\":\"reviewer@example.com\",\"original\":\"b1e2ffb6cbad1181ddfde2543019227ce316a288\",\"resolved\":true,\"location\":{\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\",\"path\":\"src/main/kotlin/Parser.kt\",\"range\":{\"startLine\":88,\"endLine\":94}}}",
+        "canonical": "{\"timestamp\":\"1787198000\",\"author\":\"reviewer@example.com\",\"original\":\"b1e2ffb6cbad1181ddfde2543019227ce316a288\",\"resolved\":true,\"location\":{\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\",\"path\":\"src/main/kotlin/Parser.kt\",\"range\":{\"startLine\":88,\"endLine\":94}}}",
+        "id": "9911c87c99ccfa071919176ff5698a2a33162cb0"
+    },
+    {
+        "name": "reply-parent",
+        "line": "{\"timestamp\":\"1787198000\",\"author\":\"reviewer@example.com\",\"parent\":\"b1e2ffb6cbad1181ddfde2543019227ce316a288\",\"resolved\":true}",
+        "canonical": "{\"timestamp\":\"1787198000\",\"author\":\"reviewer@example.com\",\"parent\":\"b1e2ffb6cbad1181ddfde2543019227ce316a288\",\"resolved\":true}",
+        "id": "45533c487c3aaeeb985d52824b60ad380bdc8fd4"
+    },
+    {
+        "name": "part-of-line",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":5,\"startColumn\":4,\"endLine\":7,\"endColumn\":9}}}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":5,\"startColumn\":4,\"endLine\":7,\"endColumn\":9}}}",
+        "id": "414062744d0a4ef3b329b5562c2be7594fc35c99"
+    },
+    {
+        "name": "start-column-zero",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":1,\"startColumn\":0,\"endLine\":1,\"endColumn\":15}}}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":1,\"endLine\":1,\"endColumn\":15}}}",
+        "id": "83c61a2240efae5a94be379034fbc7c3af2fa263"
+    },
+    {
+        "name": "explicit-zero-columns",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":1,\"startColumn\":0,\"endLine\":2,\"endColumn\":0}}}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":1,\"endLine\":2}}}",
+        "id": "683c45feabd941e0a6b19ae244f864dadb6ec378"
+    },
+    {
+        "name": "no-range",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"whole file\",\"location\":{\"commit\":\"c\",\"path\":\"p\"}}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"whole file\",\"location\":{\"commit\":\"c\",\"path\":\"p\"}}",
+        "id": "1b8bdd02db5912359a52a46e8d8ea40e2738dfe3"
+    },
+    {
+        "name": "no-location",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\"}",
+        "id": "6d9c3ed12c9a2400d90a8afc5bb7c074c8f5aa36"
+    },
+    {
+        "name": "unknown-fields",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"extra\":{\"deep\":[1,2]},\"description\":\"x\",\"location\":{\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\",\"path\":\"src/a.kt\",\"range\":{\"startLine\":3,\"endLine\":4}},\"z\":null}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\",\"path\":\"src/a.kt\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+        "id": "51ba9255ccea0ba7d9ebae5ff3c67d77f46dfc6b"
+    },
+    {
+        "name": "reordered-keys",
+        "line": "{\"location\":{\"range\":{\"endLine\":4,\"startLine\":3},\"path\":\"src/a.kt\",\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\"},\"description\":\"x\",\"author\":\"a@b.c\",\"timestamp\":\"1\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"location\":{\"commit\":\"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7\",\"path\":\"src/a.kt\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+        "id": "51ba9255ccea0ba7d9ebae5ff3c67d77f46dfc6b"
+    },
+    {
+        "name": "white-space",
+        "line": "{ \"timestamp\" : \"1\", \"author\" : \"a@b.c\", \"description\" : \"x\" }",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\"}",
+        "id": "6d9c3ed12c9a2400d90a8afc5bb7c074c8f5aa36"
+    },
+    {
+        "name": "resolved-false",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"resolved\":false}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"resolved\":false}",
+        "id": "b412fb63819ef993164f19b5b0bcd64d041f2e27"
+    },
+    {
+        "name": "v-1",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":1}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":1}",
+        "id": "1a934bfd1eeba0fdabd42979594a3e37e39c72e6"
+    },
+    {
+        "name": "v-0",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":0}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\"}",
+        "id": "6d9c3ed12c9a2400d90a8afc5bb7c074c8f5aa36"
+    },
+    {
+        "name": "null-description",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":null}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\"}",
+        "id": "c8b74ea6facd39c7ccdd1054e5e499acfc2eaeaf"
+    },
+    {
+        "name": "empty-description",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"\"}",
+        "id": "9a610ce7b36e6db4e92067b1e7ef1aa1438fe287"
+    },
+    {
+        "name": "control-characters",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"a\\u0000b\\u0001\\b\\t\\n\\u000b\\f\\r\\u001f\\u0020\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"a\\u0000b\\u0001\\b\\t\\n\\u000b\\f\\r\\u001f \"}",
+        "id": "320d3faacd3ea6ca5f2832316c31e96b9214cc45"
+    },
+    {
+        "name": "slash-del-separators",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"a\\/b/c\\u007f\\u2028\\u2029\\u0085\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"a/b/c  \"}",
+        "id": "1d67e999f9373a10fe9d3c77d86ccc987bff42f5"
+    },
+    {
+        "name": "quotes-backslash",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"say \\\"hi\\\" \\\\ C:\\\\path\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"say \\\"hi\\\" \\\\ C:\\\\path\"}",
+        "id": "fcab81fcae5b49edc0d2d99ecbabf7c6677fa769"
+    },
+    {
+        "name": "emoji-cjk",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"\\ud83d\\ude00 漢字 ü\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"😀 漢字 ü\"}",
+        "id": "4c3d70e9f774dc6362c4b9976d455511b9d69b9d"
+    },
+    {
+        "name": "crlf",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"line 1\\r\\nline 2\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"line 1\\r\\nline 2\"}",
+        "id": "cfc88d70cf43915f71f56c81d62f8a1388da3250"
+    },
+    {
+        "name": "refused-timestamp-number",
+        "line": "{\"timestamp\":1787194427,\"author\":\"a@b.c\"}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "refused-missing-author",
+        "line": "{\"timestamp\":\"1\",\"description\":\"x\"}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "refused-missing-timestamp",
+        "line": "{\"author\":\"a@b.c\"}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "start-line-string",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":\"3\",\"endLine\":4}}}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+        "id": "0101f86bcfd747f7dbbdd809cf39a9265ae34970"
+    },
+    {
+        "name": "start-line-float",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":3.0,\"endLine\":4}}}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "start-line-over-int",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":3000000000,\"endLine\":4}}}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "resolved-string",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"resolved\":\"true\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"resolved\":true}",
+        "id": "c80c4d43703ec1b7939c738a7cfaed975352ca10"
+    },
+    {
+        "name": "null-timestamp",
+        "line": "{\"timestamp\":null,\"author\":\"a@b.c\"}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "missing-path",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\"}}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "duplicate-key",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"author\":\"d@e.f\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"d@e.f\"}",
+        "id": "2b923acaf8f77ed1e4c2bdef352cd5583b55a7aa"
+    },
+    {
+        "name": "array",
+        "line": "[]",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "broken",
+        "line": "{\"timestamp\":",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "trailing-text",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\"} x",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "v-string",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":\"2\"}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":2}",
+        "id": "7758f88f48d4d0dc02a771f1b51dbbc1ed57fa62"
+    },
+    {
+        "name": "start-line-exponent",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":3e0,\"endLine\":4}}}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+        "id": "0101f86bcfd747f7dbbdd809cf39a9265ae34970"
+    },
+    {
+        "name": "v-exponent",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":1e0}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":1}",
+        "id": "1a934bfd1eeba0fdabd42979594a3e37e39c72e6"
+    },
+    {
+        "name": "v-float",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":1.0}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "null-v",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"v\":null}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "null-start-column",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":1,\"startColumn\":null,\"endLine\":2}}}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "null-end-column",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"range\":{\"startLine\":1,\"endLine\":2,\"endColumn\":null}}}",
+        "canonical": null,
+        "id": null
+    },
+    {
+        "name": "null-nullable-fields",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\",\"parent\":null,\"original\":null,\"resolved\":null,\"location\":null}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"description\":\"x\"}",
+        "id": "6d9c3ed12c9a2400d90a8afc5bb7c074c8f5aa36"
+    },
+    {
+        "name": "duplicate-key-nested",
+        "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"path\":\"q\",\"range\":{\"startLine\":1,\"endLine\":2,\"endLine\":5}}}",
+        "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"q\",\"range\":{\"startLine\":1,\"endLine\":5}}}",
+        "id": "ea114ccb71cab9604794674b6ef24f3e69fe1cbd"
+    }
+]
