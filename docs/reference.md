@@ -65,13 +65,15 @@ character of the comment.
 
 A field with no value is left out. A reader that meets an unknown field keeps the record.
 
-The identifier of a comment is the SHA-1 digest of the JSON text of that comment. The
+The full rules, for a tool that reads or writes these records, are in [spec/format.md](../spec/format.md).
+
+The identifier of a comment is the SHA-1 digest of the canonical encoding of that comment. The
 record above has the identifier `b1e2ffb6cbad1181ddfde2543019227ce316a288`.
 
 A resolve writes a second record that names the first one.
 
 ```json
-{"timestamp":"1787198000","author":"reviewer@example.com","parent":"b1e2ffb6cbad1181ddfde2543019227ce316a288","resolved":true}
+{"timestamp":"1787198000","author":"reviewer@example.com","original":"b1e2ffb6cbad1181ddfde2543019227ce316a288","resolved":true,"location":{"commit":"4f2c8b19a0e6d3c5b7a2f1e8d4c6b9a3f0e2d5c7","path":"src/main/kotlin/Parser.kt","range":{"startLine":88,"endLine":94}}}
 ```
 
 A delete removes the line from the note. The plugin keeps no copy.
@@ -95,7 +97,7 @@ git notes --ref refs/notes/devtools/discuss show <commit>
 | `refs/notes/devtools/discuss`                      | A shared comment                                                                                                                                                | You write a shared comment                                                                                                       |
 | `<folder root>/.y-review/notes/`                   | A comment of a file that no git repository covers                                                                                                               | You write a comment outside a repository                                                                                         |
 | `<git directory>/y-review/migrated-<milliseconds>` | The folder store, after the records reach the git notes                                                                                                         | A git repository starts to cover a folder store                                                                                  |
-| `remote.<name>.fetch` in the git configuration     | The line `+refs/notes/devtools/*:refs/notes/devtools/*`, added once                                                                                             | The first time you share a comment                                                                                               |
+| `remote.<name>.fetch` in the git configuration     | The line `refs/notes/devtools/*:refs/notes/devtools/*`, added once. The forced form with a leading `+` is removed.                                              | You click Add in the question that follows the first share                                                                       |
 | A push to your git remote                          | The shared note ref only                                                                                                                                        | You write a shared comment                                                                                                       |
 | `<git directory>/y-review/<window>/AGENT.md`       | The rules an agent reads                                                                                                                                        | Every send                                                                                                                       |
 | `<git directory>/y-review/<window>/tasks.json`     | The open tasks of the repository                                                                                                                                | Every send                                                                                                                       |
@@ -168,7 +170,7 @@ Open Settings, Tools, Yreview to reach this page.
 |----------------------------------------------------|-------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | New comments:                                      | Local only                                                        | Where a new comment goes. `Local only` writes `refs/notes/y-review/local`. `Shared` writes `refs/notes/devtools/discuss` and pushes that ref. The add-comment box can change the choice for one comment.                                                  |
 | Remote for shared comments:                        | `origin`                                                          | The remote that a shared note goes to. Not every repository names its remote `origin`. A blank field falls back to `origin`.                                                                                                                              |
-| Add the notes refspec to the git configuration     | On                                                                | The plugin adds `+refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch` once, so the notes other people write come back with the next fetch. With the box clear the plugin writes no git configuration, and you add that line by hand.    |
+| Add the notes refspec to the git configuration     | On                                                                | After a share, the plugin asks before it adds `refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch`, so the notes other people write come back with the next fetch. With the box clear the plugin does not ask, and you add that line by hand. |
 | Send the review tasks through the channel          | On                                                                | With the box clear, the plugin opens no port and starts no channel server. Every send then writes `AGENT.md` and `tasks.json` in the review folder of this project window, and it copies the prompt to the clipboard.                                     |
 | Show the session tool window                       | On                                                                | Whether the review session window appears. The window appears and disappears at once, so you need no restart.                                                                                                                                             |
 | Command line agent:                                | Claude Code                                                       | The agent that the session window runs. A running session keeps the agent it started with, and the next session uses the new choice.                                                                                                                      |
