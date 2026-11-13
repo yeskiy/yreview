@@ -28,17 +28,34 @@ class NotesSharingTest {
         }
     }
 
+    /** The poller of the done files shares a note every few seconds, and no share may write the user's file. */
     @Test
-    fun `adds the fetch refspec once`() {
+    fun `a share writes no fetch refspec and reports that it is missing`() {
         TempRepo().use { repo ->
             repo.addRemote()
             val head = repo.commit("a.kt", "one")
-            NotesGateway(repo.git).append(NoteRefs.DISCUSS, head, """{"timestamp":"1787194427","author":"a@b.c"}""")
+            NotesGateway(repo.git).append(NoteRefs.DISCUSS, head, note)
+            val before = fetchRefspecs(repo)
 
-            NotesSharing(repo.git).share(NoteRefs.DISCUSS)
-            NotesSharing(repo.git).share(NoteRefs.DISCUSS)
+            val results = (1..3).map { NotesSharing(repo.git).share(NoteRefs.DISCUSS) }
+
+            assertTrue(results.all { it.ok && it.needsRefspec }, results.toString())
+            assertEquals(before, fetchRefspecs(repo), "a share must not write the git configuration")
+        }
+    }
+
+    @Test
+    fun `add writes the fetch refspec once`() {
+        TempRepo().use { repo ->
+            repo.addRemote()
+            val head = repo.commit("a.kt", "one")
+            NotesGateway(repo.git).append(NoteRefs.DISCUSS, head, note)
+
+            assertTrue(NotesSharing(repo.git).addFetchRefspec().ok)
+            assertTrue(NotesSharing(repo.git).addFetchRefspec().ok)
 
             assertEquals(1, fetchRefspecs(repo).count { it == NotesSharing.FETCH_REFSPEC })
+            assertFalse(NotesSharing(repo.git).share(NoteRefs.DISCUSS).needsRefspec, "the refspec is in place")
         }
     }
 
@@ -145,6 +162,7 @@ class NotesSharingTest {
             repo.addRemote()
             val head = repo.commit("a.kt", "one")
             val gateway = NotesGateway(repo.git)
+            assertTrue(NotesSharing(repo.git).addFetchRefspec().ok)
             gateway.append(NoteRefs.DISCUSS, head, note)
             assertTrue(NotesSharing(repo.git).share(NoteRefs.DISCUSS).ok)
             val first = repo.git.run("rev-parse", NoteRefs.DISCUSS).stdout.trim()
@@ -160,14 +178,15 @@ class NotesSharingTest {
     }
 
     @Test
-    fun `the share drops the forced refspec that an older version wrote`() {
+    fun `add drops the forced refspec that an older version wrote`() {
         TempRepo().use { repo ->
             repo.addRemote()
             val head = repo.commit("a.kt", "one")
             check(repo.git.run("config", "--add", "remote.origin.fetch", NotesSharing.FORCED_REFSPEC).ok)
             NotesGateway(repo.git).append(NoteRefs.DISCUSS, head, note)
 
-            assertTrue(NotesSharing(repo.git).share(NoteRefs.DISCUSS).ok)
+            assertTrue(NotesSharing(repo.git).share(NoteRefs.DISCUSS).needsRefspec, "a forced refspec is not safe")
+            assertTrue(NotesSharing(repo.git).addFetchRefspec().ok)
 
             assertTrue(fetchRefspecs(repo).none { it == NotesSharing.FORCED_REFSPEC }, "the forced one must go")
             assertEquals(1, fetchRefspecs(repo).count { it == NotesSharing.FETCH_REFSPEC })
@@ -239,6 +258,7 @@ class NotesSharingTest {
      * The answer is the line that both sides hold.
      */
     private fun diverge(repo: TempRepo, gateway: NotesGateway, head: String): String {
+        assertTrue(NotesSharing(repo.git).addFetchRefspec().ok)
         gateway.append(NoteRefs.DISCUSS, head, note)
         assertTrue(NotesSharing(repo.git).share(NoteRefs.DISCUSS).ok)
         val first = repo.git.run("rev-parse", NoteRefs.DISCUSS).stdout.trim()

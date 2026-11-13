@@ -6,11 +6,18 @@ data class StoredComment(val id: String, val ref: String, val commit: String, va
 /** One note, named by the ref that holds it and by the commit it belongs to. */
 private data class NoteKey(val ref: String, val commit: String)
 
+/** A book asks [authorOf] only when it writes a record, so a read needs no author. */
 class CommentBook(
     private val gateway: NoteStore,
-    private val author: String,
+    private val authorOf: () -> String,
     private val clock: () -> Long = { System.currentTimeMillis() / 1000 },
 ) {
+
+    constructor(
+        gateway: NoteStore,
+        author: String,
+        clock: () -> Long = { System.currentTimeMillis() / 1000 },
+    ) : this(gateway, { author }, clock)
 
     fun add(
         ref: String,
@@ -21,7 +28,7 @@ class CommentBook(
     ): StoredComment {
         val comment = Comment(
             timestamp = clock().toString(),
-            author = author,
+            author = authorOf(),
             description = text,
             location = Location(commit = commit, path = path, range = range),
         )
@@ -31,7 +38,7 @@ class CommentBook(
     fun resolve(stored: StoredComment): StoredComment {
         val update = Comment(
             timestamp = clock().toString(),
-            author = author,
+            author = authorOf(),
             original = stored.id,
             resolved = true,
             location = stored.comment.location,
@@ -117,13 +124,8 @@ class CommentBook(
             .map { (key, ids) -> removeFrom(key, ids.toSet()) }
             .sum()
 
-    private fun removeFrom(key: NoteKey, ids: Set<String>): Int {
-        val lines = gateway.readOrRefuse(key.ref, key.commit)
-        val kept = lines.filterNot { drops(it, ids) }
-        if (kept.size == lines.size) return 0
-        gateway.rewrite(key.ref, key.commit, kept)
-        return lines.size - kept.size
-    }
+    private fun removeFrom(key: NoteKey, ids: Set<String>): Int =
+        gateway.edit(key.ref, key.commit) { lines -> lines.filterNot { drops(it, ids) } }.count { drops(it, ids) }
 
     private fun drops(line: String, ids: Set<String>): Boolean {
         val comment = runCatching { CommentJson.decode(line) }.getOrNull() ?: return false

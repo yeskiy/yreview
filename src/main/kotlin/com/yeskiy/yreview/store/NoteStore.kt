@@ -29,6 +29,13 @@ interface NoteStore {
 
     fun rewrite(ref: String, commit: String, lines: List<String>)
 
+    /** Reads the records of one key, writes [change] of them, and gives the records that [change] got. */
+    fun edit(ref: String, commit: String, change: (List<String>) -> List<String>): List<String> {
+        val before = readOrRefuse(ref, commit)
+        change(before).takeIf { it != before }?.let { rewrite(ref, commit, it) }
+        return before
+    }
+
     /** The keys that hold a record, and no key for a store the plugin cannot read. */
     fun commitsWithNotes(ref: String): List<String>
 

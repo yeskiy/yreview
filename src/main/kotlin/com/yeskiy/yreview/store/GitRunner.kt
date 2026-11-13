@@ -1,31 +1,28 @@
 package com.yeskiy.yreview.store
 
+import com.intellij.openapi.progress.ProgressManager
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.IOException
 import java.io.InputStream
-import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.Executors
+import java.util.concurrent.Future
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 data class GitResult(val exitCode: Int, val stdout: String, val stderr: String) {
 
     val ok: Boolean get() = exitCode == 0
 
     /**
-     * True when a git process ran and gave this exit code.
-     *
-     * A false answer means that git never started, so the answer states nothing about the
-     * repository. A caller that reads a fact out of a failed run tests this first.
+     * True when git itself gave this exit code. A false answer comes from the runner and states
+     * nothing about the repository, so a caller that reads a fact out of a failed run tests this first.
      */
-    val ran: Boolean get() = exitCode != DID_NOT_START
+    val ran: Boolean get() = exitCode >= 0
 
-    /**
-     * True when git itself gave this exit code.
-     *
-     * A false answer states nothing about the repository, because the runner made it. Git
-     * never gives a negative exit code, and every sentinel of this class is negative. A
-     * caller that reads a fact out of a failed run tests this first.
-     */
-    val answered: Boolean get() = exitCode >= 0
+    /** True when the runner stopped git, because the run passed its time limit. */
+    val timedOut: Boolean get() = exitCode == TIMED_OUT
 
     companion object {
 
@@ -34,6 +31,9 @@ data class GitResult(val exitCode: Int, val stdout: String, val stderr: String) 
 
         /** The exit code of an answer the runner refused, because one stream passed its limit. */
         const val TOO_MUCH_OUTPUT = -1
+
+        /** The exit code of an answer the runner refused, because git ran longer than the limit. */
+        const val TIMED_OUT = -3
     }
 }
 
@@ -42,12 +42,14 @@ interface GitRunner {
 }
 
 /**
- * Runs the git executable in one working directory. Inside the IDE the path comes from
- * the version control settings, so the plugin uses the same git the user configured.
+ * Runs git in one working directory. The run waits in short slices and calls [checkCanceled]
+ * after each slice. On a cancel or after [waitMillis], it stops git and every child of git.
  */
 class ProcessGitRunner(
     private val workingDir: File,
     private val exePath: String = "git",
+    private val waitMillis: Long = WAIT_MILLIS,
+    private val checkCanceled: () -> Unit = { ProgressManager.checkCanceled() },
 ) : GitRunner {
 
     override fun run(vararg args: String): GitResult {
@@ -58,21 +60,49 @@ class ProcessGitRunner(
         } catch (failure: SecurityException) {
             return NO_GIT
         }
-        // Both pipes are drained at the same time. Reading one to the end while the other
-        // fills its buffer deadlocks the child process.
-        val errors = CompletableFuture.supplyAsync { read(process, process.errorStream) }
-        val stdout = read(process, process.inputStream)
-        // A stopped process closes the error pipe, and the reader of that pipe then fails.
-        val stderr = if (stdout == null) runCatching { errors.get() }.getOrNull() else errors.get()
-        val exitCode = process.waitFor()
-        if (stdout == null || stderr == null) return REFUSED_OUTPUT
-        return GitResult(exitCode, stdout, stderr)
+        // Both pipes drain at the same time. A full pipe with no reader stops the child process.
+        val streams = listOf(process.inputStream, process.errorStream).map { READERS.submit<String?> { read(process, it) } }
+        try {
+            return answer(process, streams)
+        } catch (stop: Throwable) {
+            stopTree(process)
+            throw stop
+        }
+    }
+
+    private fun answer(process: Process, streams: List<Future<String?>>): GitResult {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(waitMillis)
+        while (!process.waitFor(SLICE_MILLIS, TimeUnit.MILLISECONDS)) {
+            checkCanceled()
+            if (System.nanoTime() > deadline) return stopped(process)
+        }
+        // A child process of git can keep a pipe open after git ends, so this wait has the same bound.
+        val texts = streams.map { stream ->
+            try {
+                stream.get(maxOf(0, deadline - System.nanoTime()), TimeUnit.NANOSECONDS)
+            } catch (late: TimeoutException) {
+                return stopped(process)
+            } catch (broken: ExecutionException) {
+                null
+            }
+        }
+        if (texts.any { it == null }) return REFUSED_OUTPUT
+        return GitResult(process.exitValue(), texts[0].orEmpty(), texts[1].orEmpty())
+    }
+
+    private fun stopped(process: Process): GitResult {
+        stopTree(process)
+        return GitResult(
+            GitResult.TIMED_OUT,
+            "",
+            "Git did not stop in ${waitMillis / 1000} seconds, so the plugin stopped it. " +
+                "Git can wait for a password or for a credential window. Make sure that git runs without input.",
+        )
     }
 
     /**
-     * Reads one stream up to the limit and stops the process at the limit. The answer is
-     * null when the stream holds more bytes than the limit. The caller never gets a text
-     * that stops in the middle, because a part of a note reads as a whole note.
+     * Reads one stream up to the limit, and stops the process at the limit. The answer is then
+     * null, because a part of a note reads as a whole note.
      */
     private fun read(process: Process, stream: InputStream): String? {
         val collected = ByteArrayOutputStream()
@@ -82,7 +112,7 @@ class ProcessGitRunner(
                 val count = it.read(chunk)
                 if (count < 0) break
                 if (collected.size() + count > MAX_OUTPUT_BYTES) {
-                    process.destroyForcibly()
+                    stopTree(process)
                     return null
                 }
                 collected.write(chunk, 0, count)
@@ -92,21 +122,26 @@ class ProcessGitRunner(
     }
 
     companion object {
-        /**
-         * The most bytes that one git stream may write. A note holds review comments, and
-         * `git notes list` writes about 90 bytes for each note. This limit therefore
-         * allows about 180000 notes.
-         */
+        /** The most bytes that one git stream may write. `git notes list` writes about 90 bytes for each note. */
         const val MAX_OUTPUT_BYTES = 16 * 1024 * 1024
+
+        /** The longest time that one git run may take. A push over the network takes the most time. */
+        const val WAIT_MILLIS = 120_000L
+
+        private const val SLICE_MILLIS = 100L
 
         private const val CHUNK_BYTES = 64 * 1024
 
-        /**
-         * The answer of a run that never started. Git is missing, or the system refused it.
-         *
-         * The message names no path, because the user reads it. The caller still gets a
-         * failed answer, so a write refuses and states the reason.
-         */
+        private val READERS = Executors.newCachedThreadPool { task ->
+            Thread(task, "y-review git reader").apply { isDaemon = true }
+        }
+
+        private fun stopTree(process: Process) {
+            process.descendants().forEach { it.destroyForcibly() }
+            process.destroyForcibly()
+        }
+
+        /** The answer of a run that never started. The message names no path, because the user reads it. */
         private val NO_GIT = GitResult(
             GitResult.DID_NOT_START,
             "",

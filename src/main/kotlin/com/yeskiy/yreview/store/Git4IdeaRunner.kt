@@ -34,7 +34,7 @@ private class ReportingGitRunner(
 
     override fun run(vararg args: String): GitResult {
         val result = runner.run(*args)
-        if (!result.ran && project.service<GitStartNotice>().first()) {
+        if (result.exitCode == GitResult.DID_NOT_START && project.service<GitStartNotice>().first()) {
             ReviewNotice.warn(project, result.stderr)
         }
         return result

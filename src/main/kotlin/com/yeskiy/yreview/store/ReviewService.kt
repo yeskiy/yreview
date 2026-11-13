@@ -86,7 +86,7 @@ class ReviewService(private val project: Project) {
         val runner = ideGitRunner(project, store.root)
         return CommentBook(
             if (store.kind == StoreKind.GIT) NotesGateway(runner) else folderNotesOf(store.root),
-            author = authorOf(runner),
+            authorOf = { GitAuthor.of(runner) },
         )
     }
 
@@ -279,8 +279,12 @@ class ReviewService(private val project: Project) {
         val result = runShare(root, ref)
         if (!result.ok) return result.message
         ShareLog.getInstance(project).clear(root.path, ref)
+        if (result.needsRefspec) RefspecPrompt.getInstance(project).offer(root.path, root.name) { sharing(root).addFetchRefspec() }
         return null
     }
+
+    private fun sharing(root: VirtualFile): NotesSharing =
+        ReviewSettings.getInstance(project).let { NotesSharing(ideGitRunner(project, root), it.remote, it.writeRefspec) }
 
     private fun finish(root: VirtualFile, stored: StoredComment): CommentWriteResult {
         val error = share(root, stored)
@@ -301,10 +305,7 @@ class ReviewService(private val project: Project) {
     }
 
     private fun runShare(root: VirtualFile, ref: String): ShareResult {
-        val settings = ReviewSettings.getInstance(project)
-        val task = ThrowableComputable<ShareResult, RuntimeException> {
-            NotesSharing(ideGitRunner(project, root), settings.remote, settings.writeRefspec).share(ref)
-        }
+        val task = ThrowableComputable<ShareResult, RuntimeException> { sharing(root).share(ref) }
         if (!ApplicationManager.getApplication().isDispatchThread) return task.compute()
         return ProgressManager.getInstance()
             .runProcessWithProgressSynchronously(task, "Sharing the Review Comment", true, project)
@@ -316,9 +317,6 @@ class ReviewService(private val project: Project) {
             DaemonCodeAnalyzer.getInstance(project).restart("a review comment changed")
         }, project.disposed)
     }
-
-    private fun authorOf(runner: GitRunner): String =
-        runner.run("config", "user.email").stdout.trim().ifEmpty { "unknown" }
 
     companion object {
         fun getInstance(project: Project): ReviewService = project.service()

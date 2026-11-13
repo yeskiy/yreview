@@ -89,4 +89,16 @@ class FolderOwnershipTest {
             assertFalse(FolderOwnership.mayMigrate(ProcessGitRunner(root, "y-review-no-such-git")))
         }
     }
+
+    /** An answer that the runner refused or stopped states nothing about the folder, so no record moves. */
+    @Test
+    fun `an answer that git did not give refuses the migration`() {
+        listOf(GitResult.TOO_MUCH_OUTPUT, GitResult.TIMED_OUT).forEach { code ->
+            val runner = object : GitRunner {
+                override fun run(vararg args: String) = GitResult(code, "", "the runner refused the answer")
+            }
+
+            assertFalse(FolderOwnership.mayMigrate(runner), "exit code $code must not allow a migration")
+        }
+    }
 }
