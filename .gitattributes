@@ -1,2 +1,4 @@
 # The shared vectors keep LF, so a byte compare gives the same result on every system.
 spec/vectors/*.json text eol=lf
+# The VS Code extension keeps LF, because Prettier checks for endOfLine lf.
+vscode/** text=auto eol=lf
