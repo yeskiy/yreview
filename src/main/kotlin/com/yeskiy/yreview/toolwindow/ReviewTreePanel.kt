@@ -1083,7 +1083,6 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener { scheduleReload() })
         onProject.subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { scheduleReload() })
         onProject.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { scheduleReload() })
-        onProject.subscribe(TodoConfiguration.PROPERTY_CHANGE, PropertyChangeListener { scheduleReload() })
         onProject.subscribe(DumbService.DUMB_MODE, IndexWatch())
         if (scope == TaskScope.CURRENT_FILE) {
             onProject.subscribe(
@@ -1097,6 +1096,8 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
             ChangeListManager.getInstance(project).addChangeListListener(ChangeListWatch(), this)
         }
 
+        // A change of the TODO patterns arrives here. The platform keeps the topic for a
+        // change of the TODO filters internal, so a filter edit shows at the next reload.
         val onApplication = ApplicationManager.getApplication().messageBus.connect(this)
         onApplication.subscribe(IndexPatternProvider.INDEX_PATTERNS_CHANGED, PropertyChangeListener { scheduleReload() })
         onApplication.subscribe(
