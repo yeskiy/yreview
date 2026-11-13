@@ -56,7 +56,10 @@ conventional_commits = true
 filter_unconventional = true
 # A breaking commit reaches the file even when a rule below skips its type.
 protect_breaking_commits = true
-tag_pattern = "v[0-9].*"
+# The plugin tags are v1.2.3. The anchor keeps the extension tags vscode/v1.2.3 out.
+tag_pattern = "^v[0-9].*"
+# The VS Code extension has its own changelog in vscode/CHANGELOG.md.
+exclude_paths = ["vscode/**"]
 sort_commits = "oldest"
 commit_parsers = [
   { message = "^feat", group = "Added" },
