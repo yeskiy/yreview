@@ -30,6 +30,7 @@ jobs:
   test:
     name: Test on ${{ matrix.os }} with VS Code ${{ matrix.vscode }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -90,10 +91,12 @@ jobs:
 
       - name: Run the integration tests on Linux
         if: runner.os == 'Linux'
+        timeout-minutes: 20
         run: xvfb-run -a npm run test:integration
 
       - name: Run the integration tests
         if: runner.os != 'Linux'
+        timeout-minutes: 20
         run: npm run test:integration
 
   package:

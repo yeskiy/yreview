@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
@@ -15,6 +15,11 @@ writeFileSync(identity, '[user]\n\tname = Yreview Test\n\temail = reviewer@examp
 const home = path.join(scratch, 'home')
 rmSync(home, { recursive: true, force: true })
 mkdirSync(home, { recursive: true })
+// On macOS, VS Code waits on a dialog when the home has no login keychain, so link the real one.
+if (process.platform === 'darwin') {
+  mkdirSync(path.join(home, 'Library'))
+  symlinkSync(path.join(homedir(), 'Library', 'Keychains'), path.join(home, 'Library', 'Keychains'))
+}
 
 const filesUnder = (folder) =>
   existsSync(folder)
