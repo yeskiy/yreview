@@ -189,10 +189,35 @@ tool window.
 3. Keep one purpose per pull request.
 4. Run `./gradlew test :channel-server:test verifyPlugin` before you open it.
 5. Fill the pull request template.
-6. Add an entry under `## [Unreleased]` in `CHANGELOG.md` for any change a user can see.
+6. Do not edit `CHANGELOG.md` or `vscode/CHANGELOG.md`. The release writes them from the
+   commit messages.
 
 The GitHub workflow builds, tests, and verifies every pull request. A red run blocks the
 merge.
+
+## Versions
+
+The repository holds two products: the IntelliJ plugin and the VS Code extension. Each one
+has a version of the form `major.minor.patch`.
+
+| Part | Rule |
+|---|---|
+| Major and minor | The same in both products. Two versions with the same major and minor read and write the same notes and use the same bridge protocol. |
+| Patch | Each product counts its own patches. A fix in one product does not change the version of the other. |
+
+| Change | Release |
+|---|---|
+| A fix or a feature that does not change `spec/format.md` or the bridge protocol | A patch release of the product that changed |
+| A change to `spec/format.md` or to the bridge protocol | The minor goes up, and both products release `x.y.0` together |
+| A change that an older version cannot read | The major goes up, and both products release `x.0.0` together |
+
+| Product | Tag | Version file |
+|---|---|---|
+| IntelliJ plugin | `v1.2.3` | `pluginVersion` in `gradle.properties` |
+| VS Code extension | `vscode/v1.2.3` | `version` in `vscode/package.json` |
+
+Each release workflow stops when the major and minor of its tag differ from those of the
+other product in the same commit.
 
 ## The license of your contribution
 
