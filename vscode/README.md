@@ -15,12 +15,18 @@ writes the same notes, so one team can use VS Code and IntelliJ IDEA together.
 To close a new comment box, click Discard or press Escape. Discard closes the box at once.
 Escape asks first when the box has text, as for each comment box of VS Code.
 
-A keymap extension can bind Ctrl+Enter to another command in each text editor. The
-IntelliJ IDEA Keybindings extension binds it to Go to Declaration, and an extension cannot
-win over that binding. In this case, add this line to your `keybindings.json`:
+A keymap extension can bind Ctrl+Enter to another command in each text editor. For example,
+the IntelliJ IDEA Keybindings extension binds it to Go to Declaration. An extension cannot
+win over that binding, but a user key binding can. When Yreview finds such a binding, it
+offers to add this line to your `keybindings.json`. Click Add to let Yreview add the line.
+On macOS, the line uses `cmd+enter`.
 
 ```json
-{ "key": "ctrl+enter", "command": "editor.action.submitComment", "when": "commentEditorFocused" }
+{
+  "key": "ctrl+enter",
+  "command": "editor.action.submitComment",
+  "when": "commentEditorFocused && commentController == yreview"
+}
 ```
 
 A local comment stays on your machine in `refs/notes/y-review/local`. A shared comment goes

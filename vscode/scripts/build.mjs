@@ -11,6 +11,7 @@ const common = {
   sourcemap: !production,
   minify: production,
   logLevel: 'info',
+  mainFields: ['module', 'main'],
 }
 
 await Promise.all([

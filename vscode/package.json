@@ -272,6 +272,7 @@
     "vscode:prepublish": "node scripts/build.mjs --production"
   },
   "dependencies": {
+    "jsonc-parser": "3.3.1",
     "sqids": "0.3.0"
   },
   "devDependencies": {

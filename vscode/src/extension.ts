@@ -7,6 +7,7 @@ import { checkGit, findGitPath } from './git/gitPath'
 import { offerIntellijKey } from './keyOffer'
 import { redactingLog } from './log'
 import { withLongForms } from './places'
+import { offerSaveKey } from './saveKey'
 import { ReviewService } from './store/reviewService'
 import { vscodeHost } from './vscodeHost'
 
@@ -63,6 +64,9 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   context.subscriptions.push(comments)
   offerIntellijKey(context.globalState).catch((error: unknown) =>
     log.error('The key offer failed.', error),
+  )
+  offerSaveKey(context.globalState, log).catch((error: unknown) =>
+    log.error('The save key offer failed.', error),
   )
   log.info('Yreview started.')
   return { comments }
