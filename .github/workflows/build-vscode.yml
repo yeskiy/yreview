@@ -8,11 +8,13 @@ on:
     paths:
       - "vscode/**"
       - "spec/**"
+      - "channel-server/**"
       - ".github/workflows/build-vscode.yml"
   pull_request:
     paths:
       - "vscode/**"
       - "spec/**"
+      - "channel-server/**"
       - ".github/workflows/build-vscode.yml"
   workflow_dispatch:
 
@@ -68,6 +70,20 @@ jobs:
 
       - name: Check the prose
         run: npm run prose
+
+      - name: Set up Java for the channel contract
+        if: matrix.os == 'ubuntu-latest' && matrix.vscode == 'stable'
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Build the Kotlin channel server for the contract
+        if: matrix.os == 'ubuntu-latest' && matrix.vscode == 'stable'
+        working-directory: .
+        run: |
+          ./gradlew :channel-server:channelJar --console=plain
+          echo "YREVIEW_CHANNEL_JAR=$PWD/channel-server/build/channel/y-review-channel.jar" >> "$GITHUB_ENV"
 
       - name: Run the unit tests
         run: npm run test:unit

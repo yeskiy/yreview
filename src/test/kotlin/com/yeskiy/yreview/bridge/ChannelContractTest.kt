@@ -29,7 +29,7 @@ import kotlin.test.assertTrue
  * The file under test is the jar that the plugin ships. The Gradle test task builds that
  * jar first and names it in the y.review.channel.jar property.
  */
-class ChannelContractTest {
+open class ChannelContractTest {
 
     private val commit = "4f2c8b1c9d0e1f2a3b4c5d6e7f8091a2b3c4d5e6"
 
@@ -82,12 +82,17 @@ class ChannelContractTest {
         comments = listOf(batch.comments.single().copy(startColumn = 4, endColumn = 9)),
     )
 
-    private fun startChannel(key: String? = null, sink: LinkedBlockingQueue<String> = lines): Process {
+    /** The program and its arguments, or null to skip. The plugin runs its own jar. */
+    protected open fun command(): List<String>? {
         val jar = File(System.getProperty("y.review.channel.jar").orEmpty())
-        Assumptions.assumeTrue(jar.isFile, "the channel jar is missing at ${jar.absolutePath}")
         val java = JavaRuntime.locate()
-        Assumptions.assumeTrue(java != null, "this runtime names no java launcher")
-        val builder = ProcessBuilder(java, "-cp", jar.absolutePath, ChannelServer.MAIN_CLASS)
+        return if (jar.isFile && java != null) listOf(java, "-cp", jar.absolutePath, ChannelServer.MAIN_CLASS) else null
+    }
+
+    private fun startChannel(key: String? = null, sink: LinkedBlockingQueue<String> = lines): Process {
+        val parts = command()
+        Assumptions.assumeTrue(parts != null, "this run names no channel server")
+        val builder = ProcessBuilder(parts)
         builder.environment()["Y_REVIEW_BRIDGE_FILE"] = bridgeFile.path.toString()
         key?.let { builder.environment()[SessionKey.VARIABLE] = it }
         val process = builder.start()

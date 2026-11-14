@@ -142,4 +142,6 @@ tasks.test {
         "y.review.channel.jar",
         layout.projectDirectory.file("channel-server/build/channel/y-review-channel.jar").asFile.absolutePath,
     )
+    // The contract test also runs the channel server of the VS Code extension when its bundle exists.
+    systemProperty("y.review.node.channel", layout.projectDirectory.file("vscode/dist/channel.js").asFile.absolutePath)
 }

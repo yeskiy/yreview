@@ -99,6 +99,17 @@ jobs:
         with:
           cache-read-only: true
 
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Build the VS Code channel server for the contract test
+        working-directory: vscode
+        run: npm ci --ignore-scripts && npm run build
+
       # Two test sets run here. The plugin tests read the IntelliJ Platform. The channel
       # server tests run in a plain JVM, and one Gradle command covers both.
       - name: Run the plugin tests and the channel server tests
