@@ -138,6 +138,25 @@ describe('mcp file (McpFileTest.kt)', () => {
     assert.equal(readFileSync(file(), 'utf8'), '{}')
   })
 
+  it('a change made while the dialog is open stays, and the write stops', async () => {
+    place('{"mcpServers":{}}')
+    const outcome = await writeMcpFile(file(), WANTED, async () => {
+      place('{"mcpServers":{"other":{"command":"node"}}}')
+      return true
+    })
+    assert.equal(outcome.kind, 'problem')
+    assert.equal(readFileSync(file(), 'utf8'), '{"mcpServers":{"other":{"command":"node"}}}')
+  })
+
+  it('a file made while the dialog is open stays, and the write stops', async () => {
+    const outcome = await writeMcpFile(file(), WANTED, async () => {
+      place('{"inputs":[]}')
+      return true
+    })
+    assert.equal(outcome.kind, 'problem')
+    assert.equal(readFileSync(file(), 'utf8'), '{"inputs":[]}')
+  })
+
   it('a file that exists keeps its mode', async function keptMode() {
     if (process.platform === 'win32') this.skip()
     place('{}')

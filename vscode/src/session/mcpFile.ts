@@ -71,9 +71,16 @@ export const writeMcpFile = async (
   wanted: string,
   approve: McpApproval,
 ): Promise<McpWrite> => {
-  const merged = mergeMcp(await readIfFile(file), wanted)
+  const before = await readIfFile(file)
+  const merged = mergeMcp(before, wanted)
   if (merged.kind === 'problem') return { kind: 'problem', value: `${merged.value} File: ${file}` }
   if (!(await approve(file, merged.value))) return { kind: 'declined' }
+  if ((await readIfFile(file)) !== before) {
+    return {
+      kind: 'problem',
+      value: `The file changed while the dialog was open, so Yreview did not change it. File: ${file}`,
+    }
+  }
   const mode = (await stat(file).catch(() => undefined))?.mode
   await writeAtomic(file, merged.value, mode === undefined ? 0o644 : mode % 0o1000)
   return { kind: 'written' }
