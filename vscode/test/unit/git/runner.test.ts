@@ -9,6 +9,7 @@ import {
   TOO_MUCH_OUTPUT,
   isOk,
   ran,
+  stopTree,
 } from '../../../src/git/runner'
 import { git, makeRepo, removeDir } from '../../fixtures/scratch'
 
@@ -127,6 +128,55 @@ describe('ProcessGitRunner', () => {
     const result = await node().run(['-e', 'process.stdout.write(process.argv[1])', value])
     assert.equal(result.stdout, value)
   })
+
+  describe('stopTree', () => {
+    const failingKill = (code: string) => {
+      const calls: (number | string | undefined)[][] = []
+      const kill = (pid: number, signal?: string | number): true => {
+        calls.push([pid, signal])
+        throw Object.assign(new Error(`kill ${code}`), { code })
+      }
+      return { calls, kill }
+    }
+
+    ;['EPERM', 'ESRCH'].forEach((code) =>
+      it(`a kill that fails with ${code} counts as a stopped group`, () => {
+        const { calls, kill } = failingKill(code)
+        assert.equal(stopTree(1234, 'darwin', kill), undefined)
+        assert.deepEqual(calls, [[-1234, 'SIGKILL']])
+      }),
+    )
+
+    it('a kill that fails for another reason gives the error and does not throw', () => {
+      const { kill } = failingKill('EINVAL')
+      assert.match(String(stopTree(1234, 'linux', kill)), /EINVAL/)
+    })
+  })
+
+  ;['EPERM', 'ESRCH'].forEach((code) =>
+    // Mocha fails a test on an uncaught error and on a second done, so a pass proves one settle.
+    it(`an answer over the limit settles once when the kill fails with ${code}`, async function overLimit() {
+      // On Windows the runner stops the tree with taskkill and never calls process.kill.
+      if (process.platform === 'win32') this.skip()
+      const original = process.kill
+      const calls: number[] = []
+      process.kill = (pid: number) => {
+        calls.push(pid)
+        throw Object.assign(new Error(`kill ${code}`), { code })
+      }
+      try {
+        const result = await node().run([
+          '-e',
+          "Array.from({ length: 5 }).forEach(() => process.stdout.write('x'.repeat(4000)))",
+        ])
+        assert.equal(result.exitCode, TOO_MUCH_OUTPUT)
+        assert.match(result.stderr, /1000/)
+        assert.equal(calls.length, 1)
+      } finally {
+        process.kill = original
+      }
+    }),
+  )
 
   it('a GIT_DIR of the environment does not move git to another repository', async () => {
     const other = makeRepo()

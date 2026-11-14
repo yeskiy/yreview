@@ -64,20 +64,29 @@ const refusedOutput = (maxBytes: number): GitResult => ({
   stderr: `The git command wrote more than ${maxBytes} bytes. The extension stopped the command and refused the answer.`,
 })
 
-const stopTree = (pid: number | undefined): void => {
-  if (pid === undefined) return
-  if (process.platform === 'win32') {
+/** ESRCH: the group ended. EPERM: the group is not ours, or on macOS holds only a zombie leader. */
+const GROUP_GONE = new Set(['ESRCH', 'EPERM'])
+
+/** Stops the process and its children. It never throws, and gives the error of a kill that failed. */
+export const stopTree = (
+  pid: number | undefined,
+  platform: NodeJS.Platform = process.platform,
+  kill: (pid: number, signal: NodeJS.Signals) => true = process.kill.bind(process),
+): unknown => {
+  if (pid === undefined) return undefined
+  if (platform === 'win32') {
     spawn('taskkill', ['/pid', String(pid), '/T', '/F'], {
       stdio: 'ignore',
       windowsHide: true,
     }).on('error', () => undefined)
-    return
+    return undefined
   }
   try {
-    process.kill(-pid, 'SIGKILL')
+    // The child is spawned detached, so it leads its own process group and -pid names that group.
+    kill(-pid, 'SIGKILL')
+    return undefined
   } catch (error) {
-    // ESRCH: the process group already ended.
-    if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error
+    return GROUP_GONE.has((error as NodeJS.ErrnoException).code ?? '') ? undefined : error
   }
 }
 
@@ -102,14 +111,30 @@ export class ProcessGitRunner implements GitRunner {
       })
       const chunks: [Buffer[], Buffer[]] = [[], []]
       const sizes = [0, 0]
-      const outcome: { result?: GitResult; error?: unknown; stopped: boolean } = { stopped: false }
+      const outcome: {
+        result?: GitResult
+        error?: unknown
+        stopped: boolean
+        settled: boolean
+        unwatch: () => void
+      } = { stopped: false, settled: false, unwatch: () => undefined }
+      const finish = (answer: () => void): void => {
+        if (outcome.settled) return
+        outcome.settled = true
+        outcome.unwatch()
+        answer()
+      }
       // A child of git can keep a pipe open, so the runner also closes its own ends of the pipes.
       const halt = (result?: GitResult, error?: unknown): void => {
         if (outcome.stopped) return
         Object.assign(outcome, { result, error, stopped: true })
-        stopTree(child.pid)
+        const failure = stopTree(child.pid)
         child.stdout.destroy()
         child.stderr.destroy()
+        if (failure === undefined) return
+        // The group did not stop, so 'close' can be late. Stop the child alone and answer now.
+        child.kill('SIGKILL')
+        finish(() => reject(error ?? failure))
       }
       ;[child.stdout, child.stderr].forEach((stream, index) =>
         stream.on('data', (chunk: Buffer) => {
@@ -122,28 +147,24 @@ export class ProcessGitRunner implements GitRunner {
       const timer = setTimeout(() => halt(timedOut(this.limits.waitMs)), this.limits.waitMs)
       const onAbort = (): void => halt(undefined, signal?.reason)
       signal?.addEventListener('abort', onAbort, { once: true })
-      const settle = (): void => {
+      outcome.unwatch = () => {
         clearTimeout(timer)
         signal?.removeEventListener('abort', onAbort)
       }
-      child.on('error', () => {
-        settle()
-        resolve(NO_GIT)
-      })
-      child.on('close', (code) => {
-        settle()
-        if (outcome.error !== undefined) {
-          reject(outcome.error)
-          return
-        }
-        resolve(
-          outcome.result ?? {
-            exitCode: code ?? 1,
-            stdout: Buffer.concat(chunks[0]).toString('utf8'),
-            stderr: Buffer.concat(chunks[1]).toString('utf8'),
-          },
-        )
-      })
+      child.on('error', () => finish(() => resolve(NO_GIT)))
+      child.on('close', (code) =>
+        finish(() =>
+          outcome.error === undefined
+            ? resolve(
+                outcome.result ?? {
+                  exitCode: code ?? 1,
+                  stdout: Buffer.concat(chunks[0]).toString('utf8'),
+                  stderr: Buffer.concat(chunks[1]).toString('utf8'),
+                },
+              )
+            : reject(outcome.error),
+        ),
+      )
     })
   }
 }
