@@ -10,6 +10,10 @@ const git = (...args) => execFileSync('git', args, { cwd: root, stdio: 'ignore' 
 rmSync(root, { recursive: true, force: true })
 mkdirSync(path.join(root, 'src'), { recursive: true })
 writeFileSync(path.join(root, 'src', 'a.txt'), 'one\ntwo\nthree\n')
+writeFileSync(
+  path.join(root, 'src', 'todo.ts'),
+  '// TODO: first task\nexport const value = 1 // FIXME: second task\n',
+)
 git('init', '-q', '-b', 'main')
 git('config', 'user.email', 'reviewer@example.com')
 git('config', 'user.name', 'Reviewer')

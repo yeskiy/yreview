@@ -7,6 +7,8 @@ import {
   ProcessGitRunner,
   TIMED_OUT,
   TOO_MUCH_OUTPUT,
+  gitCalls,
+  inBackground,
   isOk,
   ran,
   stopTree,
@@ -194,5 +196,13 @@ describe('ProcessGitRunner', () => {
       else process.env.GIT_DIR = saved
       removeDir(other)
     }
+  })
+
+  it('a run in the background does not count as an action call', async () => {
+    const before = gitCalls()
+    await inBackground(() => node().run(['-e', '']))
+    assert.equal(gitCalls(), before)
+    await node().run(['-e', ''])
+    assert.equal(gitCalls(), before + 1)
   })
 })

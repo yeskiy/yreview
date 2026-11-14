@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { spawn } from 'node:child_process'
 
 export interface GitResult {
@@ -27,8 +28,13 @@ export const isOk = (result: GitResult): boolean => result.exitCode === 0
 
 const started = { count: 0 }
 
-/** The number of git processes that this extension host started. The action log uses it. */
+const background = new AsyncLocalStorage<boolean>()
+
+/** The number of git processes that the actions started, with no background scan. The action log uses it. */
 export const gitCalls = (): number => started.count
+
+/** Runs work whose git processes gitCalls does not count, for example the scan of the task views. */
+export const inBackground = <T>(work: () => Promise<T>): Promise<T> => background.run(true, work)
 
 /** False for an answer of the runner, which states nothing about the repository. */
 export const ran = (result: GitResult): boolean => result.exitCode >= 0
@@ -105,7 +111,7 @@ export class ProcessGitRunner implements GitRunner {
 
   async run(args: readonly string[], signal?: AbortSignal): Promise<GitResult> {
     signal?.throwIfAborted()
-    started.count += 1
+    if (background.getStore() !== true) started.count += 1
     return new Promise((resolve, reject) => {
       const child = spawn(this.gitPath, args, {
         cwd: this.cwd,

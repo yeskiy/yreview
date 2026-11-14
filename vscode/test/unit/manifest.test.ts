@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
 const root = path.resolve(__dirname, '../..')
@@ -85,5 +85,34 @@ describe('manifest', () => {
     assert.match(overlap.dark ?? '', /^#[0-9a-f]{8}$/)
     assert.match(overlap.light ?? '', /^#[0-9a-f]{8}$/)
     assert.equal(contributes.colors[2]?.defaults?.highContrast, 'contrastActiveBorder')
+  })
+
+  it('puts the task views in an activity bar container', () => {
+    const all = manifest.contributes as Record<string, unknown>
+    const containers = (all.viewsContainers as Record<string, readonly Record<string, unknown>[]>)
+      .activitybar
+    assert.deepEqual(
+      containers?.map((container) => container.id),
+      ['yreview'],
+    )
+    assert.ok(existsSync(path.join(root, String(containers?.[0]?.icon))))
+    assert.deepEqual(
+      (all.views as Record<string, readonly Record<string, unknown>[]>).yreview?.map(
+        (view) => view.id,
+      ),
+      ['yreview.project', 'yreview.currentFile', 'yreview.changes'],
+    )
+    assert.match(
+      readFileSync(path.join(root, '.vscodeignore'), 'utf8'),
+      /^!images\/activity\.svg$/m,
+    )
+  })
+
+  it('gives the TODO settings application scope, so a workspace cannot set them', () => {
+    const { properties } = (manifest.contributes as Record<string, unknown>).configuration as {
+      readonly properties?: Record<string, Record<string, unknown>>
+    }
+    assert.equal(properties?.['yreview.todoPatterns']?.scope, 'application')
+    assert.equal(properties?.['yreview.todoFilters']?.scope, 'application')
   })
 })

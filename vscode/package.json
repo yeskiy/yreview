@@ -79,8 +79,48 @@
         "command": "yreview.delete",
         "title": "Delete",
         "icon": "$(trash)"
+      },
+      {
+        "command": "yreview.tasks.refresh",
+        "title": "Refresh Review Tasks",
+        "category": "Yreview",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "yreview.tasks.open",
+        "title": "Open Review Task"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yreview",
+          "title": "Yreview",
+          "icon": "images/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "yreview": [
+        {
+          "id": "yreview.project",
+          "name": "Project",
+          "contextualTitle": "Yreview"
+        },
+        {
+          "id": "yreview.currentFile",
+          "name": "Current File",
+          "contextualTitle": "Yreview",
+          "visibility": "collapsed"
+        },
+        {
+          "id": "yreview.changes",
+          "name": "Local Changes",
+          "contextualTitle": "Yreview",
+          "visibility": "collapsed"
+        }
+      ]
+    },
     "menus": {
       "commandPalette": [
         {
@@ -109,6 +149,10 @@
         },
         {
           "command": "yreview.delete",
+          "when": "false"
+        },
+        {
+          "command": "yreview.tasks.open",
           "when": "false"
         }
       ],
@@ -158,6 +202,13 @@
           "command": "yreview.delete",
           "group": "inline@1",
           "when": "commentController == yreview && comment == yreview.comment"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "yreview.tasks.refresh",
+          "when": "view == yreview.project || view == yreview.currentFile || view == yreview.changes",
+          "group": "navigation@9"
         }
       ]
     },
@@ -252,6 +303,63 @@
           "default": false,
           "scope": "application",
           "markdownDescription": "Also bind Ctrl+Shift+G, the key of the IntelliJ plugin, to Add Review Comment while an editor has focus. It replaces Show Source Control there."
+        },
+        "yreview.todoPatterns": {
+          "type": "array",
+          "scope": "application",
+          "default": [
+            {
+              "pattern": "\\btodo\\b.*",
+              "caseSensitive": false
+            },
+            {
+              "pattern": "\\bfixme\\b.*",
+              "caseSensitive": false
+            }
+          ],
+          "items": {
+            "type": "object",
+            "required": [
+              "pattern"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "pattern": {
+                "type": "string",
+                "description": "A JavaScript regular expression."
+              },
+              "caseSensitive": {
+                "type": "boolean",
+                "default": false
+              }
+            }
+          },
+          "markdownDescription": "The TODO patterns of the task views. Each pattern is a JavaScript regular expression, and the TODO text is the part of the line that it matches, up to the end of the comment. Each pattern needs a word of two or more letters or digits outside every group, for example `\\btodo\\b.*`. Yreview reads the text of the files, so a TODO in a string also shows."
+        },
+        "yreview.todoFilters": {
+          "type": "array",
+          "scope": "application",
+          "default": [],
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "patterns"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "patterns": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "markdownDescription": "Named sets of TODO patterns. The Filter button of a task view offers each set. Each entry of `patterns` is a `pattern` value of `yreview.todoPatterns`."
         }
       }
     }

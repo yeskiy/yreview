@@ -1,5 +1,8 @@
 import * as vscode from 'vscode'
 
+import { type TodoFilter, readFilters } from './tasks/taskFilter'
+import { type TodoPattern, readPatterns } from './tasks/todoPatterns'
+
 export interface Settings {
   readonly newComments: 'local' | 'shared'
   readonly remote: string
@@ -16,3 +19,19 @@ export const readSettings = (scope?: vscode.Uri): Settings => {
     editorMarks: config.get<boolean>('editorMarks', true),
   }
 }
+
+export interface TaskSettings {
+  readonly todoPatterns: readonly TodoPattern[]
+  readonly todoFilters: readonly TodoFilter[]
+}
+
+/** The user value or the default. A workspace value of an application setting never counts. */
+const userValue = (name: string): unknown => {
+  const found = vscode.workspace.getConfiguration('yreview').inspect<unknown>(name)
+  return found?.globalValue ?? found?.defaultValue
+}
+
+export const readTaskSettings = (): TaskSettings => ({
+  todoPatterns: readPatterns(userValue('todoPatterns')),
+  todoFilters: readFilters(userValue('todoFilters')),
+})

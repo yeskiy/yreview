@@ -10,6 +10,7 @@ import type { RecordRange } from '../core/record'
 import { gitCalls } from '../git/runner'
 import { guard } from '../guard'
 import type { Log } from '../log'
+import { watchNotes } from '../noteWatch'
 import { readSettings } from '../settings'
 import type { StoredComment } from '../store/commentBook'
 import { ALL_REFS, isShared } from '../store/noteRefs'
@@ -315,7 +316,7 @@ export class ReviewComments implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('yreview.editorMarks')) this.applyMarks()
       }),
-      ...this.noteWatchers(),
+      ...watchNotes((files) => this.noteChanged(files)),
     )
     this.reloadVisible()
   }
@@ -402,6 +403,16 @@ export class ReviewComments implements vscode.Disposable {
 
   snapshot(uri: vscode.Uri): readonly Shown[] {
     return this.shown.get(uri.toString()) ?? []
+  }
+
+  /** Draws the comments of the file and expands the thread of one comment. False when no thread shows it. */
+  async reveal(uri: vscode.Uri, id: string): Promise<boolean> {
+    const find = (): Shown | undefined => this.snapshot(uri).find((shown) => shown.stored.id === id)
+    if (find() === undefined) await this.reload(uri)
+    const entry = find()
+    if (entry === undefined) return false
+    Object.assign(entry.thread, { collapsibleState: vscode.CommentThreadCollapsibleState.Expanded })
+    return true
   }
 
   /** The commented text of one file, split by the number of open comments that cover it. */
@@ -522,34 +533,10 @@ export class ReviewComments implements vscode.Disposable {
   }
 
   /** A fetch or another program changes the note refs, so every visible file reads them again. */
-  private noteWatchers(): vscode.Disposable[] {
-    const timer: { handle?: NodeJS.Timeout } = {}
-    const changed = new Set<string>()
-    const later = (uri: vscode.Uri): void => {
-      changed.add(uri.fsPath)
-      clearTimeout(timer.handle)
-      timer.handle = setTimeout(() => {
-        const files = [...changed]
-        changed.clear()
-        this.foreignChange(files)
-          .then((foreign) => (foreign ? this.reloadVisible() : undefined))
-          .catch((error: unknown) => this.log.error('The check of the note refs failed.', error))
-      }, 300)
-    }
-    return [
-      { dispose: () => clearTimeout(timer.handle) },
-      ...(vscode.workspace.workspaceFolders ?? []).flatMap((folder) =>
-        ['.git/refs/notes/**', '.git/packed-refs', '.y-review/notes/**'].map((glob) => {
-          const watcher = vscode.workspace.createFileSystemWatcher(
-            new vscode.RelativePattern(folder, glob),
-          )
-          watcher.onDidChange(later)
-          watcher.onDidCreate(later)
-          watcher.onDidDelete(later)
-          return watcher
-        }),
-      ),
-    ]
+  private noteChanged(files: readonly string[]): void {
+    this.foreignChange(files)
+      .then((foreign) => (foreign ? this.reloadVisible() : undefined))
+      .catch((error: unknown) => this.log.error('The check of the note refs failed.', error))
   }
 
   /** False when each change is a folder, a scratch ref, a lock file, or a ref that this window wrote. */

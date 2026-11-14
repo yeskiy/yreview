@@ -49,6 +49,26 @@ over that text to see the same count. The high contrast themes show an outline i
 `yreview.commentOverlapBorder` in place of the amber color. You can change each color in the
 setting `workbench.colorCustomizations`.
 
+## The task views
+
+Click the Yreview icon in the activity bar. It holds three views of the open review comments and
+TODO items:
+
+| View          | Content                                                 |
+| ------------- | ------------------------------------------------------- |
+| Project       | Every task of the workspace. The badge counts its rows. |
+| Current File  | The tasks of the file in the editor                     |
+| Local Changes | The tasks of the files that `git status` names          |
+
+Click a row to open the file at the task. A click on a comment row also expands its thread. You
+can drag the container to the panel at the bottom.
+
+Yreview finds a TODO item with `git grep` and the patterns of `yreview.todoPatterns`. It reads the
+text of the files, so a TODO inside a string also shows.
+
+The extension runs the regular expressions of `yreview.todoPatterns` on each line with no time
+limit. A slow pattern makes the scan slow.
+
 ## Requirements
 
 | Item      | Requirement                                                                                                                 |
@@ -61,13 +81,15 @@ setting `workbench.colorCustomizations`.
 
 ## Settings
 
-| Setting                | Default  | Effect                                                         |
-| ---------------------- | -------- | -------------------------------------------------------------- |
-| `yreview.newComments`  | `local`  | The button that the comment box shows first                    |
-| `yreview.remote`       | `origin` | The remote that gets the shared comments                       |
-| `yreview.writeRefspec` | `true`   | After a share, ask before Yreview adds the notes fetch refspec |
-| `yreview.editorMarks`  | `true`   | Show the threads open and color the commented lines            |
-| `yreview.intellijKey`  | `false`  | Also bind Ctrl+Shift+G, the IntelliJ key                       |
+| Setting                | Default                     | Effect                                                         |
+| ---------------------- | --------------------------- | -------------------------------------------------------------- |
+| `yreview.newComments`  | `local`                     | The button that the comment box shows first                    |
+| `yreview.remote`       | `origin`                    | The remote that gets the shared comments                       |
+| `yreview.writeRefspec` | `true`                      | After a share, ask before Yreview adds the notes fetch refspec |
+| `yreview.editorMarks`  | `true`                      | Show the threads open and color the commented lines            |
+| `yreview.intellijKey`  | `false`                     | Also bind Ctrl+Shift+G, the IntelliJ key                       |
+| `yreview.todoPatterns` | `\btodo\b.*`, `\bfixme\b.*` | The TODO patterns of the task views                            |
+| `yreview.todoFilters`  | none                        | Named sets of TODO patterns for the Filter button              |
 
 ## What Yreview writes
 

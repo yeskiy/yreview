@@ -10,12 +10,14 @@ import { withLongForms } from './places'
 import { offerSaveKey } from './saveKey'
 import { shareLogOf } from './shareLogState'
 import { ReviewService } from './store/reviewService'
+import { type TaskViews, createTaskViews, placeholderViews } from './views/taskViews'
 import { vscodeHost } from './vscodeHost'
 
 export interface YreviewApi {
   /** Undefined when git is missing or older than 2.24, so the comment features stay off. */
   readonly comments: ReviewComments | undefined
   readonly service: ReviewService | undefined
+  readonly tasks: TaskViews | undefined
 }
 
 const COMMENT_COMMANDS = [
@@ -31,7 +33,11 @@ const projectFolders = (): readonly string[] =>
 
 export const activate = async (context: vscode.ExtensionContext): Promise<YreviewApi> => {
   const output = vscode.window.createOutputChannel('Yreview', { log: true })
-  const held: { service?: ReviewService; projects: readonly string[] } = {
+  const held: {
+    service?: ReviewService
+    tasks?: TaskViews
+    projects: readonly string[]
+  } = {
     projects: projectFolders(),
   }
   const homes = withLongForms(
@@ -40,7 +46,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   const log = redactingLog(output, () => ({
     homes,
     projects: held.projects,
-    repositories: held.service?.knownRoots() ?? [],
+    repositories: [...(held.service?.knownRoots() ?? []), ...(held.tasks?.model.roots() ?? [])],
   }))
   context.subscriptions.push(
     output,
@@ -57,9 +63,10 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       ...COMMENT_COMMANDS.map((command) =>
         vscode.commands.registerCommand(command, () => vscode.window.showErrorMessage(problem)),
       ),
+      ...placeholderViews(problem),
     )
     vscode.window.showErrorMessage(problem)
-    return { comments: undefined, service: undefined }
+    return { comments: undefined, service: undefined, tasks: undefined }
   }
   held.service = new ReviewService(
     vscodeHost(context.workspaceState, git),
@@ -67,6 +74,8 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   )
   const comments = new ReviewComments(held.service, log)
   context.subscriptions.push(comments)
+  held.tasks = createTaskViews(held.service, comments, git, log, context.workspaceState)
+  context.subscriptions.push(held.tasks)
   const settle = (): void => {
     held.service
       ?.folderStoreRoots(true)
@@ -81,7 +90,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     log.error('The save key offer failed.', error),
   )
   log.info('Yreview started.')
-  return { comments, service: held.service }
+  return { comments, service: held.service, tasks: held.tasks }
 }
 
 export const deactivate = (): void => undefined
