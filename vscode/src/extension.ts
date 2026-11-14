@@ -7,7 +7,7 @@ import { checkGit, findGitPath } from './git/gitPath'
 import { offerIntellijKey } from './keyOffer'
 import { redactingLog } from './log'
 import { ReviewService } from './store/reviewService'
-import { vscodeHost } from './store/vscodeHost'
+import { vscodeHost } from './vscodeHost'
 
 export interface YreviewApi {
   /** Undefined when git is missing or older than 2.24, so the comment features stay off. */

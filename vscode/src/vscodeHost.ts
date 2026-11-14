@@ -1,8 +1,8 @@
 import * as vscode from 'vscode'
 
-import { FETCH_REFSPEC } from '../git/sharing'
-import { readSettings } from '../settings'
-import type { RefspecAnswer, ServiceHost } from './reviewService'
+import { FETCH_REFSPEC } from './git/sharing'
+import { readSettings } from './settings'
+import type { RefspecAnswer, ServiceHost } from './store/reviewService'
 
 const DECLINED = 'yreview.refspecDeclined'
 const ADD = 'Add'
