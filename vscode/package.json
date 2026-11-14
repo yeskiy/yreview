@@ -273,6 +273,12 @@
         "command": "yreview.setAgentCommand",
         "title": "Set Agent Command",
         "category": "Yreview"
+      },
+      {
+        "command": "yreview.copyTasks",
+        "title": "Copy Review Tasks",
+        "category": "Yreview",
+        "icon": "$(copy)"
       }
     ],
     "viewsContainers": {
@@ -692,6 +698,11 @@
           "command": "yreview.changes.delete",
           "when": "view == yreview.changes",
           "group": "3_write@2"
+        },
+        {
+          "command": "yreview.copyTasks",
+          "when": "view == yreview.project || view == yreview.currentFile || view == yreview.changes",
+          "group": "navigation@9"
         },
         {
           "command": "yreview.startSession",

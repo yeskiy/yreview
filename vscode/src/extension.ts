@@ -4,6 +4,7 @@ import * as vscode from 'vscode'
 
 import { ReviewComments } from './comments/controller'
 import { checkGit, findGitPath } from './git/gitPath'
+import { type HandoffApi, registerHandoff } from './handoff/register'
 import { offerIntellijKey } from './keyOffer'
 import { redactingLog } from './log'
 import { withLongForms } from './places'
@@ -27,6 +28,7 @@ export interface YreviewApi {
   readonly completion: TaskCompletion | undefined
   readonly writes: TaskWrites | undefined
   readonly sessions: ReviewSessions
+  readonly handoff: HandoffApi | undefined
 }
 
 const COMMENT_COMMANDS = [
@@ -83,6 +85,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       completion: undefined,
       writes: undefined,
       sessions,
+      handoff: undefined,
     }
   }
   held.service = new ReviewService(
@@ -105,6 +108,14 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   )
   const writes = createTaskWrites(tasks, held.service, completion)
   context.subscriptions.push(...registerTaskWrites(writes, log))
+  const handoff = registerHandoff(context, {
+    service: held.service,
+    gitPath: git,
+    log,
+    gitRoots: () => tasks.model.roots(),
+    openTodos: () => tasks.openTodos(),
+    chosenTasks: () => tasks.chosenTasks(),
+  })
   const settle = (): void => {
     held.service
       ?.folderStoreRoots(true)
@@ -119,7 +130,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     log.error('The save key offer failed.', error),
   )
   log.info('Yreview started.')
-  return { comments, service: held.service, tasks, completion, writes, sessions }
+  return { comments, service: held.service, tasks, completion, writes, sessions, handoff }
 }
 
 export const deactivate = (): void => undefined
