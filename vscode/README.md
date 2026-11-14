@@ -49,6 +49,11 @@ over that text to see the same count. The high contrast themes show an outline i
 `yreview.commentOverlapBorder` in place of the amber color. You can change each color in the
 setting `workbench.colorCustomizations`.
 
+In the Markdown preview, the Add Review Comment button in the title bar opens the source. The
+comment box opens at the caret. Each paragraph and heading also shows a small `+` link. The link
+opens the source on the first line of that block. The preview marks each block that an open
+comment covers.
+
 ## The task views
 
 Click the Yreview icon in the activity bar. It holds three views of the open review comments and
@@ -79,7 +84,34 @@ limit. A slow pattern makes the scan slow.
 | Workspace | Trusted. Yreview runs git, and git reads the repository configuration.                                                      |
 | File      | Inside a git repository that has at least one commit, or inside a workspace folder                                          |
 
+### Remote development
+
+In a remote window, Yreview runs on the remote host. git, the review bridge, the agent terminal
+and the files under `~/.y-review/` are then on the remote host. The issue form opens in the
+browser of your local machine. The Markdown preview loads the Yreview links only when the
+built-in Markdown extension runs on the same host as Yreview.
+
+The table below holds the remote check of each setup. The check has not run yet, so each cell
+says "not checked yet". The table fills after the check of the maintainer.
+
+| Check                                         | Local Windows   | Remote-SSH      | WSL             | Dev Containers  | Codespaces      | Cursor          | Windsurf        | VSCodium        |
+| --------------------------------------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- |
+| 1. Show Log shows the start and the host      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 2. A shared comment reaches a second clone    | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 3. A resolved comment stays resolved          | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 4. A sent task reaches Claude Code            | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 5. The agent resolves the task                | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 6. The `+` links of the Markdown preview      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 7. The Add button of the Markdown preview     | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 8. The diagnostic report holds no remote path | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 9. The Report button opens the issue form     | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 10. The log export holds the Yreview log      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 11. The bridge file goes when the window goes | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+
 ## Settings
+
+Run Yreview: Open Settings to see every setting. Run Yreview: Choose Agent to see the agents of
+this machine and what each one supports.
 
 | Setting                | Default                     | Effect                                                         |
 | ---------------------- | --------------------------- | -------------------------------------------------------------- |
@@ -117,11 +149,30 @@ Do not open one folder outside git in two editors at the same time (two VS Code 
 VS Code and IntelliJ). Each editor locks the comment file only inside its own process, so
 one of two parallel writes can get lost.
 
+## Report a problem
+
+Run Yreview: Copy Diagnostic Report and paste the text into an issue. The report holds versions,
+switches, counts, states and the last 50 records of this window. It holds no comment text, no
+author, no path of your machine, no remote address and no token. Read it before you paste it.
+
+When a command fails, the error message has a Report button. The button opens a new issue form
+in your browser with the error and the versions. Nothing goes anywhere until you press Submit.
+
+Run Yreview: Show Log to see the log of the extension. To attach the log files of VS Code, run
+Developer: Export Logs, or run Developer: Open Logs Folder and copy the files. The remote check
+above records which of the two commands holds the Yreview log.
+
+A crash of the extension host itself makes no report. VS Code starts the host again and shows
+its own message.
+
 ## Privacy
 
 Yreview sends no telemetry. It sends data only with the git push of a shared comment, to
 the remote that you chose. The log (Yreview: Show Log) removes your folders, remote
 addresses, mail addresses and secret values from each line.
+
+The diagnostic report and the issue form remove every path of your machine before you see them.
+They also remove every remote address, every mail address and every token.
 
 ## Read the notes yourself
 
