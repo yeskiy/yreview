@@ -8,7 +8,6 @@ import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
 import com.intellij.openapi.editor.ex.util.EditorUtil
 import com.intellij.openapi.editor.markup.HighlighterLayer
-import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
@@ -19,6 +18,7 @@ import com.yeskiy.yreview.diff.REVIEW_ROOT
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
+import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.ReviewAnchor
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
@@ -27,14 +27,13 @@ import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.ui.CommentDelete
 import com.yeskiy.yreview.ui.CommentResolve
 import com.yeskiy.yreview.ui.ReadBox
-import com.yeskiy.yreview.ui.ReviewColors
 import com.yeskiy.yreview.ui.WriteBox
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 import java.util.concurrent.ConcurrentHashMap
 
-/** The icons and the line spans that one file needs. The plugin builds this off the user interface thread. */
-data class CommentMarks(val byLine: Map<Int, List<StoredComment>>, val spans: List<IntRange>) {
+/** The icons and the ranges that one file needs. The plugin builds this off the user interface thread. */
+data class CommentMarks(val byLine: Map<Int, List<StoredComment>>, val ranges: List<Range>) {
 
     companion object {
         val EMPTY = CommentMarks(emptyMap(), emptyList())
@@ -43,7 +42,7 @@ data class CommentMarks(val byLine: Map<Int, List<StoredComment>>, val spans: Li
 
 /**
  * Draws one comment icon per range in the markup model of an open editor, and a quiet background
- * over the lines that the range covers. The plugin reads the git notes once per editor, and again
+ * over the text that the range covers. The plugin reads the git notes once per editor, and again
  * after every write, in place of once per daemon pass.
  *
  * The same class holds the boxes that the editor shows under the lines. A click on the icon opens
@@ -210,7 +209,7 @@ class CommentGutter(private val project: Project) : Disposable {
         val open = ReviewService.getInstance(project).bookFor(anchor).open(anchor.key)
         return CommentMarks(
             CommentIndex.byStartLine(open, anchor.path),
-            CommentIndex.lineSpans(open, anchor.path),
+            CommentIndex.ranges(open, anchor.path),
         )
     }
 
@@ -225,26 +224,8 @@ class CommentGutter(private val project: Project) : Disposable {
         old.forEach { editor.markupModel.removeHighlighter(it) }
         painted[editor] =
             if (root == null) emptyList()
-            else marks.spans.mapNotNull { paint(editor, it) } +
+            else CommentLayers.paint(editor, marks.ranges) +
                 marks.byLine.entries.mapNotNull { (line, here) -> mark(editor, root, line, here) }
-    }
-
-    /**
-     * Paints the lines of one span. The color comes from the scheme of the editor through a
-     * [com.intellij.openapi.editor.colors.TextAttributesKey], so a new theme repaints the span.
-     * The layer stays under the caret row, so the row of the caret still reads.
-     */
-    private fun paint(editor: Editor, span: IntRange): RangeHighlighter? {
-        val lines = editor.document.lineCount
-        if (span.first < 1 || span.first > lines) return null
-        val last = minOf(span.last, lines)
-        return editor.markupModel.addRangeHighlighter(
-            ReviewColors.COMMENT_RANGE,
-            editor.document.getLineStartOffset(span.first - 1),
-            editor.document.getLineEndOffset(last - 1),
-            HighlighterLayer.CARET_ROW - 1,
-            HighlighterTargetArea.LINES_IN_RANGE,
-        )
     }
 
     private fun mark(

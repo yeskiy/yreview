@@ -21,8 +21,8 @@ class ReviewColorsPage : ColorSettingsPage {
     override fun getDemoText(): String =
         """
         fun parse(text: String): Result {
-        <range>    val trimmed = text.trim()
-            return Result(trimmed)</range>
+            val trimmed = <range>text.trim()</range>
+        <range>    return Result(trimmed)</range>
         }
         """.trimIndent()
 
@@ -30,7 +30,7 @@ class ReviewColorsPage : ColorSettingsPage {
         mapOf("range" to ReviewColors.COMMENT_RANGE)
 
     override fun getAttributeDescriptors(): Array<AttributesDescriptor> =
-        arrayOf(AttributesDescriptor("Lines of an open comment", ReviewColors.COMMENT_RANGE))
+        arrayOf(AttributesDescriptor("Text of an open comment", ReviewColors.COMMENT_RANGE))
 
     override fun getColorDescriptors(): Array<ColorDescriptor> = ColorDescriptor.EMPTY_ARRAY
 }

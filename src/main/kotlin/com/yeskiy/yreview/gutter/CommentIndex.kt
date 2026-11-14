@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.gutter
 
+import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.StoredComment
 
 object CommentIndex {
@@ -9,26 +10,9 @@ object CommentIndex {
         comments.mapNotNull { stored -> spanOf(stored, path)?.let { it.first to stored } }
             .groupBy({ it.first }, { it.second })
 
-    /**
-     * The line spans that the comments of one file cover. Two spans that touch or overlap become
-     * one span, so no line ever carries two marks. Line numbers are 1-based.
-     *
-     * The merge keeps one list and writes the last entry again, so the cost grows with the
-     * number of spans and not with the square of it. A file can hold one comment for every
-     * line of it, and a new list for each step would copy the whole answer every time.
-     */
-    fun lineSpans(comments: List<StoredComment>, path: String): List<IntRange> =
-        comments.mapNotNull { spanOf(it, path) }
-            .sortedWith(compareBy({ it.first }, { it.last }))
-            .fold(mutableListOf<IntRange>()) { merged, span ->
-                val open = merged.lastOrNull()
-                if (open != null && span.first <= open.last + 1) {
-                    merged[merged.lastIndex] = IntRange(open.first, maxOf(open.last, span.last))
-                } else {
-                    merged.add(span)
-                }
-                merged
-            }
+    /** The ranges of the comments of one file. A comment without a range names no text. */
+    fun ranges(comments: List<StoredComment>, path: String): List<Range> =
+        comments.mapNotNull { stored -> stored.comment.location?.takeIf { it.path == path }?.range }
 
     /**
      * The last line that these comments cover. The box of the editor sits under that line.
