@@ -8,6 +8,7 @@ import { offerIntellijKey } from './keyOffer'
 import { redactingLog } from './log'
 import { withLongForms } from './places'
 import { offerSaveKey } from './saveKey'
+import { shareLogOf } from './shareLogState'
 import { ReviewService } from './store/reviewService'
 import { vscodeHost } from './vscodeHost'
 
@@ -60,7 +61,10 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     vscode.window.showErrorMessage(problem)
     return { comments: undefined, service: undefined }
   }
-  held.service = new ReviewService(vscodeHost(context.workspaceState, git))
+  held.service = new ReviewService(
+    vscodeHost(context.workspaceState, git),
+    shareLogOf(context.workspaceState),
+  )
   const comments = new ReviewComments(held.service, log)
   context.subscriptions.push(comments)
   const settle = (): void => {

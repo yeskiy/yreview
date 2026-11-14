@@ -17,6 +17,7 @@ import { mayMigrate } from './folderOwnership'
 import { copyFolder, mayMove, migrationNotice, moveStoreFolder } from './migration'
 import { ALL_REFS, isShared, refFor } from './noteRefs'
 import { RefspecAsks } from './refspecAsks'
+import { ShareLog } from './shareLog'
 
 export type StoreKind = 'git' | 'folder'
 
@@ -132,7 +133,10 @@ export class ReviewService {
 
   private pending: Promise<void> = Promise.resolve()
 
-  constructor(private readonly host: ServiceHost) {
+  constructor(
+    private readonly host: ServiceHost,
+    private readonly shareLog: ShareLog = new ShareLog(),
+  ) {
     this.asks = new RefspecAsks(host.declinedRoots())
   }
 
@@ -222,7 +226,9 @@ export class ReviewService {
     if (anchor.store === 'folder') {
       return { stored, notices: await this.folderNotices(anchor.root, shared) }
     }
-    return { stored, shareError: shared ? await this.share(anchor.root, stored.ref) : undefined }
+    const shareError = isShared(stored.ref) ? await this.share(anchor.root, stored.ref) : undefined
+    if (shareError !== undefined) await this.shareLog.mark(stored.id, anchor.root, stored.ref)
+    return { stored, shareError }
   }
 
   async resolve(anchor: Anchor, id: string): Promise<WriteResult> {
@@ -233,13 +239,12 @@ export class ReviewService {
     }
     const stored = await book.resolve(target)
     this.notify()
-    return {
-      stored,
-      shareError:
-        anchor.store === 'git' && isShared(stored.ref)
-          ? await this.share(anchor.root, stored.ref)
-          : undefined,
-    }
+    const shareError =
+      anchor.store === 'git' && isShared(stored.ref)
+        ? await this.share(anchor.root, stored.ref)
+        : undefined
+    if (shareError !== undefined) await this.shareLog.mark(stored.id, anchor.root, stored.ref)
+    return { stored, shareError }
   }
 
   /** A delete is final. A failed push leaves the note, and the next good push carries the change. */
@@ -289,6 +294,11 @@ export class ReviewService {
   /** Every root that this service anchored, for the log redaction. */
   knownRoots(): readonly string[] {
     return [...this.roots]
+  }
+
+  /** True when a push of the comment failed and no later push of its ref worked. */
+  unshared(id: string): boolean {
+    return this.shareLog.isUnshared(id)
   }
 
   onDidChange(listener: () => void): () => void {
@@ -395,6 +405,7 @@ export class ReviewService {
     const sharing = new NotesSharing(this.runner(root), settings.remote, settings.writeRefspec)
     const result = await sharing.share(ref)
     if (!result.ok) return result.message
+    await this.shareLog.clear(root, ref)
     if (result.needsRefspec) {
       this.pending = this.pending
         .then(() => this.offerRefspec(root, sharing))
