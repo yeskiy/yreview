@@ -1,17 +1,34 @@
 import * as vscode from 'vscode'
 
+import { homeDirectory } from '../bridge/discoveryFile'
 import type { Log } from '../log'
+import { agentPickItem } from '../settingsPageCore'
 import { commandOf, withCommand } from './agentCommands'
+import { appendedText, programFor } from './agentMcp'
 import { CHOOSE, NOTHING_FOUND, NO_AGENT, SEARCHING, UNKNOWN_CHOICE, place, row } from './agentRows'
 import { AgentScan, anyFound, installOf } from './agentScan'
 import { readAgentSettings, saveAgent, saveCommands } from './agentSettings'
-import { AGENTS, type AgentId, DEFAULT_AGENT, agentOf, isProduct, orderedAgents } from './catalog'
+import {
+  AGENTS,
+  type AgentId,
+  type AgentSpec,
+  DEFAULT_AGENT,
+  agentOf,
+  isProduct,
+  orderedAgents,
+} from './catalog'
+import { launcherLaunch } from './channelConfig'
+import { launcherPath } from './launcher'
 import { NO_EXTRAS, type SessionPreparer } from './sessionPlan'
 import { apart } from './sessionRules'
 import { SessionsView } from './sessionsView'
 import { type ReviewSession, ReviewSessions, nameOf } from './terminals'
 
 const NO_SESSION = 'No review session runs.'
+
+/** Add stores the launcher path for these routes, so the pick shows that path. */
+const isStored = (spec: AgentSpec): boolean =>
+  spec.mcp.kind === 'addCommand' || spec.mcp.kind === 'userFile'
 
 const isSession = (value: unknown): value is ReviewSession =>
   typeof value === 'object' && value !== null && typeof (value as ReviewSession).key === 'string'
@@ -84,13 +101,29 @@ export const registerSessions = (
       AGENTS.filter((spec) => installOf(answer, spec.id).path !== undefined).map((spec) => spec.id),
     )
     const picked = await vscode.window.showQuickPick(
-      orderedAgents(found).map((spec) => ({
-        label: spec.label,
-        description: installOf(answer, spec.id).path,
-        detail: row(spec, found.has(spec.id)),
-        picked: spec.id === settings.agent,
-        id: spec.id,
-      })),
+      orderedAgents(found).map((spec) =>
+        agentPickItem(
+          {
+            id: spec.id,
+            label: spec.label,
+            product: isProduct(spec),
+            found: installOf(answer, spec.id).path,
+            row: row(spec, found.has(spec.id)),
+            appended: isProduct(spec)
+              ? appendedText(
+                  spec,
+                  programFor(
+                    spec,
+                    commandOf(spec.id, settings.commands),
+                    installOf(answer, spec.id).path,
+                  ),
+                  isStored(spec) ? launcherLaunch(launcherPath(homeDirectory())) : undefined,
+                )
+              : undefined,
+          },
+          settings.agent,
+        ),
+      ),
       {
         title:
           settings.agent === undefined && settings.storedAgent !== '' ? UNKNOWN_CHOICE : CHOOSE,

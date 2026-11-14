@@ -316,6 +316,11 @@
         "title": "Add Review Comment",
         "category": "Yreview",
         "icon": "$(comment)"
+      },
+      {
+        "command": "yreview.openSettings",
+        "title": "Open Settings",
+        "category": "Yreview"
       }
     ],
     "viewsContainers": {
@@ -996,7 +1001,7 @@
           ],
           "default": "",
           "scope": "machine",
-          "markdownDescription": "The command line agent of the review sessions. Run **Yreview: Choose Agent** to choose one with the result of the agent search. A repository cannot set this value."
+          "markdownDescription": "The command line agent of the review sessions. A repository cannot set this value. [Choose Agent](command:yreview.chooseAgent) shows the agents that this machine has, and what each one supports."
         },
         "yreview.agentCommands": {
           "type": "object",

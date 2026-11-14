@@ -18,6 +18,7 @@ import { previewPlugin } from './preview/markdownPlugin'
 import { PreviewHost } from './preview/previewHost'
 import { offerSaveKey } from './saveKey'
 import { registerSessions } from './session/register'
+import { registerSettingsPage } from './settingsPage'
 import type { ReviewSessions } from './session/terminals'
 import { shareLogOf } from './shareLogState'
 import { ReviewService } from './store/reviewService'
@@ -91,6 +92,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   )
   const link = sessionLink(log)
   const sessions = registerSessions(context, log, link.prepare)
+  context.subscriptions.push(registerSettingsPage())
   const git = await findGitPath()
   context.subscriptions.push(...registerDiagnostics(context, { log, ring, places, git }))
   const problem = await checkGit(git)

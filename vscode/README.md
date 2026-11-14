@@ -91,6 +91,12 @@ limit. A slow pattern makes the scan slow.
 | `yreview.todoPatterns` | `\btodo\b.*`, `\bfixme\b.*` | The TODO patterns of the task views                            |
 | `yreview.todoFilters`  | none                        | Named sets of TODO patterns for the Filter button              |
 
+VS Code has no Yreview switch that maximizes the session panel. Use the Maximize Panel Size
+command of VS Code.
+
+VS Code has no Scope tab. In a task view, run Filter and type a glob, such as `src/**/*.ts`, to
+show the tasks of some files only.
+
 ## What Yreview writes
 
 | Place                                                 | When                                                                                                                             |
