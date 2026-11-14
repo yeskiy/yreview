@@ -113,15 +113,20 @@ says "not checked yet". The table fills after the check of the maintainer.
 Run Yreview: Open Settings to see every setting. Run Yreview: Choose Agent to see the agents of
 this machine and what each one supports.
 
-| Setting                | Default                     | Effect                                                         |
-| ---------------------- | --------------------------- | -------------------------------------------------------------- |
-| `yreview.newComments`  | `local`                     | The button that the comment box shows first                    |
-| `yreview.remote`       | `origin`                    | The remote that gets the shared comments                       |
-| `yreview.writeRefspec` | `true`                      | After a share, ask before Yreview adds the notes fetch refspec |
-| `yreview.editorMarks`  | `true`                      | Show the threads open and color the commented lines            |
-| `yreview.intellijKey`  | `false`                     | Also bind Ctrl+Shift+G, the IntelliJ key                       |
-| `yreview.todoPatterns` | `\btodo\b.*`, `\bfixme\b.*` | The TODO patterns of the task views                            |
-| `yreview.todoFilters`  | none                        | Named sets of TODO patterns for the Filter button              |
+| Setting                    | Default                     | Effect                                                         |
+| -------------------------- | --------------------------- | -------------------------------------------------------------- |
+| `yreview.newComments`      | `local`                     | The button that the comment box shows first                    |
+| `yreview.remote`           | `origin`                    | The remote that gets the shared comments                       |
+| `yreview.writeRefspec`     | `true`                      | After a share, ask before Yreview adds the notes fetch refspec |
+| `yreview.editorMarks`      | `true`                      | Show the threads open and color the commented lines            |
+| `yreview.channel`          | `true`                      | Open the review bridge, so an agent session gets tasks live    |
+| `yreview.intellijKey`      | `false`                     | Also bind Ctrl+Shift+G, the IntelliJ key                       |
+| `yreview.todoPatterns`     | `\btodo\b.*`, `\bfixme\b.*` | The TODO patterns of the task views                            |
+| `yreview.todoFilters`      | none                        | Named sets of TODO patterns for the Filter button              |
+| `yreview.agent`            | none                        | The command line agent of the review sessions                  |
+| `yreview.agentCommands`    | none                        | The command of each agent, by agent id                         |
+| `yreview.autoStartSession` | `true`                      | Start a session when the Yreview Session panel opens           |
+| `yreview.sessionLocation`  | `panel`                     | Where the terminal of a new session opens: `panel` or `editor` |
 
 VS Code has no Yreview switch that maximizes the session panel. Use the Maximize Panel Size
 command of VS Code.
