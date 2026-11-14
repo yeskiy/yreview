@@ -19,6 +19,7 @@ const log: Log = {
   info: () => undefined,
   warn: () => undefined,
   error: () => undefined,
+  record: () => undefined,
 }
 
 /** A stub of vscode.cursor.mcp that keeps each call. */
