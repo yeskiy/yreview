@@ -51,6 +51,13 @@ jobs:
               exit 1
             fi
           fi
+          # Both products keep one major and minor. CONTRIBUTING.md gives the rule.
+          plugin_version=$(sed -n 's/^pluginVersion=//p' ../gradle.properties)
+          if [ "${version%.*}" != "${plugin_version%.*}" ]; then
+            echo "The extension names ${version%.*}, and gradle.properties names ${plugin_version%.*}." >&2
+            echo "Release both products with the same major and minor." >&2
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node.js

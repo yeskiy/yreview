@@ -73,6 +73,13 @@ jobs:
             echo "Set pluginVersion to $tag_version, then tag the release again." >&2
             exit 1
           fi
+          # Both products keep one major and minor. CONTRIBUTING.md gives the rule.
+          extension_version=$(node -p "require('./vscode/package.json').version")
+          if [ "${tag_version%.*}" != "${extension_version%.*}" ]; then
+            echo "The plugin names ${tag_version%.*}, and vscode/package.json names ${extension_version%.*}." >&2
+            echo "Release both products with the same major and minor." >&2
+            exit 1
+          fi
 
       # The two steps below name the tag as the shell variable GITHUB_REF_NAME, and never
       # as the expression github.ref_name. git-cliff-action is a composite action, and it
