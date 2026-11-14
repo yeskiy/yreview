@@ -1,0 +1,272 @@
+# The release of the VS Code extension. A tag vscode/v1.2.3 builds, tests, attests and
+# publishes one VSIX to the Visual Studio Marketplace and Open VSX.
+
+# No store token exists. Each store takes a short-lived OIDC token of the publish job, and its
+# Trusted Publishing policy names this repository, this file and the environment marketplace.
+name: Release the VS Code extension
+
+# A start by hand is a dry run. It runs the build and the attestation only.
+on:
+  push:
+    tags:
+      - "vscode/v*"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+
+  build:
+    name: Build and test the extension
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      # The whole history comes down, because git-cliff reads every commit and every tag.
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The tag reaches the script as the variable GITHUB_REF_NAME, never as an expression.
+      - name: Check that the tag and the package name one version
+        id: version
+        working-directory: vscode
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$GITHUB_EVENT_NAME" = "push" ]; then
+            if ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^vscode/v[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "The tag $GITHUB_REF_NAME is not an extension release tag of the form vscode/v1.2.3." >&2
+              exit 1
+            fi
+            if [ "${GITHUB_REF_NAME#vscode/v}" != "$version" ]; then
+              echo "The tag names ${GITHUB_REF_NAME#vscode/v}, and vscode/package.json names $version." >&2
+              exit 1
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install the exact dependencies
+        working-directory: vscode
+        run: npm ci --ignore-scripts
+
+      - name: Check the types, the lint, the format and the prose
+        working-directory: vscode
+        run: |
+          npm run typecheck
+          npm run lint
+          npm run format:check
+          npm run prose
+
+      - name: Run the unit tests
+        working-directory: vscode
+        run: npm run test:unit
+
+      - name: Run the integration tests
+        working-directory: vscode
+        run: xvfb-run -a npm run test:integration
+
+      - name: Set up Java
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.3.0
+        with:
+          cache-read-only: true
+
+      - name: Check the plugin against the shared vectors
+        run: ./gradlew test --tests '*SpecVectorsTest' --console=plain
+
+      - name: Package the VSIX
+        working-directory: vscode
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: npx vsce package --no-dependencies --out "${RUNNER_TEMP}/yreview-${VERSION}.vsix"
+
+      # git-cliff-action writes args into a bash line, so the tag goes in as a quoted variable.
+      - name: Write the release notes of this tag
+        if: github.event_name == 'push'
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        with:
+          config: vscode/cliff.toml
+          args: --tag "${GITHUB_REF_NAME}" --latest --strip header --output "${RUNNER_TEMP}/release-notes-raw.md"
+
+      # The first command drops the version heading, and the second drops the blank lines
+      # above the first section.
+      - name: Read the release notes
+        if: github.event_name == 'push'
+        run: |
+          sed -e '0,/^## /d' "${RUNNER_TEMP}/release-notes-raw.md" | sed -e '/./,$!d' > "${RUNNER_TEMP}/release-notes.md"
+          if [ -z "$(tr -d "[:space:]" < "${RUNNER_TEMP}/release-notes.md")" ]; then
+            echo "git-cliff wrote no entry for ${GITHUB_REF_NAME}." >&2
+            exit 1
+          fi
+
+      - name: Write empty release notes for a dry run
+        if: github.event_name != 'push'
+        run: echo "Dry run." > "${RUNNER_TEMP}/release-notes.md"
+
+      - name: Keep the VSIX and the notes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: release
+          path: |
+            ${{ runner.temp }}/yreview-*.vsix
+            ${{ runner.temp }}/release-notes.md
+          if-no-files-found: error
+
+  attest:
+    name: Attest the build provenance
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Get the VSIX
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+
+      - name: Attest the VSIX
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: yreview-*.vsix
+
+  # This job holds id-token. It runs no code of the repository, and it installs only the
+  # pinned store tools of .github/release-tools with their install scripts off.
+  publish:
+    name: Publish to the Visual Studio Marketplace and Open VSX
+    if: github.event_name == 'push'
+    needs: [build, attest]
+    runs-on: ubuntu-latest
+    environment: marketplace
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Only the folder of the store tools comes down: a package.json with no script, and its lockfile.
+      - name: Check out the store tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/release-tools
+          sparse-checkout-cone-mode: false
+
+      - name: Get the VSIX
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/release
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install the pinned store tools
+        working-directory: .github/release-tools
+        run: npm ci --ignore-scripts
+
+      - name: Publish to the Visual Studio Marketplace
+        working-directory: .github/release-tools
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: npx --no-install vsce publish --oidc --packagePath "${RUNNER_TEMP}/release/yreview-${VERSION}.vsix"
+
+      - name: Publish to Open VSX
+        working-directory: .github/release-tools
+        env:
+          VERSION: ${{ needs.build.outputs.version }}
+        run: npx --no-install ovsx publish "${RUNNER_TEMP}/release/yreview-${VERSION}.vsix" --trusted-publishing
+
+  release:
+    name: Create the GitHub release
+    if: github.event_name == 'push'
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get the VSIX
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+
+      # The JetBrains release stays the latest release of the repository.
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --title "Yreview for VS Code $VERSION" \
+            --notes-file release-notes.md \
+            --latest=false \
+            "yreview-${VERSION}.vsix"
+
+  changelog:
+    name: Write the changelog back to main
+    if: github.event_name == 'push'
+    needs: [build, release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      # This checkout keeps the token, because the last step pushes the changelog branch.
+      - name: Check out the tag
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Write the changelog from the commit messages
+        uses: orhun/git-cliff-action@3d96a18cc4ec17e9dc69ddcc424ccafaf1f78ce2 # v4.9.0
+        with:
+          config: vscode/cliff.toml
+          args: --tag "${GITHUB_REF_NAME}" --output vscode/CHANGELOG.md
+
+      # The ruleset of main asks for a pull request, so the step merges one, as release.yml does.
+      # The type docs keeps this commit out of the next changelog.
+      - name: Land the changelog through a pull request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          cp vscode/CHANGELOG.md "${RUNNER_TEMP}/CHANGELOG.md"
+          git fetch --no-tags origin main
+          git checkout -f -B main origin/main
+          cp "${RUNNER_TEMP}/CHANGELOG.md" vscode/CHANGELOG.md
+          if git diff --quiet -- vscode/CHANGELOG.md; then
+            echo "vscode/CHANGELOG.md on main already carries the notes of ${GITHUB_REF_NAME}."
+            exit 0
+          fi
+          branch="chore/vscode-changelog-${VERSION}"
+          subject="docs(vscode): write the changelog of ${GITHUB_REF_NAME}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$branch"
+          git commit --only vscode/CHANGELOG.md -m "$subject"
+          git push origin "$branch"
+          git checkout main
+          gh pr create --base main --head "$branch" --title "$subject" \
+            --body "The release of ${GITHUB_REF_NAME} wrote this file from the commit messages."
+          gh pr merge "$branch" --squash --delete-branch --subject "$subject" --body ""

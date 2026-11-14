@@ -1,0 +1,46 @@
+# The changelog of the VS Code extension. git-cliff reads the Conventional Commits messages
+# of the commits that change vscode/ or spec/, between tags of the form vscode/v1.2.3.
+
+[changelog]
+header = """
+# Changelog
+
+git-cliff writes this file from the commit messages. Do not edit it by hand.
+"""
+body = """
+{% if version %}
+## {{ version | trim_start_matches(pat="vscode/v") }} - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}
+## Unreleased
+{% endif -%}
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group }}
+{% for commit in commits %}
+- {% if commit.breaking %}Breaking. {% endif %}{{ commit.message | split(pat="\n") | first | upper_first | trim }}
+{%- endfor %}
+{% endfor %}
+"""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+protect_breaking_commits = true
+tag_pattern = "^vscode/v[0-9].*"
+include_paths = ["vscode/**", "spec/**"]
+sort_commits = "oldest"
+commit_parsers = [
+  { message = "^feat", group = "Added" },
+  { message = "^fix", group = "Fixed" },
+  { message = "^perf", group = "Changed" },
+  { message = "^refactor", group = "Changed" },
+  { message = "^revert", group = "Changed" },
+  { message = "^docs", skip = true },
+  { message = "^style", skip = true },
+  { message = "^test", skip = true },
+  { message = "^chore", skip = true },
+  { message = "^build", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^merge", skip = true },
+  { message = ".*", group = "Changed" },
+]

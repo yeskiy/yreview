@@ -1,0 +1,9 @@
+{
+  "name": "yreview-release-tools",
+  "private": true,
+  "description": "The pinned store tools of the publish job of release-vscode.yml.",
+  "devDependencies": {
+    "@vscode/vsce": "4.1.1",
+    "ovsx": "1.4.0"
+  }
+}
