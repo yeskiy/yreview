@@ -36,9 +36,13 @@ export const refsFor = (includeAnalyses: boolean, includeLocal: boolean): readon
 export const isSharedRow = (kind: StoreKind, ref: string, shareError?: string): boolean =>
   kind === 'git' && isShared(ref) && shareError === undefined
 
+/** A record reads a line as a signed 32-bit number, so a larger end line makes a record that nobody reads. */
+const LINE_LIMIT = 2_147_483_647
+
 export const rangeProblem = (startLine: number, endLine: number): string | undefined => {
   if (startLine < 1) return 'startLine must be 1 or more.'
   if (endLine < startLine) return 'endLine must be equal to startLine or larger.'
+  if (endLine > LINE_LIMIT) return `endLine must be ${LINE_LIMIT} or less.`
   return undefined
 }
 

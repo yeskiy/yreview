@@ -186,6 +186,11 @@ describe('review payloads (ReviewPayloadsTest.kt)', () => {
     assert.equal(rangeProblem(7, 4), 'endLine must be equal to startLine or larger.')
   })
 
+  it('an end line above the signed 32-bit range is a problem', () => {
+    assert.equal(rangeProblem(1, 2_147_483_647), undefined)
+    assert.equal(rangeProblem(1, 2_147_483_648), 'endLine must be 2147483647 or less.')
+  })
+
   it('a hexadecimal revision passes', () => {
     assert.equal(isCommitRevision('deadbee'), true)
     assert.equal(isCommitRevision('4f2c8b1'), true)

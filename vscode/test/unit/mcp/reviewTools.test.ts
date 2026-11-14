@@ -104,6 +104,12 @@ describe('review tools (ReviewToolset.kt)', () => {
     })
   })
 
+  it('refuses an end line that a record cannot hold', async () => {
+    assert.deepEqual(await fixture().tools.addComment('src/a.ts', 1, 3_000_000_000, 'x'), {
+      error: 'endLine must be 2147483647 or less.',
+    })
+  })
+
   it('refuses an empty text', async () => {
     assert.deepEqual(await fixture().tools.addComment('src/a.ts', 1, 2, '  \n'), {
       error: 'text must not be empty.',
