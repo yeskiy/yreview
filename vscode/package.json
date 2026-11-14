@@ -279,6 +279,27 @@
         "title": "Copy Review Tasks",
         "category": "Yreview",
         "icon": "$(copy)"
+      },
+      {
+        "command": "yreview.sendTasks",
+        "title": "Send Review Tasks to the Agent",
+        "category": "Yreview",
+        "icon": "$(send)"
+      },
+      {
+        "command": "yreview.addMcpCursor",
+        "title": "Add the Review Server to Cursor",
+        "category": "Yreview"
+      },
+      {
+        "command": "yreview.addMcpAntigravity",
+        "title": "Add the Review Server to Antigravity",
+        "category": "Yreview"
+      },
+      {
+        "command": "yreview.copyMcpEntry",
+        "title": "Copy the Review Server Entry",
+        "category": "Yreview"
       }
     ],
     "viewsContainers": {
@@ -493,6 +514,14 @@
         {
           "command": "yreview.showSession",
           "when": "false"
+        },
+        {
+          "command": "yreview.addMcpCursor",
+          "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "yreview.addMcpAntigravity",
+          "when": "workspaceFolderCount > 0"
         }
       ],
       "editor/context": [
@@ -703,6 +732,11 @@
           "command": "yreview.copyTasks",
           "when": "view == yreview.project || view == yreview.currentFile || view == yreview.changes",
           "group": "navigation@9"
+        },
+        {
+          "command": "yreview.sendTasks",
+          "when": "view == yreview.project || view == yreview.currentFile || view == yreview.changes",
+          "group": "navigation@8"
         },
         {
           "command": "yreview.startSession",

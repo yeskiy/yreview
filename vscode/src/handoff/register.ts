@@ -38,7 +38,7 @@ export interface RegisterDeps {
 }
 
 /** A command argument counts as tasks only when each item has the fields of a task. */
-const isTaskList = (value: unknown): value is readonly ReviewTask[] =>
+export const isTaskList = (value: unknown): value is readonly ReviewTask[] =>
   Array.isArray(value) &&
   value.length > 0 &&
   value.every(

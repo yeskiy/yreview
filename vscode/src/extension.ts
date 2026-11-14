@@ -22,6 +22,7 @@ import { registerViewCommands } from './views/viewCommands'
 import { type TaskWrites, createTaskWrites, registerTaskWrites } from './views/taskWrites'
 import { vscodeHost } from './vscodeHost'
 import { type BridgeWiring, wireBridge } from './wiring/bridge'
+import { registerDelivery } from './wiring/send'
 import { sessionLink } from './wiring/sessions'
 
 export interface YreviewApi {
@@ -130,6 +131,14 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   const bridge = wireBridge(context, held.service, (ids) => handoff.close(ids), git, log)
   active.bridge = bridge
   link.attach(bridge, sessions)
+  registerDelivery(context, {
+    wiring: bridge,
+    registry: sessions.registry,
+    handoff,
+    chosenTasks: () => tasks.chosenTasks(),
+    gitPath: git,
+    log,
+  })
   const settle = (): void => {
     held.service
       ?.folderStoreRoots(true)
