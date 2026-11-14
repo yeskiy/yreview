@@ -39,7 +39,9 @@
     "virtualWorkspaces": false
   },
   "main": "./dist/extension.js",
-  "activationEvents": [],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
   "contributes": {
     "commands": [
       {
