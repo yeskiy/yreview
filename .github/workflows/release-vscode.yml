@@ -99,7 +99,7 @@ jobs:
           cache-read-only: true
 
       - name: Check the plugin against the shared vectors
-        run: ./gradlew test --tests '*SpecVectorsTest' --console=plain
+        run: ./gradlew :test --tests '*SpecVectorsTest' --console=plain
 
       - name: Package the VSIX
         working-directory: vscode
