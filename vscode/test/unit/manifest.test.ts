@@ -2,6 +2,8 @@ import assert from 'node:assert/strict'
 import { existsSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 
+import { reviewTools } from '../../src/channel/reviewTools'
+
 const root = path.resolve(__dirname, '../..')
 const manifest = JSON.parse(readFileSync(path.join(root, 'package.json'), 'utf8')) as Record<
   string,
@@ -114,5 +116,25 @@ describe('manifest', () => {
     }
     assert.equal(properties?.['yreview.todoPatterns']?.scope, 'application')
     assert.equal(properties?.['yreview.todoFilters']?.scope, 'application')
+  })
+
+  it('contributes the four review tools of the channel server to VS Code chat', () => {
+    const all = manifest.contributes as Record<string, unknown>
+    const tools = all.languageModelTools as readonly Record<string, unknown>[]
+    const definitions = reviewTools({ request: () => Promise.reject(new Error('no bridge')) }).map(
+      (tool) => tool.definition,
+    )
+    assert.deepEqual(
+      tools.map((tool) => tool.name),
+      definitions.map((definition) => definition.name),
+    )
+    definitions.forEach((definition, index) => {
+      const tool = tools[index] ?? {}
+      assert.equal(tool.modelDescription, definition.description)
+      assert.equal(tool.userDescription, definition.description?.split('\n')[0])
+      assert.deepEqual(tool.inputSchema, definition.inputSchema)
+      assert.equal(tool.canBeReferencedInPrompt, true)
+    })
+    assert.equal(all.mcpServerDefinitionProviders, undefined)
   })
 })

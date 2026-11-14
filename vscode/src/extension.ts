@@ -22,6 +22,7 @@ import { registerViewCommands } from './views/viewCommands'
 import { type TaskWrites, createTaskWrites, registerTaskWrites } from './views/taskWrites'
 import { vscodeHost } from './vscodeHost'
 import { type BridgeWiring, wireBridge } from './wiring/bridge'
+import { registerChatTools } from './wiring/chat'
 import { registerDelivery } from './wiring/send'
 import { sessionLink } from './wiring/sessions'
 
@@ -152,6 +153,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   offerSaveKey(context.globalState, log).catch((error: unknown) =>
     log.error('The save key offer failed.', error),
   )
+  registerChatTools(context, bridge, log)
   log.info('Yreview started.')
   return {
     comments,

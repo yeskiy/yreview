@@ -997,7 +997,117 @@
           "markdownDescription": "Where the terminal of a new review session opens."
         }
       }
-    }
+    },
+    "languageModelTools": [
+      {
+        "name": "review_list_comments",
+        "toolReferenceName": "reviewComments",
+        "displayName": "List Review Comments",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Lists the review comments of this project.",
+        "modelDescription": "Lists the review comments of this project.\nA person writes these comments in VS Code to ask for a change in the code.\nRead them first, then do what each comment asks.\nThe answer is a JSON object with one \"comments\" array. Each item holds these fields:\n- \"id\", the value the other review tools need\n- \"path\", the file inside its git repository or inside its folder store\n- \"startLine\" and \"endLine\", one based line numbers. 0 means the whole file\n- \"startColumn\" and \"endColumn\", zero based character positions in a line. A comment\n  holds them only when it covers a part of a line. \"endColumn\" names the character\n  after the last character of the comment\n- \"revision\", the git commit that the comment belongs to, or \"worktree\" for a comment\n  of a folder that no git repository holds\n- \"author\", \"text\", \"shared\" and \"resolved\"",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "resolved": {
+              "type": "boolean",
+              "description": "Pass true to list the comments a person marked as resolved. The default lists the open comments."
+            },
+            "includeAnalyses": {
+              "type": "boolean",
+              "description": "Pass true to also list the comments a machine wrote."
+            },
+            "includeLocal": {
+              "type": "boolean",
+              "description": "Pass false to leave out the private comments that stay on this computer."
+            }
+          }
+        }
+      },
+      {
+        "name": "review_resolve_comment",
+        "toolReferenceName": "resolveReviewComment",
+        "displayName": "Resolve a Review Comment",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Marks one review comment as resolved.",
+        "modelDescription": "Marks one review comment as resolved.\nCall this after you made the change the comment asks for.\nThe comment stays in the store as history. The answer is a JSON object with the id\nand \"resolved\": true, or an \"error\" field when the id is unknown.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "The id of the comment. Use a value from review_list_comments."
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      },
+      {
+        "name": "review_add_comment",
+        "toolReferenceName": "addReviewComment",
+        "displayName": "Add a Review Comment",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Writes a new review comment on a range of lines, so a person reads it later.",
+        "modelDescription": "Writes a new review comment on a range of lines, so a person reads it later.\nUse this to record a finding you do not want to fix yourself.\nYreview anchors the comment to the current commit of the file. A file that no git\nrepository holds keeps its comments in a folder store, and there the revision is \"worktree\".\nThe answer is a JSON object with the new \"id\", or an \"error\" field.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "description": "Path of the file, relative to the root of the project. The tool refuses a path outside the project."
+            },
+            "startLine": {
+              "type": "integer",
+              "description": "First line of the comment. Line numbers start at 1."
+            },
+            "endLine": {
+              "type": "integer",
+              "description": "Last line of the comment. Pass the same value as startLine for one line."
+            },
+            "text": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000,
+              "description": "The comment text a person reads."
+            }
+          },
+          "required": [
+            "path",
+            "startLine",
+            "endLine",
+            "text"
+          ]
+        }
+      },
+      {
+        "name": "review_open_comment",
+        "toolReferenceName": "openReviewComment",
+        "displayName": "Open a Review Comment",
+        "canBeReferencedInPrompt": true,
+        "userDescription": "Shows one review comment to the person at VS Code.",
+        "modelDescription": "Shows one review comment to the person at VS Code.\nVS Code opens the file at that line. When the comment belongs to an older commit,\nVS Code opens the diff between that commit and the working tree instead.\nCall this when you want the person to look at the code you discuss.\nThe answer names what VS Code opened, \"file\" or \"diff\", or holds an \"error\" field.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 200,
+              "description": "The id of the comment. Use a value from review_list_comments."
+            }
+          },
+          "required": [
+            "id"
+          ]
+        }
+      }
+    ]
   },
   "scripts": {
     "build": "node scripts/build.mjs",
