@@ -51,3 +51,14 @@ export const ensureLauncher = async (
     await writeAtomic(target, wanted, windows ? 0o600 : 0o700)
   return target
 }
+
+/** Writes an existing launcher again, so a stored route follows an update of the extension. */
+export const refreshLauncher = async (
+  home: string,
+  execPath: string,
+  script: string,
+  windows: boolean = process.platform === 'win32',
+): Promise<void> => {
+  if ((await readIfFile(launcherPath(home, windows))) !== undefined)
+    await ensureLauncher(home, execPath, script, windows)
+}

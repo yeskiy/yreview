@@ -1,8 +1,13 @@
 import { strict as assert } from 'node:assert'
-import { readFileSync, readdirSync, rmSync, statSync, utimesSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, rmSync, statSync, utimesSync } from 'node:fs'
 import path from 'node:path'
 
-import { ensureLauncher, launcherPath, launcherText } from '../../../src/session/launcher'
+import {
+  ensureLauncher,
+  launcherPath,
+  launcherText,
+  refreshLauncher,
+} from '../../../src/session/launcher'
 import { scratchDir } from '../../fixtures/scratch'
 
 const EXEC = '/usr/share/code/code'
@@ -78,6 +83,18 @@ describe('channel launcher', () => {
     const file = await ensureLauncher(held.home, EXEC, SCRIPT, false)
     await ensureLauncher(held.home, '/opt/code/code', SCRIPT, false)
     assert.equal(readFileSync(file, 'utf8'), launcherText('/opt/code/code', SCRIPT, false))
+  })
+
+  it('a refresh writes an old launcher again with the new script', async () => {
+    const file = await ensureLauncher(held.home, EXEC, SCRIPT, false)
+    const moved = SCRIPT.replace('y-review', 'y-review-1.0.1')
+    await refreshLauncher(held.home, EXEC, moved, false)
+    assert.equal(readFileSync(file, 'utf8'), launcherText(EXEC, moved, false))
+  })
+
+  it('a refresh makes no launcher when none exists', async () => {
+    await refreshLauncher(held.home, EXEC, SCRIPT, false)
+    assert.equal(existsSync(launcherPath(held.home, false)), false)
   })
 
   it('the posix launcher runs for the user only', async function privateLauncher() {

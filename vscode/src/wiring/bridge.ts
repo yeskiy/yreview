@@ -7,7 +7,7 @@ import { BridgeHost } from '../bridge/host'
 import { reviewRoutes } from '../bridge/reviewRoutes'
 import type { Log } from '../log'
 import { ReviewTools } from '../mcp/reviewTools'
-import { ensureLauncher } from '../session/launcher'
+import { ensureLauncher, refreshLauncher } from '../session/launcher'
 import { readSettings } from '../settings'
 import type { ReviewService } from '../store/reviewService'
 import { type CloseReport, problemOf } from '../tasks/taskCompletion'
@@ -47,6 +47,9 @@ export const wireBridge = (
     pid: process.pid,
   })
   const script = path.join(context.extensionPath, 'dist', 'channel.js')
+  refreshLauncher(homeDirectory(), process.execPath, script).catch((error: unknown) =>
+    log.error('The channel launcher was not refreshed.', error),
+  )
   context.subscriptions.push(
     {
       dispose: () => {
