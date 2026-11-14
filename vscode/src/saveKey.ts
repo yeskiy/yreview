@@ -52,6 +52,7 @@ const addEntry = async (parts: SaveKeyParts): Promise<void> => {
     eol: document.eol === vscode.EndOfLine.CRLF ? '\r\n' : '\n',
   })
   if (edits.length === 0) return
+  const draft = document.isDirty
   const change = new vscode.WorkspaceEdit()
   edits.forEach((edit) =>
     change.replace(
@@ -65,7 +66,9 @@ const addEntry = async (parts: SaveKeyParts): Promise<void> => {
   )
   if (!(await vscode.workspace.applyEdit(change)))
     throw new Error('VS Code did not apply the edit.')
-  if (!(await document.save())) throw new Error('VS Code did not save the keybindings file.')
+  // An unsaved draft of the user stays unsaved, so the user saves it with the new entry.
+  if (!draft && !(await document.save()))
+    throw new Error('VS Code did not save the keybindings file.')
 }
 
 /** Offers a user key binding when a keymap extension takes the save key of the comment box. */

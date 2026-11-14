@@ -94,6 +94,28 @@ describe('save key offer', () => {
     assert.equal(readFileSync(file, 'utf8'), written)
   })
 
+  it('Add keeps an unsaved draft of the user unsaved, and adds the entry to it', async () => {
+    const { file, parts, state } = setup('Add')
+    const document = await vscode.workspace.openTextDocument(file)
+    const draft = new vscode.WorkspaceEdit()
+    const at = document.getText().indexOf('f5')
+    draft.replace(
+      document.uri,
+      new vscode.Range(document.positionAt(at), document.positionAt(at + 2)),
+      'f6',
+    )
+    assert.ok(await vscode.workspace.applyEdit(draft))
+    await offerSaveKey(state, log, parts)
+    assert.deepEqual(errors, [])
+    assert.equal(readFileSync(file, 'utf8'), START)
+    assert.equal(document.isDirty, true)
+    assert.deepEqual(parse(document.getText()), [
+      { key: 'f6', command: 'a.b' },
+      { key: 'ctrl+enter', command: SAVE_COMMAND, when: SAVE_WHEN },
+    ])
+    await document.save()
+  })
+
   it('the installed extensions of the test host give no conflict, so nothing asks', async () => {
     const { asked, parts, state } = setup('Add')
     await offerSaveKey(state, log, { ...parts, installed: installedExtensions })
