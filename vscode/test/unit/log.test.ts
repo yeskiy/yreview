@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 import { newToken } from '../../src/bridge/token'
 import { type ReportFacts, reportText } from '../../src/diagnostic/report'
 import { SessionLog } from '../../src/diagnostic/sessionLog'
-import { sendRecord } from '../../src/diagnostic/sessionRecord'
+import { recordText, sendRecord } from '../../src/diagnostic/sessionRecord'
 import { redactingLog } from '../../src/log'
 
 describe('redacting log', () => {
@@ -87,6 +87,18 @@ describe('records in the log', () => {
     const before = ring.recent().length
     log.error('Git is missing.')
     assert.equal(ring.recent().length, before)
+  })
+
+  it('keeps the path of a folder hidden after the folder leaves the window', () => {
+    const now = { projects: ['D:/Work/B'] }
+    const own = new SessionLog()
+    const moving = redactingLog(sink, () => ({ ...places, projects: now.projects }), { ring: own })
+    moving.error('Scan failed.', new Error("EACCES: open 'D:\\Work\\B\\.yreview\\x'"))
+    moving.record(send('D:/Work/B/x is locked'))
+    now.projects = []
+    const kept = own.recent().map(recordText).join('\n')
+    assert.doesNotMatch(kept, /Work/)
+    assert.match(kept, /<project>/)
   })
 
   it('writes no secret value of a record to the log', () => {

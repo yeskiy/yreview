@@ -41,6 +41,12 @@ export const redactingLog = (
     const now = places()
     return redactText(message, now.homes, now.projects, now.repositories)
   }
+  /** The ring keeps clean facts, so a folder that leaves the window later stays hidden. */
+  const keep = (entry: SessionRecord): void =>
+    options.ring?.add({
+      ...entry,
+      facts: entry.facts.map(([name, value]) => [name, clean(value)] as const),
+    })
   return {
     debug: (message) => sink.debug(clean(message)),
     info: (message) => sink.info(clean(message)),
@@ -52,11 +58,11 @@ export const redactingLog = (
         ),
       )
       if (failure !== undefined) {
-        options.ring?.add(failureRecord(message, failure, options.ownRoot ?? ''))
+        keep(failureRecord(message, failure, options.ownRoot ?? ''))
       }
     },
     record: (entry) => {
-      options.ring?.add(entry)
+      keep(entry)
       sink.info(clean(`Yreview made a record.\n${recordText(entry)}`))
     },
   }
