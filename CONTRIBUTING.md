@@ -207,8 +207,8 @@ has a version of the form `major.minor.patch`.
 
 | Change | Release |
 |---|---|
-| A fix or a feature that does not change `spec/format.md` or the bridge protocol | A patch release of the product that changed |
-| A change to `spec/format.md` or to the bridge protocol | The minor goes up, and both products release `x.y.0` together |
+| A fix or a feature that the other product does not have to read, also a route that only one bridge serves | A patch release of the product that changed |
+| A change to the notes or the bridge protocol that the other product must read | The minor goes up, and both products release `x.y.0` together |
 | A change that an older version cannot read | The major goes up, and both products release `x.0.0` together |
 
 | Product | Tag | Version file |
