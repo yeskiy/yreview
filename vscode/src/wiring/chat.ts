@@ -1,6 +1,7 @@
 import * as vscode from 'vscode'
 
 import { FILE_VARIABLE } from '../bridge/discoveryFile'
+import type { AvailableLookup } from '../bridge/host'
 import {
   ADD_TOOL,
   BAD_TOOL_INPUT,
@@ -24,7 +25,7 @@ interface CursorServer {
   }
 }
 
-interface CursorMcp {
+export interface CursorMcp {
   registerServer(config: CursorServer): void
   unregisterServer(name: string): void
 }
@@ -58,37 +59,56 @@ const calls = (
     isText(input.id, 200) ? tools.openComment(input.id) : errorPayload(BAD_TOOL_INPUT),
 })
 
+/** Each open of the bridge registers the server again, so Cursor gets the launch data of that open. */
 const registerInCursor = (
   context: vscode.ExtensionContext,
   cursor: CursorMcp,
   wiring: BridgeWiring,
   log: Log,
 ): void => {
-  wiring.host
-    .start()
-    .then((lookup) => {
-      if (lookup.kind !== 'available') {
-        log.warn('The review tools did not register in Cursor, because the bridge is not open.')
-        return
-      }
+  const state = { registered: false }
+  const unregister = (): void => {
+    if (state.registered) cursor.unregisterServer(SERVER_NAME)
+    state.registered = false
+  }
+  const register = (lookup: AvailableLookup): void => {
+    try {
+      unregister()
       const launch = channelLaunch(wiring.script)
       cursor.registerServer({
         name: SERVER_NAME,
         server: { ...launch, env: { ...launch.env, [FILE_VARIABLE]: lookup.path } },
       })
-      context.subscriptions.push({ dispose: () => cursor.unregisterServer(SERVER_NAME) })
+      state.registered = true
+    } catch (error) {
+      log.error('The review server did not register in Cursor.', error)
+    }
+  }
+  context.subscriptions.push(wiring.host.onOpen(register), { dispose: unregister })
+  wiring.host
+    .start()
+    .then((lookup) => {
+      if (lookup.kind === 'available') {
+        if (!state.registered) register(lookup)
+        return
+      }
+      log.warn(
+        'The review tools did not register in Cursor, because the bridge is not open. The next bridge start tries again.',
+      )
     })
     .catch((error: unknown) => log.error('The review server did not register in Cursor.', error))
 }
+
+const cursorOfHost = (): CursorMcp | undefined =>
+  (vscode as unknown as { readonly cursor?: { readonly mcp?: CursorMcp } }).cursor?.mcp
 
 /** Cursor reads no language model tool, so it gets the stdio server instead. Only one route registers, so no tool shows twice. */
 export const registerChatTools = (
   context: vscode.ExtensionContext,
   wiring: BridgeWiring,
   log: Log,
+  cursor: CursorMcp | undefined = cursorOfHost(),
 ): void => {
-  const cursor = (vscode as unknown as { readonly cursor?: { readonly mcp?: CursorMcp } }).cursor
-    ?.mcp
   if (cursor !== undefined) {
     registerInCursor(context, cursor, wiring, log)
     return

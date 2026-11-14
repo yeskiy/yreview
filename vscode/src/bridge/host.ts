@@ -18,9 +18,11 @@ export interface HostDeps {
   readonly pid: number
 }
 
+export type AvailableLookup = BridgeLookup & { readonly kind: 'available' }
+
 interface Running {
   readonly server: BridgeServer
-  readonly lookup: BridgeLookup & { readonly kind: 'available' }
+  readonly lookup: AvailableLookup
 }
 
 /** Owns the bridge of one window. It opens a port only when a session, a send or a tool needs it. */
@@ -31,7 +33,15 @@ export class BridgeHost {
 
   private queue: Promise<unknown> = Promise.resolve()
 
+  private readonly openListeners = new Set<(lookup: AvailableLookup) => void>()
+
   constructor(private readonly deps: HostDeps) {}
+
+  /** Calls the listener each time the bridge opens a port. */
+  onOpen(listener: (lookup: AvailableLookup) => void): { dispose(): void } {
+    this.openListeners.add(listener)
+    return { dispose: () => this.openListeners.delete(listener) }
+  }
 
   start(): Promise<BridgeLookup> {
     return this.serial(() => this.open())
@@ -127,8 +137,10 @@ export class BridgeHost {
         reason: 'The review bridge did not write the file that a session reads.',
       }
     }
-    this.running = { server, lookup: { kind: 'available', url: address.url, path: file } }
-    return this.running.lookup
+    const lookup: AvailableLookup = { kind: 'available', url: address.url, path: file }
+    this.running = { server, lookup }
+    this.openListeners.forEach((listener) => listener(lookup))
+    return lookup
   }
 
   private async close(): Promise<void> {
