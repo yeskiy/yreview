@@ -17,11 +17,15 @@ export interface BridgeInput {
   readonly configFile?: string
   readonly server?: LocalServer
   readonly channelMissing?: boolean
+  /** The channel server script of the extension, for the session record. */
+  readonly channelScript?: string
 }
 
 export interface BridgeExtras extends SessionExtras {
   readonly bridgeReady: boolean
   readonly bridgeUrl: string
+  readonly configFile?: string
+  readonly channelScript?: string
 }
 
 export const bridgeStatus = (input: BridgeInput): string => {
@@ -62,5 +66,7 @@ export const bridgeExtras = (input: BridgeInput): BridgeExtras => {
     reach: reachOf(input.agent, input.server?.port, input.server?.password),
     bridgeReady: input.agent.push === 'channel' && registered,
     bridgeUrl: available?.url ?? '',
+    configFile,
+    channelScript: input.channelScript,
   }
 }

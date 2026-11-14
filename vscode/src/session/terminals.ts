@@ -1,6 +1,8 @@
 import * as vscode from 'vscode'
 
 import { isKotlinBlank } from '../core/kotlinText'
+import { startOf } from '../diagnostic/records'
+import { sessionRecord } from '../diagnostic/sessionRecord'
 import type { Log } from '../log'
 import { commandOf } from './agentCommands'
 import { NO_AGENT } from './agentRows'
@@ -160,6 +162,13 @@ export class ReviewSessions implements vscode.Disposable {
     }
     this.sessions = new Map(this.sessions).set(key, session)
     this.registry.add(key, nameOf(session), extras.reach)
+    // The process id comes later, so the record waits for it and the start does not.
+    Promise.resolve(session.terminal.processId)
+      .then((processId) => startOf(plan, extras, { terminalStarted: true, processId }))
+      .then(
+        (start) => this.log.record(sessionRecord(start)),
+        (error: unknown) => this.log.error('The record of the session start failed.', error),
+      )
     session.terminal.show(preserveFocus)
     vscode.window.setStatusBarMessage(plan.status, STATUS_MS)
     this.log.info(`Review session ${number} started with ${agent.label}.`)

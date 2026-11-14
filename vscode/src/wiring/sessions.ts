@@ -107,7 +107,16 @@ export const sessionLink = (log: Log): SessionLink => {
       server === undefined ? () => undefined : titlePoll(sessions, sessionKey, server)
     if (server !== undefined) watched.add(sessionKey)
     return {
-      ...bridgeExtras({ agent, bridge, sessionKey, launch, configFile, server, channelMissing }),
+      ...bridgeExtras({
+        agent,
+        bridge,
+        sessionKey,
+        launch,
+        configFile,
+        server,
+        channelMissing,
+        channelScript: wiring.script,
+      }),
       release: () => {
         stopPoll()
         watched.delete(sessionKey)

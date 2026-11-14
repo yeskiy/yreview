@@ -153,4 +153,11 @@ describe('bridge plan (SessionPlanTest.kt)', () => {
     assert.equal(extras('codex', { launch: undefined }).args.includes('-c'), false)
     assert.equal(extras('codex', { bridge: missing }).args.includes('-c'), false)
   })
+
+  it('the extras carry the channel script, and the config file only while the channel stands', () => {
+    const plan = extras('claude', { channelScript: SCRIPT })
+    assert.equal(plan.channelScript, SCRIPT)
+    assert.equal(plan.configFile, CONFIG)
+    assert.equal(extras('claude', { bridge: missing }).configFile, undefined)
+  })
 })

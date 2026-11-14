@@ -6,6 +6,8 @@ import { pushFallback } from '../bridge/pushFallback'
 import { type SessionChoice, sendPickOf } from '../bridge/sendPicks'
 import { type SendReport, sendNotice, sendRouteOf } from '../bridge/sendReport'
 import { handleOf } from '../core/handles'
+import { sendOf } from '../diagnostic/records'
+import { sendRecord } from '../diagnostic/sessionRecord'
 import { ProcessGitRunner, isOk } from '../git/runner'
 import { handoffPrompt } from '../handoff/handoffPrompt'
 import type { HandoffStore } from '../handoff/handoffWriter'
@@ -171,7 +173,9 @@ const sendStore = async (
     folder: written.label,
     agent,
   })
-  if (result !== undefined) show(result.report)
+  if (result === undefined) return undefined
+  show(result.report)
+  deps.log.record(sendRecord(sendOf(result.report, git ? 'git' : 'folder', choices(deps).length)))
   return result
 }
 
