@@ -88,3 +88,40 @@ export const redactText = (
       ),
     ),
   )
+
+/** The longest chain of causes that a clean failure keeps. A ring of causes ends here. */
+export const CAUSES = 10
+
+/** One failure with each message, stack frame and cause clean. */
+export interface CleanFailure {
+  readonly name: string
+  readonly message?: string
+  readonly frames: readonly string[]
+  readonly cause?: CleanFailure
+}
+
+const framesOf = (stack: string | undefined): readonly string[] =>
+  (stack ?? '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.startsWith('at '))
+
+/** A JavaScript frame names a file path, so each frame goes through the same rules as the message. */
+export const redactFailure = (
+  value: unknown,
+  clean: (text: string) => string,
+  left: number = CAUSES,
+): CleanFailure =>
+  value instanceof Error
+    ? {
+        name: value.name,
+        ...(value.message === '' ? {} : { message: clean(value.message) }),
+        frames: framesOf(value.stack).map(clean),
+        ...(value.cause !== undefined && left > 0
+          ? { cause: redactFailure(value.cause, clean, left - 1) }
+          : {}),
+      }
+    : { name: typeof value, message: clean(String(value)), frames: [] }
+
+export const failureText = (failure: CleanFailure): string =>
+  failure.message === undefined ? failure.name : `${failure.name}: ${failure.message}`
