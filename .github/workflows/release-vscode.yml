@@ -1,16 +1,23 @@
 # The release of the VS Code extension. A tag vscode/v1.2.3 builds, tests, attests and
-# publishes one VSIX to the Visual Studio Marketplace and Open VSX.
+# publishes one VSIX to the Visual Studio Marketplace, and to Open VSX when the repository
+# variable OPENVSX_PUBLISH is true.
 
 # No store token exists. Each store takes a short-lived OIDC token of the publish job, and its
 # Trusted Publishing policy names this repository, this file and the environment marketplace.
 name: Release the VS Code extension
 
 # A start by hand is a dry run. It runs the build and the attestation only.
+# A start by hand on a release tag with openvsx_only publishes the released VSIX to Open VSX only.
 on:
   push:
     tags:
       - "vscode/v*"
   workflow_dispatch:
+    inputs:
+      openvsx_only:
+        description: "Publish the VSIX of the GitHub release of this tag to Open VSX, and nothing else"
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -22,6 +29,7 @@ jobs:
 
   build:
     name: Build and test the extension
+    if: ${{ !inputs.openvsx_only }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -199,11 +207,70 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: npx --no-install vsce publish --oidc --packagePath "${RUNNER_TEMP}/release/yreview-${VERSION}.vsix"
 
+      # Open VSX takes the VSIX only after the namespace yeskiy belongs to this publisher.
       - name: Publish to Open VSX
+        if: vars.OPENVSX_PUBLISH == 'true'
         working-directory: .github/release-tools
         env:
           VERSION: ${{ needs.build.outputs.version }}
         run: npx --no-install ovsx publish "${RUNNER_TEMP}/release/yreview-${VERSION}.vsix" --trusted-publishing
+
+  # A later publish of a released version to Open VSX. It takes the VSIX of the GitHub release,
+  # checks its provenance attestation, and runs no code of the repository.
+  publish-openvsx:
+    name: Publish the released VSIX to Open VSX
+    if: github.event_name == 'workflow_dispatch' && inputs.openvsx_only
+    runs-on: ubuntu-latest
+    environment: marketplace
+    permissions:
+      contents: read
+      id-token: write
+      attestations: read
+    steps:
+      # The ref reaches the script as the variable GITHUB_REF_NAME, never as an expression.
+      - name: Check that the ref is an extension release tag
+        run: |
+          if [ "$GITHUB_REF_TYPE" != "tag" ] || ! printf '%s' "$GITHUB_REF_NAME" | grep -Eq '^vscode/v[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "The ref $GITHUB_REF_NAME is not an extension release tag of the form vscode/v1.2.3." >&2
+            exit 1
+          fi
+
+      - name: Check out the store tools
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/release-tools
+          sparse-checkout-cone-mode: false
+
+      - name: Get the VSIX of the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --pattern "yreview-${GITHUB_REF_NAME#vscode/v}.vsix" --dir "${RUNNER_TEMP}/release"
+
+      # The attest job of the tag run signed this file. Any other file stops the job here.
+      - name: Verify the provenance of the VSIX
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh attestation verify "${RUNNER_TEMP}/release/yreview-${GITHUB_REF_NAME#vscode/v}.vsix" \
+            --repo yeskiy/yreview \
+            --signer-workflow yeskiy/yreview/.github/workflows/release-vscode.yml \
+            --source-ref "refs/tags/${GITHUB_REF_NAME}"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Install the pinned store tools
+        working-directory: .github/release-tools
+        run: npm ci --ignore-scripts
+
+      - name: Publish to Open VSX
+        working-directory: .github/release-tools
+        run: npx --no-install ovsx publish "${RUNNER_TEMP}/release/yreview-${GITHUB_REF_NAME#vscode/v}.vsix" --trusted-publishing
 
   release:
     name: Create the GitHub release
