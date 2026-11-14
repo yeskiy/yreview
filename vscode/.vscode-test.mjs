@@ -26,6 +26,18 @@ const realReview = path.join(homedir(), '.y-review')
 const realFiles = path.join(scratch, 'real-home-files.json')
 writeFileSync(realFiles, JSON.stringify({ folder: realReview, files: filesUnder(realReview) }))
 
+// The keymap test installs the real keymap into a fresh profile of its own on each run.
+// An allowed publisher skips the publisher trust dialog, which a test host refuses.
+const keymapExtensions = path.join(scratch, 'keymap-extensions')
+const keymapUser = path.join(scratch, 'keymap-user-data', 'User')
+rmSync(keymapExtensions, { recursive: true, force: true })
+rmSync(path.dirname(keymapUser), { recursive: true, force: true })
+mkdirSync(keymapUser, { recursive: true })
+writeFileSync(
+  path.join(keymapUser, 'settings.json'),
+  '{ "extensions.allowed": { "*": true, "k--kato": true } }\n',
+)
+
 const common = {
   version: process.env.VSCODE_TEST_VERSION ?? 'stable',
   launchArgs: ['--disable-workspace-trust'],
@@ -50,5 +62,17 @@ export default defineConfig([
     label: 'plain',
     files: ['out/test/integration/plain/*.test.js', 'out/test/integration/realHome.test.js'],
     workspaceFolder: plainFolder(),
+  },
+  {
+    // A keymap takes keys of other tests, so it installs into a profile of its own.
+    ...common,
+    label: 'keymap',
+    files: 'out/test/integration/keymap/*.test.js',
+    workspaceFolder: plainFolder(),
+    launchArgs: [
+      ...common.launchArgs,
+      `--extensions-dir=${keymapExtensions}`,
+      `--user-data-dir=${path.dirname(keymapUser)}`,
+    ],
   },
 ])
