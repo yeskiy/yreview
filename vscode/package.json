@@ -46,7 +46,50 @@
         "title": "Show Log",
         "category": "Yreview"
       }
-    ]
+    ],
+    "configuration": {
+      "title": "Yreview",
+      "properties": {
+        "yreview.newComments": {
+          "type": "string",
+          "enum": [
+            "local",
+            "shared"
+          ],
+          "enumDescriptions": [
+            "A new comment goes to refs/notes/y-review/local and stays on this machine.",
+            "A new comment goes to refs/notes/devtools/discuss and the extension pushes it to the remote."
+          ],
+          "default": "local",
+          "scope": "resource",
+          "markdownDescription": "The button that the comment box shows first. Both buttons stay available."
+        },
+        "yreview.remote": {
+          "type": "string",
+          "default": "origin",
+          "scope": "resource",
+          "markdownDescription": "The git remote that gets the shared comments. It must be the name of a remote of the repository."
+        },
+        "yreview.writeRefspec": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "After a share, ask before the extension adds `refs/notes/devtools/*:refs/notes/devtools/*` to `remote.<name>.fetch`. With this box clear, the extension does not ask, and you add the line by hand."
+        },
+        "yreview.editorMarks": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Show the comment threads open and color the lines that an open comment covers."
+        },
+        "yreview.intellijKey": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "Also bind Ctrl+Shift+G, the key of the IntelliJ plugin, to Add Review Comment while an editor has focus. It replaces Show Source Control there."
+        }
+      }
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",

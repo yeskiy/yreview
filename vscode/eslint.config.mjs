@@ -36,6 +36,10 @@ export default defineConfig([
         { selector: 'ForStatement', message: 'Use an array method.' },
         { selector: 'ForInStatement', message: 'Use an array method.' },
         { selector: 'ForOfStatement', message: 'Use an array method.' },
+        {
+          selector: "CallExpression[callee.object.name='log'] Identifier[name=/[Tt]oken/]",
+          message: 'A log line never holds a token.',
+        },
       ],
     },
   },
