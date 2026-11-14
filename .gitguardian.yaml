@@ -1,0 +1,5 @@
+version: 2
+secret:
+  ignored_paths:
+    # The redaction test vectors hold fake secrets on purpose.
+    - spec/vectors/redact.json
