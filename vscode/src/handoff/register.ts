@@ -31,8 +31,8 @@ export interface RegisterDeps {
   readonly service: ReviewService
   readonly gitPath: string
   readonly log: Log
-  /** The repository roots of the phase 3 task model. */
-  readonly gitRoots: () => readonly string[]
+  /** The repository roots of the task model, after its first full scan. */
+  readonly gitRoots: () => Promise<readonly string[]>
   readonly openTodos: () => Promise<readonly ReviewTask[]>
   readonly chosenTasks: () => readonly ReviewTask[]
 }
@@ -84,7 +84,7 @@ export const registerHandoff = (
       projectCompletionHost(
         deps.service,
         deps.gitPath,
-        () => Promise.resolve(deps.gitRoots()),
+        deps.gitRoots,
         deps.openTodos,
         async (open) => sentHandlesOf(await taskFiles(), open, deps.log),
       ),

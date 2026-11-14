@@ -117,7 +117,7 @@ describe('handoff writer', () => {
 
   it('the stores are the repository roots, then the folder stores', async () => {
     const asked: boolean[] = []
-    const stores = await handoffStores(() => ['/r'], {
+    const stores = await handoffStores(() => Promise.resolve(['/r']), {
       folderStores: (writes: boolean) => {
         asked.push(writes)
         return Promise.resolve([{ root: '/f', store: new FolderNotes('/f') }])

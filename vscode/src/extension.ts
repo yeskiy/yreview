@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 
 import * as vscode from 'vscode'
 
+import { homeDirectory } from './bridge/discoveryFile'
 import { ReviewComments } from './comments/controller'
 import { checkGit, findGitPath } from './git/gitPath'
 import { type HandoffApi, registerHandoff } from './handoff/register'
@@ -60,7 +61,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     projects: projectFolders(),
   }
   const homes = withLongForms(
-    [process.env.USERPROFILE ?? '', homedir()].filter((home) => home !== ''),
+    [...new Set([homeDirectory(), homedir()])].filter((home) => home !== ''),
   )
   const log = redactingLog(output, () => ({
     homes,
@@ -112,7 +113,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     projectCompletionHost(
       held.service,
       git,
-      () => Promise.resolve(tasks.model.roots()),
+      () => tasks.model.readyRoots(),
       () => tasks.openTodos(),
     ),
   )
@@ -122,7 +123,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     service: held.service,
     gitPath: git,
     log,
-    gitRoots: () => tasks.model.roots(),
+    gitRoots: () => tasks.model.readyRoots(),
     openTodos: () => tasks.openTodos(),
     chosenTasks: () => tasks.chosenTasks(),
   })

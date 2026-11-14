@@ -18,10 +18,10 @@ export interface HandoffStore {
 
 /** The repository roots of the task model, then the folder stores. An agent read moves no folder. */
 export const handoffStores = async (
-  gitRoots: () => readonly string[],
+  gitRoots: () => Promise<readonly string[]>,
   service: Pick<ReviewService, 'folderStores'>,
 ): Promise<readonly HandoffStore[]> => [
-  ...gitRoots().map((root): HandoffStore => ({ kind: 'git', root })),
+  ...(await gitRoots()).map((root): HandoffStore => ({ kind: 'git', root })),
   ...(await service.folderStores(false)).map(({ root }): HandoffStore => ({
     kind: 'folder',
     root,

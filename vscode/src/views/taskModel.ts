@@ -8,7 +8,7 @@ import type { Anchor, ReviewService } from '../store/reviewService'
 import { changeFiles } from '../tasks/changeScan'
 import { type ChangeFacts, NO_CHANGES } from '../tasks/changeTab'
 import { basePathOf } from '../tasks/roots'
-import { type ScanPhase, ScanRuns, ScanState } from '../tasks/scanRuns'
+import { FirstScan, type ScanPhase, ScanRuns, ScanState } from '../tasks/scanRuns'
 import {
   type RepositoryTasks,
   SCAN_DELAY_MS,
@@ -77,6 +77,8 @@ export class TaskModel implements vscode.Disposable {
 
   private readonly state = new ScanState()
 
+  private readonly first = new FirstScan()
+
   private readonly overlays = new Map<string, string>()
 
   private readonly anchors = new Map<string, Promise<Anchor | undefined>>()
@@ -111,6 +113,7 @@ export class TaskModel implements vscode.Disposable {
           this.timers.forEach((timer) => clearTimeout(timer))
           this.schedule.cancel()
           this.runs.cancel()
+          this.first.settle()
         },
       },
       ...watchNotes(() => this.schedule.request('notes')),
@@ -134,11 +137,16 @@ export class TaskModel implements vscode.Disposable {
 
   /** Finds the git extension and runs the first scan. */
   async start(): Promise<void> {
-    this.api = await gitApi()
-    this.disposables.push(
-      watchRepositories(this.api, () => this.later('changes', () => this.refreshChanges())),
-    )
-    await this.refresh()
+    try {
+      this.api = await gitApi()
+      this.disposables.push(
+        watchRepositories(this.api, () => this.later('changes', () => this.refreshChanges())),
+      )
+      await this.refresh()
+    } catch (error) {
+      this.first.settle()
+      throw error
+    }
   }
 
   snapshot(): ModelSnapshot {
@@ -157,6 +165,11 @@ export class TaskModel implements vscode.Disposable {
 
   roots(): readonly string[] {
     return this.base.roots
+  }
+
+  /** The roots after the first full scan. A write reads these, so it never sees the empty start. */
+  readyRoots(): Promise<readonly string[]> {
+    return this.first.after(() => this.base.roots)
   }
 
   /** Scans now. A later signal starts a new scan, which aborts this one. */
@@ -221,9 +234,10 @@ export class TaskModel implements vscode.Disposable {
     if (outcome.failure !== undefined) {
       this.log.error('The scan of the review tasks failed.', outcome.failure)
     }
-    if (!this.state.finish(ticket, outcome.rows === undefined)) return
-    if (outcome.rows !== undefined) this.base = outcome.rows
-    this.emitter.fire()
+    const finished = this.state.finish(ticket, outcome.rows === undefined)
+    if (finished && outcome.rows !== undefined) this.base = outcome.rows
+    if (kind === 'full') this.first.settle()
+    if (finished) this.emitter.fire()
   }
 
   private async read(signal: AbortSignal): Promise<Base> {

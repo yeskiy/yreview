@@ -67,6 +67,20 @@ export class ScanState {
   }
 }
 
+/** Settles once at the end of the first full scan, also when that scan fails. */
+export class FirstScan {
+  private readonly latch = Promise.withResolvers<void>()
+
+  settle(): void {
+    this.latch.resolve()
+  }
+
+  /** The value of `read` after the first full scan. */
+  after<T>(read: () => T): Promise<T> {
+    return this.latch.promise.then(read)
+  }
+}
+
 /** A spinner over rows hides the rows, so a view with a row runs no spinner. */
 export const isLoading = (phase: ScanPhase, rows: number): boolean =>
   rows === 0 && (phase === 'new' || phase === 'running')
