@@ -2,7 +2,7 @@
   "name": "yreview",
   "displayName": "Yreview",
   "description": "Review comments that live in git notes. The same comments show in the Yreview plugin for JetBrains IDEs.",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "publisher": "yeskiy",
   "license": "Apache-2.0",
   "icon": "images/icon.png",
