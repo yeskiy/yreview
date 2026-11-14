@@ -2,8 +2,11 @@ import * as vscode from 'vscode'
 
 const NOTE_GLOBS = ['.git/refs/notes/**', '.git/packed-refs', '.y-review/notes/**']
 
-/** Gives the changed files 300 ms after the last change of a note ref or a folder store note. */
-export const watchNotes = (onChange: (files: readonly string[]) => void): vscode.Disposable[] => {
+/** Gives the changed files `delay` ms after the last change of a note ref or a folder store note. */
+export const watchNotes = (
+  onChange: (files: readonly string[]) => void,
+  delay = 300,
+): vscode.Disposable[] => {
   const timer: { handle?: NodeJS.Timeout } = {}
   const changed = new Set<string>()
   const later = (uri: vscode.Uri): void => {
@@ -15,7 +18,7 @@ export const watchNotes = (onChange: (files: readonly string[]) => void): vscode
       const files = [...changed]
       changed.clear()
       onChange(files)
-    }, 300)
+    }, delay)
   }
   return [
     { dispose: () => clearTimeout(timer.handle) },

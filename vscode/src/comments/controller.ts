@@ -22,6 +22,7 @@ import {
   NO_PLACE,
   type ReviewService,
 } from '../store/reviewService'
+import { gitApi, watchHeads } from '../views/repositories'
 
 const FILE = 'file'
 const GIT = 'git'
@@ -30,6 +31,7 @@ const RESOLVED = 'yreview.resolved'
 const COMMENT = 'yreview.comment'
 const SAVING = 'yreview.saving'
 const NATIVE_ADD = 'workbench.action.addComment'
+const RELOAD_DELAY_MS = 300
 const SCRATCH_DIR = `${path.sep}refs${path.sep}notes${path.sep}y-review${path.sep}scratch`
 
 /** The box that Add Review Comment opened last, and the uri of its comment input once known. */
@@ -241,6 +243,21 @@ export class ReviewComments implements vscode.Disposable {
   /** The content of each note ref file or folder store file after the last write of this window. */
   private readonly ownTips = new Map<string, string | undefined>()
 
+  /** The saves that run now, by box, so a second click on Save waits for the first save. */
+  private readonly saving = new Map<vscode.CommentThread, Promise<void>>()
+
+  /** The shown files that were not visible at the last reload. They read the store when they show. */
+  private readonly stale = new Set<string>()
+
+  /** The note files that changed, and true when the store or a HEAD changed, since the last reload. */
+  private readonly due = {
+    files: new Set<string>(),
+    store: false,
+    timer: undefined as NodeJS.Timeout | undefined,
+  }
+
+  private readonly heads = gitApi().then((api) => watchHeads(api, () => this.reloadLater([], true)))
+
   /** The author of the last saved comment. A new comment shows it while git writes the record. */
   private author: string | undefined
 
@@ -317,7 +334,14 @@ export class ReviewComments implements vscode.Disposable {
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('yreview.editorMarks')) this.applyMarks()
       }),
-      ...watchNotes((files) => this.noteChanged(files)),
+      ...watchNotes((files) => this.reloadLater(files, false), 0),
+      { dispose: () => clearTimeout(this.due.timer) },
+      // A write of this window updates its threads in place, so only other writes reload them.
+      {
+        dispose: service.onDidChange(() => {
+          if (this.writes.size === 0) this.reloadLater([], true)
+        }),
+      },
     )
     this.reloadVisible()
   }
@@ -349,6 +373,7 @@ export class ReviewComments implements vscode.Disposable {
   /** Keeps the thread of each known comment id, so a reload does not make the threads flicker. */
   private async load(uri: vscode.Uri): Promise<void> {
     if (!canComment(uri)) return
+    this.stale.delete(uri.toString())
     const known = new Set(this.snapshot(uri).map((entry) => entry.stored.id))
     const found = await this.anchorFor(uri)
     if (found.kind !== 'found') {
@@ -446,6 +471,10 @@ export class ReviewComments implements vscode.Disposable {
     this.shown.forEach((entries) => entries.forEach((entry) => entry.thread.dispose()))
     this.resolved.forEach((entry) => entry.thread.dispose())
     this.disposables.forEach((disposable) => disposable.dispose())
+    this.heads.then(
+      (watch) => watch.dispose(),
+      () => undefined,
+    )
   }
 
   // --- Drawing ---
@@ -529,15 +558,32 @@ export class ReviewComments implements vscode.Disposable {
   /** A drawn thread changes the visible editors too, so a file read before only gets its marks again. */
   private showVisible(): void {
     visibleUris().forEach((uri) =>
-      this.shown.has(uri.toString()) ? this.decorate(uri) : this.reloadSafely(uri),
+      this.shown.has(uri.toString()) && !this.stale.has(uri.toString())
+        ? this.decorate(uri)
+        : this.reloadSafely(uri),
     )
   }
 
-  /** A fetch or another program changes the note refs, so every visible file reads them again. */
-  private noteChanged(files: readonly string[]): void {
-    this.foreignChange(files)
-      .then((foreign) => (foreign ? this.reloadVisible() : undefined))
-      .catch((error: unknown) => this.log.error('The check of the note refs failed.', error))
+  /** One reload after the last change of a burst. A note file change counts when this window did not write it. */
+  private reloadLater(files: readonly string[], store: boolean): void {
+    files.forEach((file) => this.due.files.add(file))
+    this.due.store ||= store
+    clearTimeout(this.due.timer)
+    this.due.timer = setTimeout(() => {
+      const changed = [...this.due.files]
+      const forced = this.due.store
+      this.due.files.clear()
+      this.due.store = false
+      this.reloadIfChanged(changed, forced).catch((error: unknown) =>
+        this.log.error('The check of the note refs failed.', error),
+      )
+    }, RELOAD_DELAY_MS)
+  }
+
+  private async reloadIfChanged(files: readonly string[], store: boolean): Promise<void> {
+    if (!store && !(await this.foreignChange(files))) return
+    this.shown.forEach((_, key) => this.stale.add(key))
+    this.reloadVisible()
   }
 
   /** False when each change is a folder, a scratch ref, a lock file, or a ref that this window wrote. */
@@ -695,8 +741,17 @@ export class ReviewComments implements vscode.Disposable {
     reply.thread.dispose()
   }
 
+  /** A second save of the same box gets the result of the first save. */
+  private saveOrKeep(reply: vscode.CommentReply, shared: boolean): Promise<void> {
+    const running = this.saving.get(reply.thread)
+    if (running !== undefined) return running
+    const work = this.trySave(reply, shared).finally(() => this.saving.delete(reply.thread))
+    this.saving.set(reply.thread, work)
+    return work
+  }
+
   /** A failed save rejects, because VS Code then keeps the text in the comment box. */
-  private async saveOrKeep(reply: vscode.CommentReply, shared: boolean): Promise<void> {
+  private async trySave(reply: vscode.CommentReply, shared: boolean): Promise<void> {
     try {
       await this.timed(shared ? 'Save Shared' : 'Save Local', () => this.save(reply, shared))
     } catch (error) {
@@ -718,7 +773,10 @@ export class ReviewComments implements vscode.Disposable {
     const { thread } = reply
     const document = await vscode.workspace.openTextDocument(thread.uri)
     const key = pendingKey(document.uri, thread.range?.start.line ?? 0)
-    const selected = this.pending.get(key) ?? thread.range ?? new vscode.Range(0, 0, 0, 0)
+    // The file can be shorter than the selection after an edit.
+    const selected = document.validateRange(
+      this.pending.get(key) ?? thread.range ?? new vscode.Range(0, 0, 0, 0),
+    )
     const range = commentRange(
       selected.start.line + 1,
       selected.start.character,

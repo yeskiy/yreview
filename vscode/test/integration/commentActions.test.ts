@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -19,6 +20,11 @@ const reviewComments = async (): Promise<ReviewComments> =>
       vscode.extensions.getExtension<YreviewApi>('yeskiy.yreview') ?? assert.fail('no extension')
     ).activate()
   ).comments ?? assert.fail('the comment features are off')
+const localNotes = (): string =>
+  execFileSync('git', ['notes', '--ref', 'refs/notes/y-review/local', 'show', 'HEAD'], {
+    cwd: workspace(),
+    encoding: 'utf8',
+  })
 
 /** A thread that records each value set on it, so a test sees the states in their order. */
 const recorded = (
@@ -77,6 +83,45 @@ describe('comment box actions', () => {
     assert.ok(comments.hasPending(file(), 1), 'the selection of the box is gone')
     await vscode.commands.executeCommand('yreview.discard', { thread: draft, text: '' })
     assert.equal(comments.hasPending(file(), 1), false)
+  })
+
+  it('writes one record when the same box saves two times at once', async () => {
+    const draft = controller.createCommentThread(file(), new vscode.Range(0, 0, 0, 0), [])
+    const text = `Saved once ${Date.now()}.`
+    await Promise.all(
+      [1, 2].map(() =>
+        vscode.commands.executeCommand('yreview.saveLocal', { thread: draft, text }),
+      ),
+    )
+    assert.equal(localNotes().split(text).length - 1, 1)
+    const comments = await reviewComments()
+    assert.ok(comments.snapshot(file()).some((shown) => shown.thread === draft))
+    await vscode.commands.executeCommand('yreview.resolve', draft)
+  })
+
+  it('saves a box whose selection ends after the end of the file after an edit', async () => {
+    const comments = await reviewComments()
+    const editor = await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument(file()),
+    )
+    editor.selection = new vscode.Selection(0, 0, 3, 0)
+    await vscode.commands.executeCommand('yreview.addComment')
+    await editor.edit((edit) => edit.delete(new vscode.Range(1, 0, 3, 0)))
+    const draft = controller.createCommentThread(file(), new vscode.Range(0, 0, 0, 0), [])
+    try {
+      await vscode.commands.executeCommand('yreview.saveLocal', {
+        thread: draft,
+        text: 'Past the end.',
+      })
+      assert.equal(draft.contextValue, 'yreview.open')
+      assert.equal(comments.hasPending(file(), 0), false)
+    } finally {
+      if (comments.hasPending(file(), 0))
+        await vscode.commands.executeCommand('yreview.discard', { thread: draft, text: '' })
+      else await vscode.commands.executeCommand('yreview.resolve', draft)
+      await editor.edit((edit) => edit.insert(new vscode.Position(1, 0), 'two\nthree\n'))
+      await editor.document.save()
+    }
   })
 
   it('closes our box with the command that Escape runs in the box', async () => {

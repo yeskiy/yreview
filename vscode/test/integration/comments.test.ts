@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
+import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as wait } from 'node:timers/promises'
 
@@ -8,7 +10,7 @@ import * as vscode from 'vscode'
 import type { ReviewComments, Shown } from '../../src/comments/controller'
 import type { YreviewApi } from '../../src/extension'
 
-import { focusWindow, until } from './window'
+import { focusWindow, removeRepository, until } from './window'
 
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
@@ -23,6 +25,36 @@ const reviewComments = async (): Promise<ReviewComments> =>
 const localNotes = (): string => git('notes', '--ref', 'refs/notes/y-review/local', 'show', 'HEAD')
 const textOf = (shown: Shown): string =>
   (shown.thread.comments[0]?.body as vscode.MarkdownString).value
+
+/** Counts the reloads of one file until `stop`. */
+const spyReloads = (comments: ReviewComments, uri: vscode.Uri) => {
+  const calls: string[] = []
+  const original = comments.reload.bind(comments)
+  Object.assign(comments, {
+    reload: (target: vscode.Uri) => {
+      calls.push(target.toString())
+      return original(target)
+    },
+  })
+  return {
+    count: (): number => calls.filter((call) => call === uri.toString()).length,
+    stop: (): boolean => Reflect.deleteProperty(comments, 'reload'),
+  }
+}
+
+/** A thread that counts each value set on it. */
+const counted = (thread: vscode.CommentThread) => {
+  const sets: PropertyKey[] = []
+  return {
+    sets,
+    thread: new Proxy(thread, {
+      set: (target, key, value: unknown) => {
+        sets.push(key)
+        return Reflect.set(target, key, value)
+      },
+    }),
+  }
+}
 
 describe('comments in the editor', () => {
   const file = (): vscode.Uri => vscode.Uri.file(path.join(workspace(), 'src', 'a.txt'))
@@ -160,6 +192,87 @@ describe('comments in the editor', () => {
     else await vscode.commands.executeCommand('undo')
     await vscode.commands.executeCommand('yreview.closeBox')
     assert.equal(dirty, false, 'the comment box on line 1 did not get the focus')
+  })
+
+  it('reloads once after a burst of store changes, and not after a save of this window', async () => {
+    const comments = await reviewComments()
+    const service = (await api()).service ?? assert.fail('no service')
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file()))
+    await wait(1000)
+    const reloads = spyReloads(comments, file())
+    try {
+      await [1, 2, 3, 4, 5].reduce(
+        (done) =>
+          done.then(async () => {
+            service.notifyChanged()
+            await wait(50)
+          }),
+        Promise.resolve(),
+      )
+      await wait(1000)
+      assert.equal(reloads.count(), 1, 'a burst of 5 changes did not give one reload')
+      const draft = counted(
+        controller.createCommentThread(file(), new vscode.Range(2, 0, 2, 0), []),
+      )
+      await vscode.commands.executeCommand('yreview.saveLocal', {
+        thread: draft.thread,
+        text: 'Saved in place.',
+      })
+      const sets = draft.sets.length
+      await wait(1500)
+      assert.equal(reloads.count(), 1, 'the save of this window reloaded the file')
+      assert.deepEqual(draft.sets.slice(sets), [], 'the save of this window drew the thread again')
+    } finally {
+      reloads.stop()
+    }
+  })
+
+  it('shows and hides a comment that a write outside the editor makes in a repository outside the folder', async () => {
+    const comments = await reviewComments()
+    const service = (await api()).service ?? assert.fail('no service')
+    const nested = realpathSync(mkdtempSync(path.join(tmpdir(), 'yreview-nested-')))
+    const inNested = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: nested, encoding: 'utf8' })
+    writeFileSync(path.join(nested, 'n.txt'), 'one\ntwo\n')
+    inNested('init', '-q', '-b', 'main')
+    inNested('config', 'commit.gpgsign', 'false')
+    inNested('add', '.')
+    inNested('commit', '-q', '-m', 'init')
+    const uri = vscode.Uri.file(path.join(nested, 'n.txt'))
+    try {
+      await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri))
+      await comments.reload(uri)
+      const found = await service.anchorOf(uri.fsPath)
+      if (found.kind !== 'found') assert.fail(`no anchor: ${found.kind}`)
+      const { stored } = await service.addComment(
+        found.anchor,
+        { startLine: 1, endLine: 1 },
+        'Nested.',
+        false,
+      )
+      assert.ok(await until(() => comments.snapshot(uri).length === 1), 'the comment did not show')
+      await service.resolve(found.anchor, stored.id)
+      assert.ok(await until(() => comments.snapshot(uri).length === 0), 'the comment still shows')
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor')
+      await removeRepository(nested)
+    }
+  })
+
+  it('draws the comments of the new HEAD after a commit, and of the old HEAD after a reset', async () => {
+    const comments = await reviewComments()
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file()))
+    await saveDraft(new vscode.Range(2, 0, 2, 0), 'On the first commit.')
+    const shows = (): boolean =>
+      comments.snapshot(file()).some((shown) => textOf(shown) === 'On the first commit.')
+    assert.ok(shows())
+    git('commit', '-q', '--allow-empty', '-m', 'move')
+    try {
+      assert.ok(await until(() => !shows(), 80), 'the threads of the old HEAD still show')
+    } finally {
+      git('reset', '-q', '--soft', 'HEAD~1')
+    }
+    assert.ok(await until(shows, 80), 'the threads of HEAD did not show again')
   })
 
   it('registers the comment commands', async () => {
