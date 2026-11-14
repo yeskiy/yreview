@@ -32,7 +32,7 @@ const END = '--end-of-options'
 // Each key holds the tail of its chain of writes. A failed write does not stop the next writer.
 const LOCKS = new Map<string, Promise<unknown>>()
 
-const withLock = <T>(key: string, work: () => Promise<T>): Promise<T> => {
+export const withLock = <T>(key: string, work: () => Promise<T>): Promise<T> => {
   const result = (LOCKS.get(key) ?? Promise.resolve()).then(work)
   const tail = result.then(
     () => undefined,
