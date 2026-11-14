@@ -89,6 +89,126 @@
       {
         "command": "yreview.tasks.open",
         "title": "Open Review Task"
+      },
+      {
+        "command": "yreview.project.filter",
+        "title": "Filter",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "yreview.project.showResolved",
+        "title": "Show Resolved Comments",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "yreview.project.hideResolved",
+        "title": "Hide Resolved Comments",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "yreview.project.groupBy",
+        "title": "Group By",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "yreview.project.previous",
+        "title": "Previous Task",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "yreview.project.next",
+        "title": "Next Task",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "yreview.project.checkAll",
+        "title": "Check All",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "yreview.project.clearChecks",
+        "title": "Clear Checks",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "yreview.currentFile.filter",
+        "title": "Filter",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "yreview.currentFile.showResolved",
+        "title": "Show Resolved Comments",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "yreview.currentFile.hideResolved",
+        "title": "Hide Resolved Comments",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "yreview.currentFile.groupBy",
+        "title": "Group By",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "yreview.currentFile.previous",
+        "title": "Previous Task",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "yreview.currentFile.next",
+        "title": "Next Task",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "yreview.currentFile.checkAll",
+        "title": "Check All",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "yreview.currentFile.clearChecks",
+        "title": "Clear Checks",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "yreview.changes.filter",
+        "title": "Filter",
+        "icon": "$(filter)"
+      },
+      {
+        "command": "yreview.changes.showResolved",
+        "title": "Show Resolved Comments",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "yreview.changes.hideResolved",
+        "title": "Hide Resolved Comments",
+        "icon": "$(eye-closed)"
+      },
+      {
+        "command": "yreview.changes.groupBy",
+        "title": "Group By",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "yreview.changes.previous",
+        "title": "Previous Task",
+        "icon": "$(arrow-up)"
+      },
+      {
+        "command": "yreview.changes.next",
+        "title": "Next Task",
+        "icon": "$(arrow-down)"
+      },
+      {
+        "command": "yreview.changes.checkAll",
+        "title": "Check All",
+        "icon": "$(check-all)"
+      },
+      {
+        "command": "yreview.changes.clearChecks",
+        "title": "Clear Checks",
+        "icon": "$(clear-all)"
       }
     ],
     "viewsContainers": {
@@ -154,6 +274,102 @@
         {
           "command": "yreview.tasks.open",
           "when": "false"
+        },
+        {
+          "command": "yreview.project.filter",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.showResolved",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.hideResolved",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.groupBy",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.previous",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.next",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.checkAll",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.clearChecks",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.filter",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.showResolved",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.hideResolved",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.groupBy",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.previous",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.next",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.checkAll",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.clearChecks",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.filter",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.showResolved",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.hideResolved",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.groupBy",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.previous",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.next",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.checkAll",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.clearChecks",
+          "when": "false"
         }
       ],
       "editor/context": [
@@ -209,6 +425,126 @@
           "command": "yreview.tasks.refresh",
           "when": "view == yreview.project || view == yreview.currentFile || view == yreview.changes",
           "group": "navigation@9"
+        },
+        {
+          "command": "yreview.project.filter",
+          "when": "view == yreview.project",
+          "group": "navigation@1"
+        },
+        {
+          "command": "yreview.project.showResolved",
+          "when": "view == yreview.project && !yreview.project.resolvedShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yreview.project.hideResolved",
+          "when": "view == yreview.project && yreview.project.resolvedShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yreview.project.groupBy",
+          "when": "view == yreview.project",
+          "group": "navigation@3"
+        },
+        {
+          "command": "yreview.project.previous",
+          "when": "view == yreview.project && yreview.project.anyTask",
+          "group": "1_move@1"
+        },
+        {
+          "command": "yreview.project.next",
+          "when": "view == yreview.project && yreview.project.anyTask",
+          "group": "1_move@2"
+        },
+        {
+          "command": "yreview.project.checkAll",
+          "when": "view == yreview.project && yreview.project.anyTask",
+          "group": "2_checks@1"
+        },
+        {
+          "command": "yreview.project.clearChecks",
+          "when": "view == yreview.project && yreview.project.anyCheck",
+          "group": "2_checks@2"
+        },
+        {
+          "command": "yreview.currentFile.filter",
+          "when": "view == yreview.currentFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "yreview.currentFile.showResolved",
+          "when": "view == yreview.currentFile && !yreview.currentFile.resolvedShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yreview.currentFile.hideResolved",
+          "when": "view == yreview.currentFile && yreview.currentFile.resolvedShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yreview.currentFile.groupBy",
+          "when": "view == yreview.currentFile",
+          "group": "navigation@3"
+        },
+        {
+          "command": "yreview.currentFile.previous",
+          "when": "view == yreview.currentFile && yreview.currentFile.anyTask",
+          "group": "1_move@1"
+        },
+        {
+          "command": "yreview.currentFile.next",
+          "when": "view == yreview.currentFile && yreview.currentFile.anyTask",
+          "group": "1_move@2"
+        },
+        {
+          "command": "yreview.currentFile.checkAll",
+          "when": "view == yreview.currentFile && yreview.currentFile.anyTask",
+          "group": "2_checks@1"
+        },
+        {
+          "command": "yreview.currentFile.clearChecks",
+          "when": "view == yreview.currentFile && yreview.currentFile.anyCheck",
+          "group": "2_checks@2"
+        },
+        {
+          "command": "yreview.changes.filter",
+          "when": "view == yreview.changes",
+          "group": "navigation@1"
+        },
+        {
+          "command": "yreview.changes.showResolved",
+          "when": "view == yreview.changes && !yreview.changes.resolvedShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yreview.changes.hideResolved",
+          "when": "view == yreview.changes && yreview.changes.resolvedShown",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yreview.changes.groupBy",
+          "when": "view == yreview.changes",
+          "group": "navigation@3"
+        },
+        {
+          "command": "yreview.changes.previous",
+          "when": "view == yreview.changes && yreview.changes.anyTask",
+          "group": "1_move@1"
+        },
+        {
+          "command": "yreview.changes.next",
+          "when": "view == yreview.changes && yreview.changes.anyTask",
+          "group": "1_move@2"
+        },
+        {
+          "command": "yreview.changes.checkAll",
+          "when": "view == yreview.changes && yreview.changes.anyTask",
+          "group": "2_checks@1"
+        },
+        {
+          "command": "yreview.changes.clearChecks",
+          "when": "view == yreview.changes && yreview.changes.anyCheck",
+          "group": "2_checks@2"
         }
       ]
     },

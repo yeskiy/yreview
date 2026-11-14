@@ -11,6 +11,7 @@ import { offerSaveKey } from './saveKey'
 import { shareLogOf } from './shareLogState'
 import { ReviewService } from './store/reviewService'
 import { type TaskViews, createTaskViews, placeholderViews } from './views/taskViews'
+import { registerViewCommands } from './views/viewCommands'
 import { vscodeHost } from './vscodeHost'
 
 export interface YreviewApi {
@@ -76,6 +77,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   context.subscriptions.push(comments)
   held.tasks = createTaskViews(held.service, comments, git, log, context.workspaceState)
   context.subscriptions.push(held.tasks)
+  context.subscriptions.push(...registerViewCommands(held.tasks, log))
   const settle = (): void => {
     held.service
       ?.folderStoreRoots(true)
