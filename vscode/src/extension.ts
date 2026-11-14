@@ -10,8 +10,11 @@ import { withLongForms } from './places'
 import { offerSaveKey } from './saveKey'
 import { shareLogOf } from './shareLogState'
 import { ReviewService } from './store/reviewService'
+import { projectCompletionHost } from './tasks/completionHost'
+import { TaskCompletion } from './tasks/taskCompletion'
 import { type TaskViews, createTaskViews, placeholderViews } from './views/taskViews'
 import { registerViewCommands } from './views/viewCommands'
+import { type TaskWrites, createTaskWrites, registerTaskWrites } from './views/taskWrites'
 import { vscodeHost } from './vscodeHost'
 
 export interface YreviewApi {
@@ -19,6 +22,8 @@ export interface YreviewApi {
   readonly comments: ReviewComments | undefined
   readonly service: ReviewService | undefined
   readonly tasks: TaskViews | undefined
+  readonly completion: TaskCompletion | undefined
+  readonly writes: TaskWrites | undefined
 }
 
 const COMMENT_COMMANDS = [
@@ -67,7 +72,13 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       ...placeholderViews(problem),
     )
     vscode.window.showErrorMessage(problem)
-    return { comments: undefined, service: undefined, tasks: undefined }
+    return {
+      comments: undefined,
+      service: undefined,
+      tasks: undefined,
+      completion: undefined,
+      writes: undefined,
+    }
   }
   held.service = new ReviewService(
     vscodeHost(context.workspaceState, git),
@@ -78,6 +89,17 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   held.tasks = createTaskViews(held.service, comments, git, log, context.workspaceState)
   context.subscriptions.push(held.tasks)
   context.subscriptions.push(...registerViewCommands(held.tasks, log))
+  const { tasks } = held
+  const completion = new TaskCompletion(
+    projectCompletionHost(
+      held.service,
+      git,
+      () => Promise.resolve(tasks.model.roots()),
+      () => tasks.openTodos(),
+    ),
+  )
+  const writes = createTaskWrites(tasks, held.service, completion)
+  context.subscriptions.push(...registerTaskWrites(writes, log))
   const settle = (): void => {
     held.service
       ?.folderStoreRoots(true)
@@ -92,7 +114,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     log.error('The save key offer failed.', error),
   )
   log.info('Yreview started.')
-  return { comments, service: held.service, tasks: held.tasks }
+  return { comments, service: held.service, tasks, completion, writes }
 }
 
 export const deactivate = (): void => undefined

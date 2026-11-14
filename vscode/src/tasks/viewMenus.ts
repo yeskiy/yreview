@@ -53,6 +53,14 @@ export const VIEW_ACTIONS: readonly ViewAction[] = [
     group: '2_checks@2',
     when: (key) => `yreview.${key}.anyCheck`,
   },
+  {
+    action: 'resolve',
+    title: 'Resolve',
+    icon: '$(check)',
+    group: '3_write@1',
+    context: '1_write@1',
+  },
+  { action: 'delete', title: 'Delete', icon: '$(trash)', group: '3_write@2', context: '1_write@2' },
 ]
 
 export const commandOf = (key: ViewKey, action: string): string => `yreview.${key}.${action}`

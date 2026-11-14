@@ -16,6 +16,10 @@ export interface TaskViews extends vscode.Disposable {
   readonly tabs: TabStates
   view(key: ViewKey): TaskView
   open(task: ReviewTask): Promise<void>
+  /** Refreshes the scan, then gives every open TODO item of the workspace. */
+  openTodos(): Promise<readonly ReviewTask[]>
+  /** The checked tasks of the visible view, else its selection. */
+  chosenTasks(): readonly ReviewTask[]
 }
 
 const LEAVES_ROOT =
@@ -76,6 +80,18 @@ export const createTaskViews = (
     model,
     tabs,
     open,
+    openTodos: async () => {
+      await model.refresh()
+      return model
+        .snapshot()
+        .repositories.flatMap((repo) => repo.tasks)
+        .filter((task) => task.kind === 'todo')
+    },
+    chosenTasks: () => {
+      const view = [...views.values()].find((each) => each.view.visible) ?? views.get('project')
+      const checked = view === undefined ? [] : view.checks.checkedOf(view.rows().tasks)
+      return checked.length > 0 ? checked : (view?.selectedTasks() ?? [])
+    },
     view: (key) => {
       const found = views.get(key)
       if (found === undefined) throw new Error(`The extension has no task view ${key}.`)

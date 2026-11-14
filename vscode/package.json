@@ -131,6 +131,16 @@
         "icon": "$(clear-all)"
       },
       {
+        "command": "yreview.project.resolve",
+        "title": "Resolve",
+        "icon": "$(check)"
+      },
+      {
+        "command": "yreview.project.delete",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
         "command": "yreview.currentFile.filter",
         "title": "Filter",
         "icon": "$(filter)"
@@ -171,6 +181,16 @@
         "icon": "$(clear-all)"
       },
       {
+        "command": "yreview.currentFile.resolve",
+        "title": "Resolve",
+        "icon": "$(check)"
+      },
+      {
+        "command": "yreview.currentFile.delete",
+        "title": "Delete",
+        "icon": "$(trash)"
+      },
+      {
         "command": "yreview.changes.filter",
         "title": "Filter",
         "icon": "$(filter)"
@@ -209,6 +229,16 @@
         "command": "yreview.changes.clearChecks",
         "title": "Clear Checks",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "yreview.changes.resolve",
+        "title": "Resolve",
+        "icon": "$(check)"
+      },
+      {
+        "command": "yreview.changes.delete",
+        "title": "Delete",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -308,6 +338,14 @@
           "when": "false"
         },
         {
+          "command": "yreview.project.resolve",
+          "when": "false"
+        },
+        {
+          "command": "yreview.project.delete",
+          "when": "false"
+        },
+        {
           "command": "yreview.currentFile.filter",
           "when": "false"
         },
@@ -340,6 +378,14 @@
           "when": "false"
         },
         {
+          "command": "yreview.currentFile.resolve",
+          "when": "false"
+        },
+        {
+          "command": "yreview.currentFile.delete",
+          "when": "false"
+        },
+        {
           "command": "yreview.changes.filter",
           "when": "false"
         },
@@ -369,6 +415,14 @@
         },
         {
           "command": "yreview.changes.clearChecks",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.resolve",
+          "when": "false"
+        },
+        {
+          "command": "yreview.changes.delete",
           "when": "false"
         }
       ],
@@ -467,6 +521,16 @@
           "group": "2_checks@2"
         },
         {
+          "command": "yreview.project.resolve",
+          "when": "view == yreview.project",
+          "group": "3_write@1"
+        },
+        {
+          "command": "yreview.project.delete",
+          "when": "view == yreview.project",
+          "group": "3_write@2"
+        },
+        {
           "command": "yreview.currentFile.filter",
           "when": "view == yreview.currentFile",
           "group": "navigation@1"
@@ -507,6 +571,16 @@
           "group": "2_checks@2"
         },
         {
+          "command": "yreview.currentFile.resolve",
+          "when": "view == yreview.currentFile",
+          "group": "3_write@1"
+        },
+        {
+          "command": "yreview.currentFile.delete",
+          "when": "view == yreview.currentFile",
+          "group": "3_write@2"
+        },
+        {
           "command": "yreview.changes.filter",
           "when": "view == yreview.changes",
           "group": "navigation@1"
@@ -545,6 +619,48 @@
           "command": "yreview.changes.clearChecks",
           "when": "view == yreview.changes && yreview.changes.anyCheck",
           "group": "2_checks@2"
+        },
+        {
+          "command": "yreview.changes.resolve",
+          "when": "view == yreview.changes",
+          "group": "3_write@1"
+        },
+        {
+          "command": "yreview.changes.delete",
+          "when": "view == yreview.changes",
+          "group": "3_write@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "yreview.project.resolve",
+          "when": "view == yreview.project && viewItem =~ /^yreview\\./",
+          "group": "1_write@1"
+        },
+        {
+          "command": "yreview.project.delete",
+          "when": "view == yreview.project && viewItem =~ /^yreview\\./",
+          "group": "1_write@2"
+        },
+        {
+          "command": "yreview.currentFile.resolve",
+          "when": "view == yreview.currentFile && viewItem =~ /^yreview\\./",
+          "group": "1_write@1"
+        },
+        {
+          "command": "yreview.currentFile.delete",
+          "when": "view == yreview.currentFile && viewItem =~ /^yreview\\./",
+          "group": "1_write@2"
+        },
+        {
+          "command": "yreview.changes.resolve",
+          "when": "view == yreview.changes && viewItem =~ /^yreview\\./",
+          "group": "1_write@1"
+        },
+        {
+          "command": "yreview.changes.delete",
+          "when": "view == yreview.changes && viewItem =~ /^yreview\\./",
+          "group": "1_write@2"
         }
       ]
     },
