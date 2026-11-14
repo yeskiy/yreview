@@ -3,9 +3,7 @@ import path from 'node:path'
 import { windowFolderName } from '../core/paths'
 import { REVIEW_FOLDER } from '../git/gitDir'
 import { FOLDER } from '../store/folderNotes'
-
-// TODO: import StoreKind from '../store/reviewService' once task 2.4 adds it on main.
-type StoreKind = 'git' | 'folder'
+import type { StoreKind } from '../store/reviewService'
 
 /** The IntelliJ plugin uses the bare window name, so both editors can open one folder. */
 export const WINDOW_PREFIX = 'vscode-'

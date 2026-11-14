@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 import { windowFolderName } from '../../../src/core/paths'
@@ -81,6 +82,15 @@ describe('handoff place', () => {
 
   it('the window folder never equals the folder of the IntelliJ plugin', () => {
     assert.notEqual(named(handoffFolder('git', root, gitDir, window)), windowFolderName(window))
+  })
+
+  it('the source has one StoreKind type, in the review service', () => {
+    const source = path.resolve(__dirname, '../../../src')
+    const owners = readdirSync(source, { recursive: true, encoding: 'utf8' })
+      .filter((name) => name.endsWith('.ts'))
+      .filter((name) => /\btype StoreKind\b/.test(readFileSync(path.join(source, name), 'utf8')))
+      .map((name) => name.replaceAll('\\', '/'))
+    assert.deepEqual(owners, ['store/reviewService.ts'])
   })
 })
 
