@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -6,8 +6,17 @@ import path from 'node:path'
 export const git = (cwd: string, ...args: string[]): string =>
   execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
 
+/** A real long path. On Windows, `tmpdir()` can give an 8.3 short form, and git answers the long form. */
 export const scratchDir = (): string =>
-  realpathSync(mkdtempSync(path.join(tmpdir(), 'yreview-test-')))
+  realpathSync.native(mkdtempSync(path.join(tmpdir(), 'yreview-test-')))
+
+/** The 8.3 short form of a folder, or undefined when the volume makes no short names. */
+export const shortForm = (dir: string): string | undefined => {
+  if (process.platform !== 'win32') return undefined
+  // The folder is a scratch path of the test, so the cmd.exe line carries no outside input.
+  const short = execSync(`for %I in ("${dir}") do @echo %~sI`, { encoding: 'utf8' }).trim()
+  return short !== '' && short.toLowerCase() !== dir.toLowerCase() ? short : undefined
+}
 
 const configure = (dir: string): void => {
   git(dir, 'config', 'user.email', 'reviewer@example.com')
