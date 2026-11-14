@@ -844,6 +844,12 @@
           "scope": "resource",
           "markdownDescription": "Show the comment threads open and color the lines that an open comment covers."
         },
+        "yreview.channel": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Open the review bridge on the loopback address, so an agent session takes the tasks live and the review tools work. With this box clear, a send writes the review files and copies the prompt."
+        },
         "yreview.intellijKey": {
           "type": "boolean",
           "default": false,

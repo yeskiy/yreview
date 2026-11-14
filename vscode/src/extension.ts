@@ -6,6 +6,7 @@ import { ReviewComments } from './comments/controller'
 import { checkGit, findGitPath } from './git/gitPath'
 import { type HandoffApi, registerHandoff } from './handoff/register'
 import { offerIntellijKey } from './keyOffer'
+import type { BridgeHost } from './bridge/host'
 import { redactingLog } from './log'
 import { withLongForms } from './places'
 import { offerSaveKey } from './saveKey'
@@ -19,6 +20,8 @@ import { type TaskViews, createTaskViews, placeholderViews } from './views/taskV
 import { registerViewCommands } from './views/viewCommands'
 import { type TaskWrites, createTaskWrites, registerTaskWrites } from './views/taskWrites'
 import { vscodeHost } from './vscodeHost'
+import { type BridgeWiring, wireBridge } from './wiring/bridge'
+import { sessionLink } from './wiring/sessions'
 
 export interface YreviewApi {
   /** Undefined when git is missing or older than 2.24, so the comment features stay off. */
@@ -29,6 +32,8 @@ export interface YreviewApi {
   readonly writes: TaskWrites | undefined
   readonly sessions: ReviewSessions
   readonly handoff: HandoffApi | undefined
+  /** Undefined when git is missing, so a session starts without the channel. */
+  readonly bridge: BridgeHost | undefined
 }
 
 const COMMENT_COMMANDS = [
@@ -38,6 +43,9 @@ const COMMENT_COMMANDS = [
   'yreview.resolve',
   'yreview.delete',
 ]
+
+/** The bridge of the window, so deactivate can delete its discovery file. */
+const active: { bridge?: BridgeWiring } = {}
 
 const projectFolders = (): readonly string[] =>
   withLongForms((vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath))
@@ -66,7 +74,8 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     }),
     vscode.commands.registerCommand('yreview.showLog', () => output.show(true)),
   )
-  const sessions = registerSessions(context, log)
+  const link = sessionLink(log)
+  const sessions = registerSessions(context, log, link.prepare)
   const git = await findGitPath()
   const problem = await checkGit(git)
   if (problem !== undefined) {
@@ -86,6 +95,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       writes: undefined,
       sessions,
       handoff: undefined,
+      bridge: undefined,
     }
   }
   held.service = new ReviewService(
@@ -116,6 +126,9 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     openTodos: () => tasks.openTodos(),
     chosenTasks: () => tasks.chosenTasks(),
   })
+  const bridge = wireBridge(context, held.service, (ids) => handoff.close(ids), git, log)
+  active.bridge = bridge
+  link.attach(bridge, sessions)
   const settle = (): void => {
     held.service
       ?.folderStoreRoots(true)
@@ -130,7 +143,16 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     log.error('The save key offer failed.', error),
   )
   log.info('Yreview started.')
-  return { comments, service: held.service, tasks, completion, writes, sessions, handoff }
+  return {
+    comments,
+    service: held.service,
+    tasks,
+    completion,
+    writes,
+    sessions,
+    handoff,
+    bridge: bridge.host,
+  }
 }
 
-export const deactivate = (): void => undefined
+export const deactivate = async (): Promise<void> => active.bridge?.host.dispose()

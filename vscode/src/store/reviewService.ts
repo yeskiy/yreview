@@ -313,6 +313,11 @@ export class ReviewService {
     return this.pending
   }
 
+  /** Tells the listeners about a write that went past this service, for example a review tool. */
+  notifyChanged(): void {
+    this.notify()
+  }
+
   private runner(cwd: string): ProcessGitRunner {
     return new ProcessGitRunner(cwd, this.host.gitPath())
   }

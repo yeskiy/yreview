@@ -8,6 +8,7 @@ export interface Settings {
   readonly remote: string
   readonly writeRefspec: boolean
   readonly editorMarks: boolean
+  readonly channel: boolean
 }
 
 export const readSettings = (scope?: vscode.Uri): Settings => {
@@ -17,6 +18,7 @@ export const readSettings = (scope?: vscode.Uri): Settings => {
     remote: config.get<string>('remote', 'origin').trim() || 'origin',
     writeRefspec: config.get<boolean>('writeRefspec', true),
     editorMarks: config.get<boolean>('editorMarks', true),
+    channel: config.get<boolean>('channel', true),
   }
 }
 
