@@ -1,6 +1,7 @@
 import { redactText } from './core/redact'
 
 export interface LogSink {
+  debug(message: string): void
   info(message: string): void
   warn(message: string): void
   error(message: string): void
@@ -13,6 +14,7 @@ export interface Places {
 }
 
 export interface Log {
+  debug(message: string): void
   info(message: string): void
   warn(message: string): void
   error(message: string, failure?: unknown): void
@@ -25,6 +27,7 @@ export const redactingLog = (sink: LogSink, places: () => Places): Log => {
     return redactText(message, now.homes, now.projects, now.repositories)
   }
   return {
+    debug: (message) => sink.debug(clean(message)),
     info: (message) => sink.info(clean(message)),
     warn: (message) => sink.warn(clean(message)),
     error: (message, failure) =>

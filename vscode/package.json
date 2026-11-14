@@ -63,6 +63,14 @@
         "title": "Save Shared"
       },
       {
+        "command": "yreview.discard",
+        "title": "Discard"
+      },
+      {
+        "command": "yreview.closeBox",
+        "title": "Close Comment Box"
+      },
+      {
         "command": "yreview.resolve",
         "title": "Resolve",
         "icon": "$(check)"
@@ -85,6 +93,14 @@
         },
         {
           "command": "yreview.saveShared",
+          "when": "false"
+        },
+        {
+          "command": "yreview.discard",
+          "when": "false"
+        },
+        {
+          "command": "yreview.closeBox",
           "when": "false"
         },
         {
@@ -123,6 +139,11 @@
           "command": "yreview.saveLocal",
           "group": "inline@2",
           "when": "commentController == yreview && commentThreadIsEmpty && config.yreview.newComments == shared"
+        },
+        {
+          "command": "yreview.discard",
+          "group": "inline@3",
+          "when": "commentController == yreview && commentThreadIsEmpty"
         }
       ],
       "comments/commentThread/title": [
@@ -152,6 +173,11 @@
         "key": "ctrl+shift+g",
         "mac": "ctrl+shift+g",
         "when": "editorTextFocus && config.yreview.intellijKey"
+      },
+      {
+        "command": "yreview.closeBox",
+        "key": "escape",
+        "when": "commentEditorFocused && commentController == yreview && !suggestWidgetVisible && !inlineSuggestionVisible && !parameterHintsVisible && !inSnippetMode"
       }
     ],
     "colors": [
@@ -166,23 +192,23 @@
         }
       },
       {
-        "id": "yreview.commentRangeBackground2",
-        "description": "The second layer of background on text that two or more open review comments cover. It goes over the first layer.",
+        "id": "yreview.commentOverlapBackground",
+        "description": "Background of the text that two or more open review comments cover.",
         "defaults": {
-          "dark": "yreview.commentRangeBackground",
-          "light": "yreview.commentRangeBackground",
-          "highContrast": "yreview.commentRangeBackground",
-          "highContrastLight": "yreview.commentRangeBackground"
+          "dark": "#d7a01a40",
+          "light": "#e0a00040",
+          "highContrast": null,
+          "highContrastLight": null
         }
       },
       {
-        "id": "yreview.commentRangeBackground3",
-        "description": "The third layer of background on text that three or more open review comments cover. It goes over the first two layers.",
+        "id": "yreview.commentOverlapBorder",
+        "description": "Outline of the text that two or more open review comments cover. The high contrast themes use it in place of a background.",
         "defaults": {
-          "dark": "yreview.commentRangeBackground",
-          "light": "yreview.commentRangeBackground",
-          "highContrast": "yreview.commentRangeBackground",
-          "highContrastLight": "yreview.commentRangeBackground"
+          "dark": "#00000000",
+          "light": "#00000000",
+          "highContrast": "contrastActiveBorder",
+          "highContrastLight": "contrastActiveBorder"
         }
       }
     ],

@@ -1,25 +1,37 @@
+import { readFile, stat } from 'node:fs/promises'
+import path from 'node:path'
+
 import * as vscode from 'vscode'
 
-import { MAX_DEPTH, type Segment, segments } from '../core/overlap'
+import { type Segment, segments } from '../core/overlap'
 import { commentRange, compactRange, hasColumns } from '../core/range'
+import { gitCalls } from '../git/runner'
 import { guard } from '../guard'
 import type { Log } from '../log'
 import { readSettings } from '../settings'
 import type { StoredComment } from '../store/commentBook'
-import { isShared } from '../store/noteRefs'
+import { ALL_REFS, isShared } from '../store/noteRefs'
 import { type Anchor, NO_COMMIT, NO_REPOSITORY, type ReviewService } from '../store/reviewService'
 
 const OPEN = 'yreview.open'
 const RESOLVED = 'yreview.resolved'
 const COMMENT = 'yreview.comment'
+const SAVING = 'yreview.saving'
 const NATIVE_ADD = 'workbench.action.addComment'
-const LAYER_COLORS = [
-  'yreview.commentRangeBackground',
-  'yreview.commentRangeBackground2',
-  'yreview.commentRangeBackground3',
-]
+const SCRATCH_DIR = `${path.sep}refs${path.sep}notes${path.sep}y-review${path.sep}scratch`
 
 export const NEEDS_REPOSITORY = `${NO_REPOSITORY} Open a folder that is a git repository.`
+
+/** The box that Add Review Comment opened last, and the uri of its comment input once known. */
+interface Box {
+  readonly uri: vscode.Uri
+  readonly line: number
+  readonly thread?: vscode.CommentThread
+  input?: string
+}
+
+const inputOf = (editor: vscode.TextEditor | undefined): string | undefined =>
+  editor?.document.uri.scheme === 'comment' ? editor.document.uri.toString() : undefined
 
 export interface Shown {
   readonly thread: vscode.CommentThread
@@ -52,6 +64,16 @@ const firstLine = (range: vscode.Range): vscode.Range =>
   new vscode.Range(range.start.line, 0, range.start.line, 0)
 
 const pendingKey = (uri: vscode.Uri, at: number): string => `${uri.toString()}#${at}`
+
+/** Windows paths differ in the case of the drive letter, so a path key ignores case there. */
+const fileKey = (file: string): string =>
+  process.platform === 'win32' ? path.resolve(file).toLowerCase() : path.resolve(file)
+
+const contentOf = (file: string): Promise<string | undefined> =>
+  readFile(file, 'utf8').then(
+    (text) => text.trim(),
+    () => undefined,
+  )
 
 /** Comment text comes from other people, so it renders with no command links and no HTML. */
 const untrusted = (text: string): vscode.MarkdownString =>
@@ -93,6 +115,12 @@ const openView = (stored: StoredComment, range: vscode.Range) => ({
   range: firstLine(range),
 })
 
+const resolvedView = {
+  state: vscode.CommentThreadState.Resolved,
+  contextValue: RESOLVED,
+  collapsibleState: vscode.CommentThreadCollapsibleState.Collapsed,
+}
+
 /** Sets only the parts that changed, so VS Code does not redraw a thread that is the same. */
 const refresh = (old: Shown, stored: StoredComment, range: vscode.Range): vscode.CommentThread =>
   Object.assign(old.thread, {
@@ -114,6 +142,12 @@ const rangeOfSegment = (segment: Segment): vscode.Range =>
     segment.end.character,
   )
 
+/** A piece that ends at the start of a line ends on the line before it. */
+const lastLineOf = (segment: Segment): number =>
+  segment.end.character === 0 && segment.end.line > segment.start.line
+    ? segment.end.line - 1
+    : segment.end.line
+
 const visibleUris = (): readonly vscode.Uri[] =>
   [
     ...new Set(vscode.window.visibleTextEditors.map((editor) => editor.document.uri.toString())),
@@ -123,12 +157,26 @@ const visibleUris = (): readonly vscode.Uri[] =>
 export class ReviewComments implements vscode.Disposable {
   private readonly controller = vscode.comments.createCommentController('yreview', 'Yreview')
 
-  /** Layer N colors the text that N or more open comments cover, so overlaps get darker. */
-  private readonly layers = LAYER_COLORS.slice(0, MAX_DEPTH).map((color) =>
-    vscode.window.createTextEditorDecorationType({ backgroundColor: new vscode.ThemeColor(color) }),
-  )
+  /** Text under one open comment gets the range color, text under two or more the overlap color. */
+  private readonly single = vscode.window.createTextEditorDecorationType({
+    backgroundColor: new vscode.ThemeColor('yreview.commentRangeBackground'),
+  })
 
-  private readonly hover = vscode.window.createTextEditorDecorationType({})
+  private readonly overlap = vscode.window.createTextEditorDecorationType({
+    backgroundColor: new vscode.ThemeColor('yreview.commentOverlapBackground'),
+    outlineColor: new vscode.ThemeColor('yreview.commentOverlapBorder'),
+    outlineStyle: 'solid',
+    outlineWidth: '1px',
+  })
+
+  /** The count of comments over an overlap, after the end of its last line. */
+  private readonly countMark = vscode.window.createTextEditorDecorationType({
+    after: {
+      color: new vscode.ThemeColor('editorCodeLens.foreground'),
+      margin: '0 0 0 1em',
+      textDecoration: 'none; font-size: 85%',
+    },
+  })
 
   private readonly shown = new Map<string, readonly Shown[]>()
 
@@ -142,7 +190,21 @@ export class ReviewComments implements vscode.Disposable {
 
   private readonly queued = new Map<string, Promise<void>>()
 
+  /** The ids that a delete removes now, so a reload in the meantime does not draw them again. */
+  private readonly deleting = new Set<string>()
+
+  /** The writes of this window that run now. A note watcher waits for them. */
+  private readonly writes = new Set<Promise<unknown>>()
+
+  /** The content of each note ref file after the last write of this window, by file. */
+  private readonly ownTips = new Map<string, string | undefined>()
+
+  /** The author of the last saved comment. A new comment shows it while git writes the record. */
+  private author: string | undefined
+
   private nativeAdd: Promise<boolean> | undefined
+
+  private box: Box | undefined
 
   private readonly disposables: vscode.Disposable[] = []
 
@@ -160,27 +222,36 @@ export class ReviewComments implements vscode.Disposable {
       prompt: 'Add a review comment',
       placeHolder: 'Write a review comment. Markdown works.',
     }
-    const stopListening = service.onDidChange(() => this.reloadVisible())
     this.disposables.push(
       this.controller,
-      ...this.layers,
-      this.hover,
-      { dispose: stopListening },
+      this.single,
+      this.overlap,
+      this.countMark,
       vscode.commands.registerCommand(
         'yreview.addComment',
         guard(log, 'Add Review Comment', () => this.startThread()),
       ),
-      vscode.commands.registerCommand(
-        'yreview.saveLocal',
-        guard(log, 'Save', (reply: vscode.CommentReply) => this.save(reply, false)),
+      vscode.commands.registerCommand('yreview.saveLocal', (reply: vscode.CommentReply) =>
+        this.saveOrKeep(reply, false),
+      ),
+      vscode.commands.registerCommand('yreview.saveShared', (reply: vscode.CommentReply) =>
+        this.saveOrKeep(reply, true),
+      ),
+      vscode.commands.registerCommand('yreview.discard', (reply: vscode.CommentReply) =>
+        this.discard(reply),
       ),
       vscode.commands.registerCommand(
-        'yreview.saveShared',
-        guard(log, 'Save', (reply: vscode.CommentReply) => this.save(reply, true)),
+        'yreview.closeBox',
+        guard(log, 'Close', () => this.closeBox()),
       ),
+      vscode.window.onDidChangeActiveTextEditor((editor) => {
+        if (this.box !== undefined) this.box.input ??= inputOf(editor)
+      }),
       vscode.commands.registerCommand(
         'yreview.resolve',
-        guard(log, 'Resolve', (thread: vscode.CommentThread) => this.resolve(thread)),
+        guard(log, 'Resolve', (thread: vscode.CommentThread) =>
+          this.timed('Resolve', () => this.resolve(thread)),
+        ),
       ),
       vscode.commands.registerCommand(
         'yreview.delete',
@@ -243,7 +314,9 @@ export class ReviewComments implements vscode.Disposable {
       this.decorate(uri)
       return
     }
-    const stored = await this.service.openAt(found.anchor)
+    const stored = (await this.service.openAt(found.anchor)).filter(
+      (entry) => !this.deleting.has(entry.id),
+    )
     const document = await vscode.workspace.openTextDocument(uri)
     const ids = new Set(stored.map((entry) => entry.id))
     const before = this.snapshot(uri)
@@ -268,6 +341,14 @@ export class ReviewComments implements vscode.Disposable {
     this.decorate(uri)
   }
 
+  /** The count of git processes so far. Tests use it. */
+  readonly gitCalls = gitCalls
+
+  /** True while a new comment box on this line keeps its selection. Tests use it. */
+  hasPending(uri: vscode.Uri, at: number): boolean {
+    return this.pending.has(pendingKey(uri, at))
+  }
+
   snapshot(uri: vscode.Uri): readonly Shown[] {
     return this.shown.get(uri.toString()) ?? []
   }
@@ -282,6 +363,20 @@ export class ReviewComments implements vscode.Disposable {
           })),
         )
       : []
+  }
+
+  /** The count marks of one file: one for each line where overlap pieces end, with the top count. */
+  countMarksOf(uri: vscode.Uri): ReadonlyMap<number, number> {
+    return this.segmentsOf(uri)
+      .filter((segment) => segment.count > 1)
+      .reduce(
+        (marks, segment) =>
+          marks.set(
+            lastLineOf(segment),
+            Math.max(marks.get(lastLineOf(segment)) ?? 0, segment.count),
+          ),
+        new Map<number, number>(),
+      )
   }
 
   dispose(): void {
@@ -311,30 +406,32 @@ export class ReviewComments implements vscode.Disposable {
 
   private decorate(uri: vscode.Uri): void {
     const marks = this.segmentsOf(uri)
+    const counts = this.countMarksOf(uri)
     vscode.window.visibleTextEditors
       .filter((editor) => editor.document.uri.toString() === uri.toString())
       .forEach((editor) => {
-        this.layers.forEach((layer, index) =>
-          editor.setDecorations(
-            layer,
-            marks.filter((segment) => segment.depth > index).map(rangeOfSegment),
-          ),
+        editor.setDecorations(
+          this.single,
+          marks.filter((segment) => segment.count === 1).map(rangeOfSegment),
         )
         editor.setDecorations(
-          this.hover,
+          this.overlap,
           marks
             .filter((segment) => segment.count > 1)
             .map((segment) => ({
-              range: new vscode.Range(
-                segment.start.line,
-                segment.start.character,
-                segment.start.line,
-                segment.start.line === segment.end.line
-                  ? segment.end.character
-                  : editor.document.lineAt(segment.start.line).text.length,
-              ),
+              range: rangeOfSegment(segment),
               hoverMessage: `${segment.count} open review comments cover this text.`,
             })),
+        )
+        editor.setDecorations(
+          this.countMark,
+          [...counts].map(([at, count]) => {
+            const { end } = editor.document.lineAt(at).range
+            return {
+              range: new vscode.Range(end, end),
+              renderOptions: { after: { contentText: String(count) } },
+            }
+          }),
         )
       })
   }
@@ -375,9 +472,17 @@ export class ReviewComments implements vscode.Disposable {
   /** A fetch or another program changes the note refs, so every visible file reads them again. */
   private noteWatchers(): vscode.Disposable[] {
     const timer: { handle?: NodeJS.Timeout } = {}
-    const later = (): void => {
+    const changed = new Set<string>()
+    const later = (uri: vscode.Uri): void => {
+      changed.add(uri.fsPath)
       clearTimeout(timer.handle)
-      timer.handle = setTimeout(() => this.reloadVisible(), 300)
+      timer.handle = setTimeout(() => {
+        const files = [...changed]
+        changed.clear()
+        this.foreignChange(files)
+          .then((foreign) => (foreign ? this.reloadVisible() : undefined))
+          .catch((error: unknown) => this.log.error('The check of the note refs failed.', error))
+      }, 300)
     }
     return [
       { dispose: () => clearTimeout(timer.handle) },
@@ -393,6 +498,63 @@ export class ReviewComments implements vscode.Disposable {
         }),
       ),
     ]
+  }
+
+  /** False when each change is a folder, a scratch ref, a lock file, or a ref that this window wrote. */
+  private async foreignChange(files: readonly string[]): Promise<boolean> {
+    await Promise.allSettled([...this.writes])
+    const answers = await Promise.all(
+      files
+        .filter(
+          (file) =>
+            !file.endsWith(SCRATCH_DIR) &&
+            !file.includes(`${SCRATCH_DIR}${path.sep}`) &&
+            !file.endsWith('.lock'),
+        )
+        .map(
+          async (file) =>
+            (await stat(file).catch(() => undefined))?.isDirectory() !== true &&
+            (!this.ownTips.has(fileKey(file)) ||
+              (await contentOf(file)) !== this.ownTips.get(fileKey(file))),
+        ),
+    )
+    return answers.includes(true)
+  }
+
+  /** Keeps the note ref files as this window wrote them. Git keeps a loose ref under .git. */
+  private async rememberTips(root: string): Promise<void> {
+    await Promise.all(
+      ALL_REFS.map((ref) => path.join(root, '.git', ...ref.split('/'))).map(async (file) =>
+        this.ownTips.set(fileKey(file), await contentOf(file)),
+      ),
+    )
+  }
+
+  /** Runs one write of this window. The note watchers wait for it before they look at the refs. */
+  private async write<T>(root: string, work: () => Promise<T>): Promise<T> {
+    const done = work().then(async (result) => {
+      await this.rememberTips(root)
+      return result
+    })
+    this.writes.add(done)
+    try {
+      return await done
+    } finally {
+      this.writes.delete(done)
+    }
+  }
+
+  /** Writes one debug line for each action with its duration and its count of git processes. */
+  private async timed(what: string, work: () => Promise<void>): Promise<void> {
+    const start = Date.now()
+    const before = gitCalls()
+    try {
+      await work()
+    } finally {
+      this.log.debug(
+        `${what} took ${Date.now() - start} ms and started ${gitCalls() - before} git processes.`,
+      )
+    }
   }
 
   private find(predicate: (shown: Shown) => boolean): Shown | undefined {
@@ -426,17 +588,71 @@ export class ReviewComments implements vscode.Disposable {
     )
     if ((await this.hasNativeAdd()) && glyphOnLine === undefined) {
       editor.selection = new vscode.Selection(selection.start, selection.start)
+      this.box = { uri: document.uri, line: at }
       await vscode.commands.executeCommand(NATIVE_ADD)
       editor.selection = selection
+      this.box.input ??= inputOf(vscode.window.activeTextEditor)
       return
     }
-    Object.assign(this.controller.createCommentThread(document.uri, firstLine(selection), []), {
-      canReply: true,
-      collapsibleState: vscode.CommentThreadCollapsibleState.Expanded,
+    this.box = {
+      uri: document.uri,
+      line: at,
+      thread: Object.assign(
+        this.controller.createCommentThread(document.uri, firstLine(selection), []),
+        { canReply: true, collapsibleState: vscode.CommentThreadCollapsibleState.Expanded },
+      ),
+    }
+  }
+
+  // The last hideComment handler of VS Code skips a comment input, so Escape does nothing there.
+  // The native add command on the line of the box closes the box, and asks first when it has text.
+  private async closeBox(): Promise<void> {
+    const { box } = this
+    if (box === undefined || box.input !== inputOf(vscode.window.activeTextEditor)) {
+      await vscode.commands.executeCommand('workbench.action.hideComment')
+      return
+    }
+    this.box = undefined
+    if (box.thread !== undefined) {
+      this.pending.delete(pendingKey(box.uri, box.line))
+      box.thread.dispose()
+      return
+    }
+    await vscode.commands.executeCommand(NATIVE_ADD, {
+      range: { startLineNumber: box.line + 1, endLineNumber: box.line + 1, endColumn: 1 },
     })
   }
 
-  /** The comment box becomes the saved thread, so nothing on screen closes and opens again. */
+  private forgetBox(thread: vscode.CommentThread): void {
+    if (
+      this.box?.uri.toString() === thread.uri.toString() &&
+      this.box.line === thread.range?.start.line
+    ) {
+      this.box = undefined
+    }
+  }
+
+  /** A box with no saved comment closes at once, with no question about its text. */
+  private discard(reply: vscode.CommentReply): void {
+    this.pending.delete(pendingKey(reply.thread.uri, reply.thread.range?.start.line ?? 0))
+    this.forgetBox(reply.thread)
+    reply.thread.dispose()
+  }
+
+  /** A failed save rejects, because VS Code then keeps the text in the comment box. */
+  private async saveOrKeep(reply: vscode.CommentReply, shared: boolean): Promise<void> {
+    try {
+      await this.timed(shared ? 'Save Shared' : 'Save Local', () => this.save(reply, shared))
+    } catch (error) {
+      this.log.error('Save failed.', error)
+      vscode.window
+        .showErrorMessage(`Save failed. ${error instanceof Error ? error.message : String(error)}`)
+        .then(undefined, () => undefined)
+      throw error
+    }
+  }
+
+  /** The box shows the comment at once and becomes the saved thread. A failure opens the box again. */
   private async save(reply: vscode.CommentReply, shared: boolean): Promise<void> {
     const text = reply.text.trim()
     if (text === '') {
@@ -445,60 +661,81 @@ export class ReviewComments implements vscode.Disposable {
     }
     const { thread } = reply
     const document = await vscode.workspace.openTextDocument(thread.uri)
-    const found = await this.service.anchorOf(document.uri.fsPath)
-    if (found.kind !== 'git') {
-      await vscode.window.showErrorMessage(found.kind === 'noCommit' ? NO_COMMIT : NEEDS_REPOSITORY)
-      return
-    }
     const key = pendingKey(document.uri, thread.range?.start.line ?? 0)
     const selected = this.pending.get(key) ?? thread.range ?? new vscode.Range(0, 0, 0, 0)
-    const result = await this.service.addComment(
-      found.anchor,
-      commentRange(
-        selected.start.line + 1,
-        selected.start.character,
-        selected.end.line + 1,
-        selected.end.character,
-        document.lineAt(selected.end.line).text.length,
-      ),
-      text,
-      shared,
+    const range = commentRange(
+      selected.start.line + 1,
+      selected.start.character,
+      selected.end.line + 1,
+      selected.end.character,
+      document.lineAt(selected.end.line).text.length,
     )
-    this.pending.delete(key)
-    const range = fullRange(result.stored, document)
-    Object.assign(thread, openView(result.stored, range), {
+    Object.assign(thread, {
+      comments: [
+        {
+          body: untrusted(text),
+          mode: vscode.CommentMode.Preview,
+          author: { name: this.author ?? 'You' },
+          label: shared ? 'shared, saving' : 'local, saving',
+          contextValue: SAVING,
+        },
+      ],
+      canReply: false,
+      contextValue: SAVING,
+      label: `Lines ${compactRange(range)}`,
       collapsibleState: vscode.CommentThreadCollapsibleState.Collapsed,
     })
-    const twins = this.snapshot(document.uri).filter(
-      (entry) => entry.stored.id === result.stored.id,
-    )
-    twins.forEach((entry) => entry.thread.dispose())
-    this.shown.set(document.uri.toString(), [
-      ...this.snapshot(document.uri).filter((entry) => !twins.includes(entry)),
-      { thread, stored: result.stored, anchor: found.anchor, range },
-    ])
-    this.decorate(document.uri)
-    if (result.shareError !== undefined) {
-      await vscode.window.showWarningMessage(
-        `The comment is in the local notes, but the push failed. ${result.shareError}`,
+    try {
+      const found = await this.service.anchorOf(document.uri.fsPath)
+      if (found.kind !== 'git') {
+        throw new Error(found.kind === 'noCommit' ? NO_COMMIT : NEEDS_REPOSITORY)
+      }
+      const result = await this.write(found.anchor.root, () =>
+        this.service.addComment(found.anchor, range, text, shared),
       )
+      this.author = result.stored.record.author
+      this.pending.delete(key)
+      this.forgetBox(thread)
+      const shownRange = fullRange(result.stored, document)
+      Object.assign(thread, openView(result.stored, shownRange))
+      const twins = this.snapshot(document.uri).filter(
+        (entry) => entry.stored.id === result.stored.id,
+      )
+      twins.forEach((entry) => entry.thread.dispose())
+      this.shown.set(document.uri.toString(), [
+        ...this.snapshot(document.uri).filter((entry) => !twins.includes(entry)),
+        { thread, stored: result.stored, anchor: found.anchor, range: shownRange },
+      ])
+      this.decorate(document.uri)
+      if (result.shareError !== undefined) {
+        await vscode.window.showWarningMessage(
+          `The comment is in the local notes, but the push failed. ${result.shareError}`,
+        )
+      }
+    } catch (error) {
+      Object.assign(thread, {
+        comments: [],
+        canReply: true,
+        contextValue: undefined,
+        label: undefined,
+        collapsibleState: vscode.CommentThreadCollapsibleState.Expanded,
+      })
+      throw error
     }
   }
 
   private async resolve(thread: vscode.CommentThread): Promise<void> {
     const entry = this.snapshot(thread.uri).find((shown) => shown.thread === thread)
     if (entry === undefined) return
-    const result = await this.service.resolve(entry.anchor, entry.stored.id)
+    const result = await this.write(entry.anchor.root, () =>
+      this.service.resolve(entry.anchor, entry.stored.id),
+    )
     this.shown.set(
       thread.uri.toString(),
       this.snapshot(thread.uri).filter((shown) => shown !== entry),
     )
     this.resolved.add(entry)
-    Object.assign(thread, {
-      state: vscode.CommentThreadState.Resolved,
-      contextValue: RESOLVED,
-      collapsibleState: vscode.CommentThreadCollapsibleState.Collapsed,
-    })
+    Object.assign(thread, resolvedView)
     this.decorate(thread.uri)
     if (result.shareError !== undefined) {
       await vscode.window.showWarningMessage(
@@ -508,27 +745,50 @@ export class ReviewComments implements vscode.Disposable {
   }
 
   private async remove(comment: vscode.Comment): Promise<void> {
-    const entry = this.find((shown) => shown.thread.comments.includes(comment))
-    if (entry === undefined) return
     const choice = await vscode.window.showWarningMessage(
       'Delete this review comment? The extension removes it from the git notes, and you cannot undo this.',
       { modal: true },
       'Delete',
     )
-    if (choice !== 'Delete') return
-    const result = await this.service.remove(entry.anchor, [entry.stored.id])
+    if (choice === 'Delete') await this.deleteComment(comment)
+  }
+
+  /** Deletes a shown comment with no question. The thread goes at once, and a failure draws it again. */
+  async deleteComment(comment: vscode.Comment): Promise<void> {
+    const entry = this.find((shown) => shown.thread.comments.includes(comment))
+    if (entry === undefined) return
     const { uri } = entry.thread
-    this.resolved.delete(entry)
+    const wasResolved = this.resolved.delete(entry)
     this.shown.set(
       uri.toString(),
       this.snapshot(uri).filter((shown) => shown !== entry),
     )
     entry.thread.dispose()
     this.decorate(uri)
-    if (result.shareError !== undefined) {
-      await vscode.window.showWarningMessage(
-        `The delete is in the local notes, but the push failed. ${result.shareError}`,
-      )
-    }
+    this.deleting.add(entry.stored.id)
+    await this.timed('Delete', async () => {
+      try {
+        const result = await this.write(entry.anchor.root, () =>
+          this.service.removeStored(entry.anchor, [entry.stored]),
+        )
+        if (result.shareError !== undefined) {
+          await vscode.window.showWarningMessage(
+            `The delete is in the local notes, but the push failed. ${result.shareError}`,
+          )
+        }
+      } catch (error) {
+        const thread = this.draw(uri, entry.stored, entry.range, false)
+        const back = {
+          ...entry,
+          thread: wasResolved ? Object.assign(thread, resolvedView) : thread,
+        }
+        if (wasResolved) this.resolved.add(back)
+        else this.shown.set(uri.toString(), [...this.snapshot(uri), back])
+        this.decorate(uri)
+        throw error
+      } finally {
+        this.deleting.delete(entry.stored.id)
+      }
+    })
   }
 }

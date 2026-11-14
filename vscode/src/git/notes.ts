@@ -9,13 +9,16 @@ import { type GitResult, type GitRunner, isOk, ran } from './runner'
 
 export type Change = (lines: readonly string[]) => readonly string[] | Promise<readonly string[]>
 
+/** A record line, or a line that is still in work, for example while git gives the author. */
+export type Line = string | PromiseLike<string>
+
 /** One place that holds review records, named by a ref and by a commit. */
 export interface NoteStore {
   /** The records of one note, and none for a note that the extension cannot read. */
   readLines(ref: string, commit: string): Promise<readonly string[]>
   /** The records of one note. A note that the extension cannot read stops the caller. */
   readOrRefuse(ref: string, commit: string): Promise<readonly string[]>
-  append(ref: string, commit: string, line: string): Promise<void>
+  append(ref: string, commit: string, line: Line): Promise<void>
   rewrite(ref: string, commit: string, lines: readonly string[]): Promise<void>
   /** Writes `change` of the note and gives the lines that `change` got. */
   edit(ref: string, commit: string, change: Change): Promise<readonly string[]>
@@ -80,6 +83,9 @@ const noteRef = (ref: string): string =>
 
 /** Reads and writes git notes. A write moves the ref only when no other writer moved it after the read. */
 export class NotesGateway implements NoteStore {
+  /** The common git dir does not change, so the gateway asks git for it once. */
+  private commonDir: Promise<string> | undefined
+
   constructor(private readonly git: GitRunner) {}
 
   async readLines(ref: string, commit: string): Promise<readonly string[]> {
@@ -105,11 +111,12 @@ export class NotesGateway implements NoteStore {
     return []
   }
 
-  async append(ref: string, commit: string, line: string): Promise<void> {
+  async append(ref: string, commit: string, line: Line): Promise<void> {
     plainValue(commit, 'commit')
     await this.guarded(ref, async (tip) => {
+      const text = await line
       const landed = await this.swap(ref, tip, (scratch) =>
-        this.withFile(line, 'git notes append failed', (file) => [
+        this.withFile(text, 'git notes append failed', (file) => [
           'notes',
           '--ref',
           scratch,
@@ -193,8 +200,8 @@ export class NotesGateway implements NoteStore {
         check(await this.git.run(['update-ref', END, scratch, tip]), 'git update-ref failed')
       }
       await write(scratch)
-      const built = (await this.tip(scratch)) ?? fail(`git notes wrote no commit for ${ref}.`)
-      const moved = await this.git.run(['update-ref', END, ref, built, tip ?? ''])
+      // Git reads the scratch ref name as the new value, so no extra read of the scratch tip runs.
+      const moved = await this.git.run(['update-ref', END, ref, scratch, tip ?? ''])
       if (isOk(moved)) return true
       if ((await this.tip(ref)) === tip) check(moved, 'git update-ref failed')
       return false
@@ -242,9 +249,17 @@ export class NotesGateway implements NoteStore {
 
   /** Two worktrees of one repository share the note refs, so the key is the common git dir. */
   private async lockKey(ref: string): Promise<string> {
+    this.commonDir ??= this.readCommonDir().catch((error: unknown) => {
+      this.commonDir = undefined
+      throw error
+    })
+    return `${await this.commonDir}\u0000${ref}`
+  }
+
+  private async readCommonDir(): Promise<string> {
     const result = await this.git.run(['rev-parse', '--path-format=absolute', '--git-common-dir'])
     if (!isOk(result)) throw new NotesWriteError(refusal('the git directory', result))
-    return `${result.stdout.trim()}\u0000${ref}`
+    return result.stdout.trim()
   }
 
   /** The note text goes through a file, never through an argument. */

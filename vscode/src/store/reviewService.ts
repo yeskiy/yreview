@@ -68,6 +68,8 @@ export class ReviewService {
 
   private readonly roots = new Set<string>()
 
+  private readonly books = new Map<string, CommentBook>()
+
   private readonly asks: RefspecAsks
 
   private pending: Promise<void> = Promise.resolve()
@@ -80,16 +82,18 @@ export class ReviewService {
   async anchorOf(filePath: string): Promise<AnchorResult> {
     const real = await realpath(filePath).catch(() => path.resolve(filePath))
     if (!(await isDirectory(path.dirname(real)))) return NO_REPOSITORY_RESULT
-    const top = fromGit(await this.runner(path.dirname(real)).run(['rev-parse', '--show-toplevel']))
-    if (!isOk(top)) return NO_REPOSITORY_RESULT
+    // The folder of the file and the root name one repository, so the two reads run together.
+    const runner = this.runner(path.dirname(real))
+    const [top, head] = await Promise.all([
+      runner.run(['rev-parse', '--show-toplevel']),
+      runner.run(['rev-parse', '-q', '--verify', 'HEAD^{commit}']),
+    ])
+    if (!isOk(fromGit(top))) return NO_REPOSITORY_RESULT
     const root = top.stdout.trim()
     const relative = path.relative(root, real).split(path.sep).join('/')
     if (!isRelativeUnder(root, relative)) return NO_REPOSITORY_RESULT
     this.roots.add(root)
-    const head = fromGit(
-      await this.runner(root).run(['rev-parse', '-q', '--verify', 'HEAD^{commit}']),
-    )
-    if (!isOk(head)) return { kind: 'noCommit' }
+    if (!isOk(fromGit(head))) return { kind: 'noCommit' }
     return { kind: 'git', anchor: { root, head: head.stdout.trim(), path: relative } }
   }
 
@@ -136,9 +140,12 @@ export class ReviewService {
 
   /** A delete is final. A failed push leaves the note, and the next good push carries the change. */
   async remove(anchor: Anchor, ids: readonly string[]): Promise<DeleteResult> {
-    const book = this.book(anchor.root)
-    const records = await book.findAll(new Set(ids))
-    const removed = await book.remove(records)
+    return this.removeStored(anchor, await this.book(anchor.root).findAll(new Set(ids)))
+  }
+
+  /** Deletes records that the caller read before, with no search of every note. */
+  async removeStored(anchor: Anchor, records: readonly StoredComment[]): Promise<DeleteResult> {
+    const removed = await this.book(anchor.root).remove(records)
     if (removed === 0) return { removed }
     this.notify()
     const errors = await Promise.all(
@@ -171,9 +178,15 @@ export class ReviewService {
     return new ProcessGitRunner(cwd, this.host.gitPath())
   }
 
+  /** One book for each root and git program, so the book keeps what it read about the repository. */
   private book(root: string): CommentBook {
+    const key = `${this.host.gitPath()}\u0000${root}`
+    const known = this.books.get(key)
+    if (known !== undefined) return known
     const runner = this.runner(root)
-    return new CommentBook(new NotesGateway(runner), () => gitAuthor(runner))
+    const book = new CommentBook(new NotesGateway(runner), () => gitAuthor(runner))
+    this.books.set(key, book)
+    return book
   }
 
   private notify(): void {

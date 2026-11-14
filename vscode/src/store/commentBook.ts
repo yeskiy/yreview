@@ -67,13 +67,19 @@ export class CommentBook {
         'The comment holds a broken character, so the extension wrote no record. Remove the character and try again.',
       )
     }
-    const record: ReviewRecord = {
-      timestamp: String(this.clock()),
-      author: await this.authorOf(),
+    const timestamp = String(this.clock())
+    // Git gives the author while the store reads the ref tip, so the two calls run together.
+    const pending = this.authorOf().then((author): ReviewRecord => ({
+      timestamp,
+      author,
       description: text,
       location: { commit, path, range },
-    }
-    await this.store.append(ref, commit, encodeRecord(record))
+    }))
+    const line = pending.then(encodeRecord)
+    pending.catch(() => undefined)
+    line.catch(() => undefined)
+    await this.store.append(ref, commit, line)
+    const record = await pending
     return { id: recordId(record), ref, commit, record }
   }
 

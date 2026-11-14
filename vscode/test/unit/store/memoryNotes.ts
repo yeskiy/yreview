@@ -1,4 +1,4 @@
-import type { Change, NoteStore } from '../../../src/git/notes'
+import type { Change, Line, NoteStore } from '../../../src/git/notes'
 
 /** A note store in memory, keyed by ref and commit. */
 export class MemoryNotes implements NoteStore {
@@ -16,12 +16,12 @@ export class MemoryNotes implements NoteStore {
     return this.readLines(ref, commit)
   }
 
-  append(ref: string, commit: string, line: string): Promise<void> {
+  async append(ref: string, commit: string, line: Line): Promise<void> {
+    const text = await line
     this.notes.set(MemoryNotes.key(ref, commit), [
       ...(this.notes.get(MemoryNotes.key(ref, commit)) ?? []),
-      line,
+      text,
     ])
-    return Promise.resolve()
   }
 
   async rewrite(ref: string, commit: string, lines: readonly string[]): Promise<void> {

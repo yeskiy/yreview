@@ -35,7 +35,12 @@ export class NotesSharing {
         `The extension shares only a note ref, and ${JSON.stringify(ref)} is not one.`,
       )
     }
-    if (!(await this.known())) {
+    // Both reads only read the configuration, so they run together before the push.
+    const [known, inPlace] = await Promise.all([
+      this.known(),
+      this.writeRefspec ? this.refspecInPlace() : Promise.resolve(true),
+    ])
+    if (!known) {
       return done(
         false,
         `Git has no remote with the name ${this.remote}. The comment stays in the local notes.`,
@@ -43,11 +48,7 @@ export class NotesSharing {
     }
     const pushed = await this.git.run(['push', END, this.remote, ref])
     if (!isOk(pushed)) return failure(pushed, 'The push failed.')
-    return {
-      ok: true,
-      message: '',
-      needsRefspec: this.writeRefspec && !(await this.refspecInPlace()),
-    }
+    return { ok: true, message: '', needsRefspec: !inPlace }
   }
 
   /** Runs only after the user agrees. It drops the forced refspec and adds the safe one once. */

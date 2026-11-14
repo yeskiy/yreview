@@ -10,7 +10,18 @@ writes the same notes, so one team can use VS Code and IntelliJ IDEA together.
 2. Press Ctrl+Alt+G (Cmd+Alt+G on macOS), or use Add Review Comment in the editor
    context menu.
 3. Write the comment. Markdown works.
-4. Click Save Local or Save Shared.
+4. Click Save Local or Save Shared, or press Ctrl+Enter (Cmd+Enter on macOS).
+
+To close a new comment box, click Discard or press Escape. Discard closes the box at once.
+Escape asks first when the box has text, as for each comment box of VS Code.
+
+A keymap extension can bind Ctrl+Enter to another command in each text editor. The
+IntelliJ IDEA Keybindings extension binds it to Go to Declaration, and an extension cannot
+win over that binding. In this case, add this line to your `keybindings.json`:
+
+```json
+{ "key": "ctrl+enter", "command": "editor.action.submitComment", "when": "commentEditorFocused" }
+```
 
 A local comment stays on your machine in `refs/notes/y-review/local`. A shared comment goes
 to `refs/notes/devtools/discuss`, and Yreview pushes that ref to your remote at once.
@@ -19,6 +30,13 @@ Click Resolve on a comment to close it. Click Delete to remove it from the notes
 
 The comment box opens on the first line of the commented text, and Yreview colors the full
 text. For this reason, the VS Code Comments view shows only the first line of each comment.
+
+Text under one open comment gets the color `yreview.commentRangeBackground`. Text under two
+or more open comments gets the amber color `yreview.commentOverlapBackground`, and a small
+number after the end of its last line shows how many comments cover it. Move the pointer
+over that text to see the same count. The high contrast themes show an outline in the color
+`yreview.commentOverlapBorder` in place of the amber color. You can change each color in the
+setting `workbench.colorCustomizations`.
 
 ## Requirements
 

@@ -25,6 +25,11 @@ export const WAIT_MS = 120_000
 
 export const isOk = (result: GitResult): boolean => result.exitCode === 0
 
+const started = { count: 0 }
+
+/** The number of git processes that this extension host started. The action log uses it. */
+export const gitCalls = (): number => started.count
+
 /** False for an answer of the runner, which states nothing about the repository. */
 export const ran = (result: GitResult): boolean => result.exitCode >= 0
 
@@ -100,6 +105,7 @@ export class ProcessGitRunner implements GitRunner {
 
   async run(args: readonly string[], signal?: AbortSignal): Promise<GitResult> {
     signal?.throwIfAborted()
+    started.count += 1
     return new Promise((resolve, reject) => {
       const child = spawn(this.gitPath, args, {
         cwd: this.cwd,

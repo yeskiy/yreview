@@ -5,6 +5,7 @@ import { redactingLog } from '../../src/log'
 describe('redacting log', () => {
   const lines: string[] = []
   const sink = {
+    debug: (m: string) => lines.push(m),
     info: (m: string) => lines.push(m),
     warn: (m: string) => lines.push(m),
     error: (m: string) => lines.push(m),
@@ -26,6 +27,11 @@ describe('redacting log', () => {
     log.error('Push failed.', new Error(`token=${'ab'.repeat(20)} to git@example.com:o/r.git`))
     assert.equal(lines.length, 1)
     assert.doesNotMatch(lines[0] ?? '', /abab|example\.com/)
+  })
+
+  it('removes the folders of the user from a debug line', () => {
+    log.debug('Save Local took 5 ms in E:/work/demo')
+    assert.deepEqual(lines, ['Save Local took 5 ms in <project>'])
   })
 
   it('removes a remote URL and a mail address from a warning', () => {
