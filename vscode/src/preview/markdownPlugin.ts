@@ -2,12 +2,12 @@ import type MarkdownIt from 'markdown-it'
 
 import { commentLink } from './commentLink'
 
-type CoreRule = Parameters<MarkdownIt['core']['ruler']['push']>[1]
-type CoreState = Parameters<CoreRule>[0]
+type RenderRule = NonNullable<MarkdownIt['renderer']['rules'][string]>
+type Token = Parameters<RenderRule>[0][number]
 
 export const MARK_CLASS = 'yreview-commented'
 export const LINK_CLASS = 'yreview-add'
-const BLOCKS: ReadonlySet<string> = new Set(['paragraph_open', 'heading_open'])
+const BLOCKS = ['paragraph_open', 'heading_open']
 
 /** One commented range of source lines, one-based and inclusive. */
 export interface LineSpan {
@@ -23,6 +23,11 @@ export interface PreviewSource {
   readonly failed: (error: unknown) => void
 }
 
+interface View {
+  readonly file: string
+  readonly spans: readonly LineSpan[]
+}
+
 const fileOf = (env: unknown): string | undefined => {
   const document = (env as { currentDocument?: { scheme?: unknown; fsPath?: unknown } } | undefined)
     ?.currentDocument
@@ -31,40 +36,75 @@ const fileOf = (env: unknown): string | undefined => {
     : undefined
 }
 
-const addLinks = (state: CoreState, source: PreviewSource): void => {
-  const file = fileOf(state.env)
-  if (file === undefined) return
-  const spans = source.commented(file) ?? []
-  state.tokens.forEach((token, index) => {
-    const inline = state.tokens[index + 1]
-    if (!BLOCKS.has(token.type) || token.map === null || inline?.type !== 'inline') return
-    const [first, after] = token.map
-    if (spans.some((span) => span.start <= after && span.end > first)) {
-      token.attrJoin('class', MARK_CLASS)
+/** The links and marks of one block. The tokens stay as they are, because VS Code caches them. */
+const blockRule =
+  (md: MarkdownIt, source: PreviewSource, views: WeakMap<object, View>, previous?: RenderRule) =>
+  (...[tokens, index, options, env, self]: Parameters<RenderRule>): string => {
+    const plain = (list: Token[]): string =>
+      previous === undefined
+        ? self.renderToken(list, index, options)
+        : previous(list, index, options, env, self)
+    const view = typeof env === 'object' && env !== null ? views.get(env as object) : undefined
+    const token = tokens[index]
+    if (view === undefined || token?.map == null || tokens[index + 1]?.type !== 'inline') {
+      return plain(tokens)
     }
-    const open = new state.Token('link_open', 'a', 1)
-    open.attrSet('href', commentLink(source.scheme(), file, first + 1))
-    open.attrSet('class', LINK_CLASS)
-    open.attrSet('title', `Add a review comment on line ${first + 1}`)
-    inline.children = [
-      open,
-      Object.assign(new state.Token('text', '', 0), { content: '+' }),
-      new state.Token('link_close', 'a', -1),
-      ...(inline.children ?? []),
-    ]
-  })
+    try {
+      const { Token: Made } = md.core.State.prototype
+      const [first, after] = token.map
+      const open = new Made('link_open', 'a', 1)
+      open.attrSet('href', commentLink(source.scheme(), view.file, first + 1))
+      open.attrSet('class', LINK_CLASS)
+      open.attrSet('title', `Add a review comment on line ${first + 1}`)
+      const marked = view.spans.some((span) => span.start <= after && span.end > first)
+        ? Object.assign(new Made(token.type, token.tag, token.nesting), token, {
+            attrs: token.attrs?.map(([name, value]): [string, string] => [name, value]) ?? null,
+          })
+        : undefined
+      marked?.attrJoin('class', MARK_CLASS)
+      return `${plain(marked === undefined ? tokens : tokens.map((item, at) => (at === index ? marked : item)))}${self.renderInline(
+        [
+          open,
+          Object.assign(new Made('text', '', 0), { content: '+' }),
+          new Made('link_close', 'a', -1),
+        ],
+        options,
+        env,
+      )}`
+    } catch (error) {
+      source.failed(error)
+      return plain(tokens)
+    }
+  }
+
+const viewOf = (env: unknown, source: PreviewSource): View | undefined => {
+  try {
+    const file = fileOf(env)
+    return file === undefined ? undefined : { file, spans: source.commented(file) ?? [] }
+  } catch (error) {
+    source.failed(error)
+    return undefined
+  }
 }
 
-/** The markdown-it plugin of the preview. A failure leaves the preview as markdown-it made it. */
+/** The markdown-it plugin of the preview. It works at render time, because the parse has no file. */
 export const previewPlugin =
   (source: PreviewSource) =>
   (md: MarkdownIt): MarkdownIt => {
-    md.core.ruler.push('yreview_comment_links', (state) => {
-      try {
-        addLinks(state, source)
-      } catch (error) {
-        source.failed(error)
-      }
+    const views = new WeakMap<object, View>()
+    const render = md.renderer.render.bind(md.renderer)
+    Object.assign(
+      md.renderer.rules,
+      Object.fromEntries(
+        BLOCKS.map((type) => [type, blockRule(md, source, views, md.renderer.rules[type])]),
+      ),
+    )
+    Object.assign(md.renderer, {
+      render: (...[tokens, options, env]: Parameters<typeof render>): string => {
+        const view = viewOf(env, source)
+        if (view !== undefined && typeof env === 'object' && env !== null) views.set(env, view)
+        return render(tokens, options, env)
+      },
     })
     return md
   }

@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 
+import type MarkdownIt from 'markdown-it'
 import * as vscode from 'vscode'
 
 import { homeDirectory } from './bridge/discoveryFile'
@@ -13,6 +14,8 @@ import { offerIntellijKey } from './keyOffer'
 import type { BridgeHost } from './bridge/host'
 import { type Places, redactingLog } from './log'
 import { withLongForms } from './places'
+import { previewPlugin } from './preview/markdownPlugin'
+import { PreviewHost } from './preview/previewHost'
 import { offerSaveKey } from './saveKey'
 import { registerSessions } from './session/register'
 import type { ReviewSessions } from './session/terminals'
@@ -40,6 +43,10 @@ export interface YreviewApi {
   readonly handoff: HandoffApi | undefined
   /** Undefined when git is missing, so a session starts without the channel. */
   readonly bridge: BridgeHost | undefined
+  /** Undefined when git is missing. Tests call its link handler. */
+  readonly preview: PreviewHost | undefined
+  /** The Markdown preview calls it, because the manifest sets markdown.markdownItPlugins. */
+  extendMarkdownIt(md: MarkdownIt): MarkdownIt
 }
 
 const COMMENT_COMMANDS = [
@@ -109,6 +116,8 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       sessions,
       handoff: undefined,
       bridge: undefined,
+      preview: undefined,
+      extendMarkdownIt: (md: MarkdownIt) => md,
     }
   }
   held.service = new ReviewService(
@@ -116,7 +125,8 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     shareLogOf(context.workspaceState),
   )
   const comments = new ReviewComments(held.service, log)
-  context.subscriptions.push(comments)
+  const preview = new PreviewHost(held.service, log)
+  context.subscriptions.push(comments, preview)
   held.tasks = createTaskViews(held.service, comments, git, log, context.workspaceState)
   context.subscriptions.push(held.tasks)
   context.subscriptions.push(...registerViewCommands(held.tasks, log))
@@ -174,6 +184,8 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     sessions,
     handoff,
     bridge: bridge.host,
+    preview,
+    extendMarkdownIt: previewPlugin(preview.source),
   }
 }
 

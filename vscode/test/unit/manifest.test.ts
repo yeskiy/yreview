@@ -161,3 +161,24 @@ describe('diagnostic commands', () => {
       'false',
     ))
 })
+
+describe('the Markdown preview', () => {
+  const markdown = manifest.contributes as Record<string, unknown>
+
+  it('gives a markdown-it plugin and a style sheet that the package carries', () => {
+    assert.equal(markdown['markdown.markdownItPlugins'], true)
+    assert.deepEqual(markdown['markdown.previewStyles'], ['./media/preview.css'])
+    assert.ok(
+      readFileSync(path.join(root, 'media', 'preview.css'), 'utf8').includes('.yreview-add'),
+    )
+    assert.match(readFileSync(path.join(root, '.vscodeignore'), 'utf8'), /^!media\/preview\.css$/m)
+  })
+
+  it('shows the add button on the preview only', () =>
+    assert.equal(
+      contributes.menus['editor/title']?.find(
+        (entry) => entry.command === 'yreview.addCommentFromPreview',
+      )?.when,
+      "activeWebviewPanelId == 'markdown.preview'",
+    ))
+})

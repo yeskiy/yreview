@@ -310,6 +310,12 @@
         "command": "yreview.reportFailure",
         "title": "Report a Failure",
         "category": "Yreview"
+      },
+      {
+        "command": "yreview.addCommentFromPreview",
+        "title": "Add Review Comment",
+        "category": "Yreview",
+        "icon": "$(comment)"
       }
     ],
     "viewsContainers": {
@@ -536,6 +542,17 @@
         {
           "command": "yreview.reportFailure",
           "when": "false"
+        },
+        {
+          "command": "yreview.addCommentFromPreview",
+          "when": "activeWebviewPanelId == 'markdown.preview'"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "yreview.addCommentFromPreview",
+          "when": "activeWebviewPanelId == 'markdown.preview'",
+          "group": "navigation@9"
         }
       ],
       "editor/context": [
@@ -1012,6 +1029,10 @@
         }
       }
     },
+    "markdown.markdownItPlugins": true,
+    "markdown.previewStyles": [
+      "./media/preview.css"
+    ],
     "languageModelTools": [
       {
         "name": "review_list_comments",

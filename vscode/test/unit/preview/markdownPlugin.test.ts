@@ -87,6 +87,20 @@ describe('the preview plugin', () => {
     )
   })
 
+  it('reads the file at render time and keeps the parsed tokens, as the VS Code cache needs', () => {
+    const md = previewPlugin({
+      scheme: () => 'vscode',
+      commented: () => [{ start: 3, end: 3 }],
+      failed: (error) => assert.fail(String(error)),
+    })(new MarkdownIt())
+    const tokens = md.parse(text, {})
+    const once = md.renderer.render(tokens, md.options, { ...fileEnv })
+    assert.equal(count(once, `class="${LINK_CLASS}"`), 3)
+    assert.equal(count(once, MARK_CLASS), 1)
+    assert.equal(md.renderer.render(tokens, md.options, { ...fileEnv }), once)
+    assert.equal(md.renderer.render(tokens, md.options, {}), new MarkdownIt().render(text))
+  })
+
   it('leaves the preview whole after a failure, and reports it', () => {
     const failures: unknown[] = []
     assert.equal(render([], { failures, broken: true }), new MarkdownIt().render(text))

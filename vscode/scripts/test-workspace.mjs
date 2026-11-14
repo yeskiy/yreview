@@ -11,6 +11,10 @@ rmSync(root, { recursive: true, force: true })
 mkdirSync(path.join(root, 'src'), { recursive: true })
 writeFileSync(path.join(root, 'src', 'a.txt'), 'one\ntwo\nthree\n')
 writeFileSync(
+  path.join(root, 'src', 'notes.md'),
+  '# Notes\n\nFirst paragraph.\n\nSecond paragraph.\n',
+)
+writeFileSync(
   path.join(root, 'src', 'todo.ts'),
   '// TODO: first task\nexport const value = 1 // FIXME: second task\n',
 )
