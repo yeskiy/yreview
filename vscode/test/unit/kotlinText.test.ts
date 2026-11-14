@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { isKotlinBlank, kotlinTrim } from '../../src/core/kotlinText'
+import { isKotlinBlank, kotlinTrim, kotlinTrimEnd } from '../../src/core/kotlinText'
 
 describe('kotlinText', () => {
   it('trims the characters that Kotlin trims', () => {
@@ -16,4 +16,11 @@ describe('kotlinText', () => {
     assert.equal(isKotlinBlank(''), true)
     assert.equal(isKotlinBlank('\ufeff'), false)
   })
+
+  it('trims a trailing space at the end', () => assert.equal(kotlinTrimEnd('TODO  '), 'TODO'))
+
+  it('trims a trailing no-break space at the end', () =>
+    assert.equal(kotlinTrimEnd(`TODO${String.fromCharCode(0xa0)}`), 'TODO'))
+
+  it('keeps a leading space at the end trim', () => assert.equal(kotlinTrimEnd('  TODO'), '  TODO'))
 })

@@ -1,4 +1,4 @@
-import { kotlinTrim } from '../core/kotlinText'
+import { kotlinTrim, kotlinTrimEnd } from '../core/kotlinText'
 import { compactRange, hasColumns } from '../core/range'
 import type { ReviewTask } from './reviewTask'
 import { cleanPath, cleanText, cutText } from './taskText'
@@ -65,3 +65,17 @@ export const plainText = (task: ReviewTask): string =>
   `${task.id} ${task.kind === 'todo' ? 'todo' : 'comment'} ${cleanPath(task.path)}:${linesOf(task)}\n${kotlinTrim(
     cleanText(task.text),
   )}`
+
+export const MARKUP = '<html'
+export const UNKNOWN_TITLE = 'unknown'
+export const LONGEST_TITLE = 200
+
+export const isMarkup = (value: string): boolean =>
+  kotlinTrim(value).toLowerCase().startsWith(MARKUP)
+
+/** A title from an agent for a tab name. Markup names nothing, and a long title ends in MORE. */
+export const plainTitle = (value: string | undefined, limit: number = LONGEST_TITLE): string => {
+  const text = value ?? ''
+  if (isMarkup(text)) return UNKNOWN_TITLE
+  return text.length <= limit ? text : `${kotlinTrimEnd(cutText(text, limit))}${MORE}`
+}

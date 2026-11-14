@@ -1,17 +1,21 @@
 import assert from 'node:assert/strict'
 
 import {
+  LONGEST_TITLE,
   MORE,
   ROW_LIMIT,
   TOOLTIP_LIMIT,
   TOOLTIP_LINES,
+  UNKNOWN_TITLE,
   fileCount,
   fileTitle,
   firstLine,
   folderCount,
   folderTitle,
+  isMarkup,
   linesOf,
   plainText,
+  plainTitle,
   rowText,
   taskState,
   taskTitle,
@@ -209,5 +213,57 @@ describe('task labels', () => {
     const text = plainText({ ...comment, path: `src/Parser.kt${escape}[31m\r\nrm -rf /` })
     assert.equal(text.includes(escape), false)
     assert.equal(text, 'a1b2c3 comment src/Parser.kt[31mrm -rf /:88-94\nfirst line\nsecond line')
+  })
+})
+
+describe('plainTitle (PlainTextTest.kt)', () => {
+  it('a plain value stays as it is', () =>
+    assert.equal(plainTitle('alice@example.com'), 'alice@example.com'))
+
+  it('a value that starts with the markup tag reads as unknown', () =>
+    assert.equal(plainTitle('<html><b>alice</b>'), UNKNOWN_TITLE))
+
+  it('the case of the markup tag changes nothing', () =>
+    assert.equal(plainTitle('<HtMl><img src=x>'), UNKNOWN_TITLE))
+
+  it('a space in front of the markup tag changes nothing', () => {
+    assert.equal(plainTitle('  <html>x'), UNKNOWN_TITLE)
+    assert.equal(isMarkup('  <HTML>x'), true)
+  })
+
+  it('a tag inside the value keeps the value', () =>
+    assert.equal(plainTitle('see <html> here'), 'see <html> here'))
+
+  it('a cut of the value keeps every character whole', () =>
+    assert.equal(
+      plainTitle(`${'y'.repeat(LONGEST_TITLE - 1)}${String.fromCodePoint(0x1f680)}tail`),
+      `${'y'.repeat(LONGEST_TITLE - 1)}${MORE}`,
+    ))
+
+  it('a value over the cap ends with the mark', () => {
+    const cut = plainTitle('x'.repeat(LONGEST_TITLE + 40))
+    assert.equal(cut.length, LONGEST_TITLE + MORE.length)
+    assert.ok(cut.endsWith(MORE), cut)
+  })
+
+  it('a cut trims the white space at its end', () =>
+    assert.equal(
+      plainTitle(`${'w'.repeat(LONGEST_TITLE - 1)} x`),
+      `${'w'.repeat(LONGEST_TITLE - 1)}${MORE}`,
+    ))
+
+  it('a value of the length of the cap keeps every character', () =>
+    assert.equal(plainTitle('y'.repeat(LONGEST_TITLE)), 'y'.repeat(LONGEST_TITLE)))
+
+  it('the caller can set a shorter cap', () =>
+    assert.equal(plainTitle('abcdefgh', 3), `abc${MORE}`))
+
+  it('a value that is missing reads as an empty text', () =>
+    assert.equal(plainTitle(undefined), ''))
+
+  it('the markup test answers the tag and nothing else', () => {
+    assert.equal(isMarkup('<html>'), true)
+    assert.equal(isMarkup('<b>bold</b>'), false)
+    assert.equal(isMarkup(''), false)
   })
 })
