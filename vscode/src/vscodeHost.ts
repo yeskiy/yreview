@@ -7,8 +7,12 @@ import type { RefspecAnswer, ServiceHost } from './store/reviewService'
 const DECLINED = 'yreview.refspecDeclined'
 const ADD = 'Add'
 const NEVER = 'Do not ask again'
+const TOLD = 'yreview.folderNoticeRoots'
 
-/** The editor side of the review service. The "Do not ask again" roots stay in the given state. */
+const strings = (value: unknown): readonly string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+
+/** The editor side of the review service. The state keeps the declined roots and the told folders. */
 export const vscodeHost = (state: vscode.Memento, git: string): ServiceHost => ({
   gitPath: () => git,
   settings: (root) => readSettings(vscode.Uri.file(root)),
@@ -21,13 +25,17 @@ export const vscodeHost = (state: vscode.Memento, git: string): ServiceHost => (
     if (answer === ADD) return 'add'
     return answer === NEVER ? 'never' : undefined
   },
-  declinedRoots: () => {
-    const stored = state.get<unknown>(DECLINED)
-    return Array.isArray(stored)
-      ? stored.filter((root): root is string => typeof root === 'string')
-      : []
-  },
+  declinedRoots: () => strings(state.get<unknown>(DECLINED)),
   saveDeclinedRoots: (roots) => Promise.resolve(state.update(DECLINED, roots)),
+  workspaceFolders: () =>
+    (vscode.workspace.workspaceFolders ?? [])
+      .filter((folder) => folder.uri.scheme === 'file')
+      .map((folder) => folder.uri.fsPath),
+  toldFolders: () => strings(state.get<unknown>(TOLD)),
+  saveToldFolders: (roots) => Promise.resolve(state.update(TOLD, roots)),
+  say: (message) => {
+    vscode.window.showInformationMessage(message)
+  },
   warn: (message) => {
     vscode.window.showWarningMessage(message)
   },

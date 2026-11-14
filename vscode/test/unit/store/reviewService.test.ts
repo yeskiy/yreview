@@ -34,6 +34,10 @@ const host = (
       store.declined = [...roots]
       return Promise.resolve()
     },
+    workspaceFolders: () => [],
+    toldFolders: () => [],
+    saveToldFolders: () => Promise.resolve(),
+    say: () => undefined,
     warn: (message) => {
       warnings.push(message)
     },
@@ -67,15 +71,16 @@ describe('ReviewService', function reviewService() {
   }
   const anchored = async (service: ReviewService, dir: string): Promise<Anchor> => {
     const result = await service.anchorOf(path.join(dir, 'src', 'a.txt'))
-    return result.kind === 'git' ? result.anchor : assert.fail(`no anchor: ${result.kind}`)
+    return result.kind === 'found' ? result.anchor : assert.fail(`no anchor: ${result.kind}`)
   }
 
   it('anchors a file of a repository to HEAD and its path', async () => {
     const dir = repo()
     const result = await new ReviewService(host([]).value).anchorOf(path.join(dir, 'src', 'a.txt'))
     assert.deepEqual(result, {
-      kind: 'git',
+      kind: 'found',
       anchor: {
+        store: 'git',
         root: git(dir, 'rev-parse', '--show-toplevel'),
         head: git(dir, 'rev-parse', 'HEAD'),
         path: 'src/a.txt',
@@ -93,12 +98,12 @@ describe('ReviewService', function reviewService() {
     })
   })
 
-  it('refuses a file outside every repository', async () => {
+  it('refuses a file outside every repository and every workspace folder', async () => {
     const dir = scratchDir()
     dirs.push(dir)
     writeFileSync(path.join(dir, 'a.txt'), 'x')
     assert.deepEqual(await new ReviewService(host([]).value).anchorOf(path.join(dir, 'a.txt')), {
-      kind: 'noRepository',
+      kind: 'noPlace',
     })
   })
 
@@ -106,7 +111,7 @@ describe('ReviewService', function reviewService() {
     const dir = repo()
     assert.deepEqual(
       await new ReviewService(host([]).value).anchorOf(path.join(dir, 'gone', 'a.txt')),
-      { kind: 'noRepository' },
+      { kind: 'noPlace' },
     )
   })
 

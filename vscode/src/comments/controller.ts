@@ -11,7 +11,7 @@ import type { Log } from '../log'
 import { readSettings } from '../settings'
 import type { StoredComment } from '../store/commentBook'
 import { ALL_REFS, isShared } from '../store/noteRefs'
-import { type Anchor, NO_COMMIT, NO_REPOSITORY, type ReviewService } from '../store/reviewService'
+import { type Anchor, NO_COMMIT, NO_PLACE, type ReviewService } from '../store/reviewService'
 
 const OPEN = 'yreview.open'
 const RESOLVED = 'yreview.resolved'
@@ -19,8 +19,6 @@ const COMMENT = 'yreview.comment'
 const SAVING = 'yreview.saving'
 const NATIVE_ADD = 'workbench.action.addComment'
 const SCRATCH_DIR = `${path.sep}refs${path.sep}notes${path.sep}y-review${path.sep}scratch`
-
-export const NEEDS_REPOSITORY = `${NO_REPOSITORY} Open a folder that is a git repository.`
 
 /** The box that Add Review Comment opened last, and the uri of its comment input once known. */
 interface Box {
@@ -309,7 +307,7 @@ export class ReviewComments implements vscode.Disposable {
     if (uri.scheme !== 'file') return
     const known = new Set(this.snapshot(uri).map((entry) => entry.stored.id))
     const found = await this.service.anchorOf(uri.fsPath)
-    if (found.kind !== 'git') {
+    if (found.kind !== 'found') {
       this.clear(uri)
       this.decorate(uri)
       return
@@ -687,8 +685,8 @@ export class ReviewComments implements vscode.Disposable {
     })
     try {
       const found = await this.service.anchorOf(document.uri.fsPath)
-      if (found.kind !== 'git') {
-        throw new Error(found.kind === 'noCommit' ? NO_COMMIT : NEEDS_REPOSITORY)
+      if (found.kind !== 'found') {
+        throw new Error(found.kind === 'noCommit' ? NO_COMMIT : (found.reason ?? NO_PLACE))
       }
       const result = await this.write(found.anchor.root, () =>
         this.service.addComment(found.anchor, range, text, shared),

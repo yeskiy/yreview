@@ -15,15 +15,16 @@ export type Line = string | PromiseLike<string>
 /** One place that holds review records, named by a ref and by a commit. */
 export interface NoteStore {
   /** The records of one note, and none for a note that the extension cannot read. */
-  readLines(ref: string, commit: string): Promise<readonly string[]>
+  readonly readLines: (ref: string, commit: string) => Promise<readonly string[]>
   /** The records of one note. A note that the extension cannot read stops the caller. */
-  readOrRefuse(ref: string, commit: string): Promise<readonly string[]>
-  append(ref: string, commit: string, line: Line): Promise<void>
-  rewrite(ref: string, commit: string, lines: readonly string[]): Promise<void>
+  readonly readOrRefuse: (ref: string, commit: string) => Promise<readonly string[]>
+  /** Property syntax, so the compiler refuses a method that takes a narrower parameter. */
+  readonly append: (ref: string, commit: string, line: Line) => Promise<void>
+  readonly rewrite: (ref: string, commit: string, lines: readonly string[]) => Promise<void>
   /** Writes `change` of the note and gives the lines that `change` got. */
-  edit(ref: string, commit: string, change: Change): Promise<readonly string[]>
-  commitsWithNotes(ref: string): Promise<readonly string[]>
-  commitsOrRefuse(ref: string): Promise<readonly string[]>
+  readonly edit: (ref: string, commit: string, change: Change) => Promise<readonly string[]>
+  readonly commitsWithNotes: (ref: string) => Promise<readonly string[]>
+  readonly commitsOrRefuse: (ref: string) => Promise<readonly string[]>
 }
 
 export const SCRATCH_PREFIX = 'refs/notes/y-review/scratch/'

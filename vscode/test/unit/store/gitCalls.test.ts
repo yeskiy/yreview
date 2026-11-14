@@ -12,6 +12,10 @@ const host: ServiceHost = {
   askRefspec: () => Promise.resolve(undefined),
   declinedRoots: () => [],
   saveDeclinedRoots: () => Promise.resolve(),
+  workspaceFolders: () => [],
+  toldFolders: () => [],
+  saveToldFolders: () => Promise.resolve(),
+  say: () => undefined,
   warn: () => undefined,
 }
 
@@ -31,13 +35,20 @@ describe('git calls of the comment actions', function calls() {
 
   const anchored = async (service: ReviewService, dir: string): Promise<Anchor> => {
     const found = await service.anchorOf(path.join(dir, 'src', 'a.txt'))
-    return found.kind === 'git' ? found.anchor : assert.fail('no anchor')
+    return found.kind === 'found' ? found.anchor : assert.fail('no anchor')
   }
 
   it('anchors a file with 2 git calls', async () => {
     const dir = makeRepo()
     dirs.push(dir)
     const service = new ReviewService(host)
+    assert.equal((await counted(() => service.anchorOf(path.join(dir, 'src', 'a.txt')))).calls, 2)
+  })
+
+  it('anchors a file of a workspace folder repository with 2 git calls', async () => {
+    const dir = makeRepo()
+    dirs.push(dir)
+    const service = new ReviewService({ ...host, workspaceFolders: () => [dir] })
     assert.equal((await counted(() => service.anchorOf(path.join(dir, 'src', 'a.txt')))).calls, 2)
   })
 

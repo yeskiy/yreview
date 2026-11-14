@@ -30,6 +30,10 @@ const quiet: ServiceHost = {
   askRefspec: () => Promise.resolve(undefined),
   declinedRoots: () => [],
   saveDeclinedRoots: () => Promise.resolve(),
+  workspaceFolders: () => [],
+  toldFolders: () => [],
+  saveToldFolders: () => Promise.resolve(),
+  say: () => undefined,
   warn: () => undefined,
 }
 const fetchNotes = (dir: string): string =>
@@ -63,7 +67,7 @@ describe('mixed team flow', function mixed() {
     fetchNotes(vscodeUser)
     const service = new ReviewService(quiet)
     const anchor = await service.anchorOf(path.join(vscodeUser, 'src', 'a.txt'))
-    if (anchor.kind !== 'git') return assert.fail('no anchor')
+    if (anchor.kind !== 'found') return assert.fail('no anchor')
     assert.equal(anchor.anchor.head, head)
     const written = await service.addComment(
       anchor.anchor,
