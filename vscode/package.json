@@ -1147,7 +1147,10 @@
           ]
         }
       }
-    ]
+    ],
+    "configurationDefaults": {
+      "comments.openView": "never"
+    }
   },
   "scripts": {
     "build": "node scripts/build.mjs",

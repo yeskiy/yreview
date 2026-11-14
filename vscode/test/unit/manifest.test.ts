@@ -42,6 +42,11 @@ describe('manifest', () => {
     assert.equal(capabilities.virtualWorkspaces, false)
   })
 
+  it('keeps the Comments panel closed when a comment thread opens', () => {
+    const defaults = (manifest.contributes as Record<string, unknown>).configurationDefaults
+    assert.deepEqual(defaults, { 'comments.openView': 'never' })
+  })
+
   it('contributes no telemetry setting', () => {
     assert.doesNotMatch(JSON.stringify(manifest.contributes), /telemetry/i)
   })
