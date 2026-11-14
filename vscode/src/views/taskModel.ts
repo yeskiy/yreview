@@ -140,7 +140,11 @@ export class TaskModel implements vscode.Disposable {
     try {
       this.api = await gitApi()
       this.disposables.push(
-        watchRepositories(this.api, () => this.later('changes', () => this.refreshChanges())),
+        watchRepositories(
+          this.api,
+          () => this.later('changes', () => this.refreshChanges()),
+          () => this.schedule.request('full'),
+        ),
       )
       await this.refresh()
     } catch (error) {

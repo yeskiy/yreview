@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { appendFileSync } from 'node:fs'
+import { appendFileSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as wait } from 'node:timers/promises'
 
@@ -11,6 +12,8 @@ import type { YreviewApi } from '../../src/extension'
 import type { ReviewTask } from '../../src/tasks/reviewTask'
 import { NO_TASK, type Row } from '../../src/tasks/viewRows'
 import type { TaskViews } from '../../src/views/taskViews'
+
+import { gitRepository, removeRepository, until as eventually } from './window'
 
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
@@ -66,6 +69,31 @@ describe('task views', function views() {
       'TODO: first task',
     ])
     assert.equal(project.view.badge?.value, project.rows().tasks.length)
+  })
+
+  it('scans a repository that the git extension opens later, and drops it after a close', async function lateRepository() {
+    const tasks = await taskViews()
+    await tasks.model.refresh()
+    const project = tasks.view('project')
+    const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'yreview-late-')))
+    const late = (...args: string[]): string =>
+      execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
+    writeFileSync(path.join(dir, 'late.ts'), '// TODO: late task\n')
+    late('init', '-q', '-b', 'main')
+    late('config', 'commit.gpgsign', 'false')
+    late('add', '.')
+    late('commit', '-q', '-m', 'init')
+    const shows = (): boolean => todoTexts(project.rows().tasks).includes('TODO: late task')
+    try {
+      await vscode.commands.executeCommand('git.openRepository', dir)
+      // The git extension of VS Code 1.101 does not open a repository outside the workspace.
+      if (!(await eventually(() => gitRepository(dir) !== undefined))) this.skip()
+      await until(shows)
+      await vscode.commands.executeCommand('git.close', vscode.Uri.file(dir))
+      await until(() => !shows())
+    } finally {
+      await removeRepository(dir)
+    }
   })
 
   it('a click on a comment row opens the file and expands the thread', async () => {

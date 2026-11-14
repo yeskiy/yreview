@@ -5,7 +5,10 @@ import { gitRoot, projectPath, uniqueRoots } from '../tasks/roots'
 
 export interface GitRepository {
   readonly rootUri: vscode.Uri
-  readonly state: { readonly onDidChange: vscode.Event<void> }
+  readonly state: {
+    readonly onDidChange: vscode.Event<void>
+    readonly HEAD?: { readonly commit?: string }
+  }
 }
 
 export interface GitApi {
@@ -55,24 +58,43 @@ export const repositoryRoots = async (
     )),
   ])
 
-/** Calls back when the git extension opens, closes or changes a repository. */
+/** Calls back when a repository changes its state, and when the git extension opens or closes one. */
 export const watchRepositories = (
   api: GitApi | undefined,
-  onChange: () => void,
+  onChange: (repository: GitRepository) => void,
+  onSet: () => void,
 ): vscode.Disposable => {
   const held: vscode.Disposable[] = []
   const follow = (repository: GitRepository): void => {
-    held.push(repository.state.onDidChange(() => onChange()))
+    held.push(repository.state.onDidChange(() => onChange(repository)))
   }
   api?.repositories.forEach(follow)
   if (api !== undefined) {
     held.push(
       api.onDidOpenRepository((repository) => {
         follow(repository)
-        onChange()
+        onSet()
       }),
-      api.onDidCloseRepository(() => onChange()),
+      api.onDidCloseRepository(() => onSet()),
     )
   }
   return new vscode.Disposable(() => held.forEach((disposable) => disposable.dispose()))
+}
+
+/** Calls back when HEAD of a repository that the git extension knows moves to another commit. */
+export const watchHeads = (api: GitApi | undefined, onMove: () => void): vscode.Disposable => {
+  const heads = new Map<GitRepository, string | undefined>(
+    (api?.repositories ?? []).map((repository) => [repository, repository.state.HEAD?.commit]),
+  )
+  return watchRepositories(
+    api,
+    (repository) => {
+      const head = repository.state.HEAD?.commit
+      if (head === undefined) return
+      const before = heads.get(repository)
+      heads.set(repository, head)
+      if (before !== undefined && before !== head) onMove()
+    },
+    () => undefined,
+  )
 }
