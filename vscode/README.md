@@ -34,6 +34,11 @@ to `refs/notes/devtools/discuss`, and Yreview pushes that ref to your remote at 
 
 Click Resolve on a comment to close it. Click Delete to remove it from the notes.
 
+Open a change in the Source Control view. Both sides of the diff take comments. A comment on
+the left side goes to the note of the revision of that side. A comment on the working tree
+side goes to the note of HEAD. The thread label shows the revision, for example
+`Lines 2-2 @4f2c8b1`. Diff views of other extensions, for example GitLens, take no comments.
+
 The comment box opens on the first line of the commented text, and Yreview colors the full
 text. For this reason, the VS Code Comments view shows only the first line of each comment.
 
@@ -46,13 +51,13 @@ setting `workbench.colorCustomizations`.
 
 ## Requirements
 
-| Item      | Requirement                                                                                                     |
-| --------- | --------------------------------------------------------------------------------------------------------------- |
-| VS Code   | 1.101 or later                                                                                                  |
-| git       | 2.24 or later, on the PATH or in the user setting `git.path`. With an older git, the comment commands stay off. |
-| Folder    | A git repository. Yreview keeps comments in git notes only, so a folder outside git gets no comments.           |
-| Workspace | Trusted. Yreview runs git, and git reads the repository configuration.                                          |
-| File      | Inside the git repository, which has at least one commit                                                        |
+| Item      | Requirement                                                                                                                 |
+| --------- | --------------------------------------------------------------------------------------------------------------------------- |
+| VS Code   | 1.101 or later                                                                                                              |
+| git       | 2.24 or later, on the PATH or in the user setting `git.path`. With an older git, the comment commands stay off.             |
+| Folder    | A git repository, or a folder outside git. Outside git, Yreview keeps the comments in `.y-review/` of the workspace folder. |
+| Workspace | Trusted. Yreview runs git, and git reads the repository configuration.                                                      |
+| File      | Inside a git repository that has at least one commit, or inside a workspace folder                                          |
 
 ## Settings
 
@@ -66,13 +71,23 @@ setting `workbench.colorCustomizations`.
 
 ## What Yreview writes
 
-| Place                                                 | When                                        |
-| ----------------------------------------------------- | ------------------------------------------- |
-| `refs/notes/y-review/local`                           | You save a local comment                    |
-| `refs/notes/devtools/discuss`, and a push of that ref | You save a shared comment                   |
-| `remote.<name>.fetch` in `.git/config`                | You click Add in the question after a share |
+| Place                                                 | When                                                                                                                             |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `refs/notes/y-review/local`                           | You save a local comment                                                                                                         |
+| `refs/notes/devtools/discuss`, and a push of that ref | You save a shared comment                                                                                                        |
+| `remote.<name>.fetch` in `.git/config`                | You click Add in the question after a share                                                                                      |
+| `.y-review/notes/` in the workspace folder            | You save a comment on a file outside every git repository                                                                        |
+| `<git dir>/y-review/migrated-<time>`                  | A repository with a commit now holds that folder. Yreview copies the comments into the git notes, then moves the old folder here |
 
-Yreview never changes a file of your working tree.
+Yreview changes no file of your working tree, except the folder `.y-review/` of a workspace
+folder outside git. Two editors that write comments in one folder outside git at the same
+time can lose one comment, because each one locks only inside its own process.
+
+## Known limits
+
+Do not open one folder outside git in two editors at the same time (two VS Code windows, or
+VS Code and IntelliJ). Each editor locks the comment file only inside its own process, so
+one of two parallel writes can get lost.
 
 ## Privacy
 

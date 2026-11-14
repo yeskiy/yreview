@@ -14,6 +14,7 @@ import { vscodeHost } from './vscodeHost'
 export interface YreviewApi {
   /** Undefined when git is missing or older than 2.24, so the comment features stay off. */
   readonly comments: ReviewComments | undefined
+  readonly service: ReviewService | undefined
 }
 
 const COMMENT_COMMANDS = [
@@ -57,11 +58,18 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       ),
     )
     vscode.window.showErrorMessage(problem)
-    return { comments: undefined }
+    return { comments: undefined, service: undefined }
   }
   held.service = new ReviewService(vscodeHost(context.workspaceState, git))
   const comments = new ReviewComments(held.service, log)
   context.subscriptions.push(comments)
+  const settle = (): void => {
+    held.service
+      ?.folderStoreRoots(true)
+      .catch((error: unknown) => log.error('The move of a folder store failed.', error))
+  }
+  settle()
+  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(settle))
   offerIntellijKey(context.globalState).catch((error: unknown) =>
     log.error('The key offer failed.', error),
   )
@@ -69,7 +77,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     log.error('The save key offer failed.', error),
   )
   log.info('Yreview started.')
-  return { comments }
+  return { comments, service: held.service }
 }
 
 export const deactivate = (): void => undefined

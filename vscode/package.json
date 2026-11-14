@@ -85,7 +85,7 @@
       "commandPalette": [
         {
           "command": "yreview.addComment",
-          "when": "editorIsOpen && resourceScheme == file"
+          "when": "editorIsOpen && resourceScheme =~ /^(file|git)$/"
         },
         {
           "command": "yreview.saveLocal",
@@ -115,7 +115,7 @@
       "editor/context": [
         {
           "command": "yreview.addComment",
-          "when": "resourceScheme == file",
+          "when": "resourceScheme =~ /^(file|git)$/",
           "group": "z_yreview@1"
         }
       ],

@@ -3,16 +3,26 @@ import path from 'node:path'
 
 import * as vscode from 'vscode'
 
+import { parseGitUriQuery, refKindOf, revisionLabel } from '../core/diffAnchor'
 import { type Segment, segments } from '../core/overlap'
 import { commentRange, compactRange, hasColumns } from '../core/range'
+import type { RecordRange } from '../core/record'
 import { gitCalls } from '../git/runner'
 import { guard } from '../guard'
 import type { Log } from '../log'
 import { readSettings } from '../settings'
 import type { StoredComment } from '../store/commentBook'
 import { ALL_REFS, isShared } from '../store/noteRefs'
-import { type Anchor, NO_COMMIT, NO_PLACE, type ReviewService } from '../store/reviewService'
+import {
+  type Anchor,
+  type AnchorResult,
+  NO_COMMIT,
+  NO_PLACE,
+  type ReviewService,
+} from '../store/reviewService'
 
+const FILE = 'file'
+const GIT = 'git'
 const OPEN = 'yreview.open'
 const RESOLVED = 'yreview.resolved'
 const COMMENT = 'yreview.comment'
@@ -30,6 +40,33 @@ interface Box {
 
 const inputOf = (editor: vscode.TextEditor | undefined): string | undefined =>
   editor?.document.uri.scheme === 'comment' ? editor.document.uri.toString() : undefined
+
+/** The file and the ref of a `git:` side that can take a comment. A merge stage cannot. */
+const gitSide = (uri: vscode.Uri) => {
+  if (uri.scheme !== GIT) return undefined
+  const query = parseGitUriQuery(uri.query)
+  return query === undefined || refKindOf(query.ref).kind === 'none' ? undefined : query
+}
+
+const canComment = (uri: vscode.Uri): boolean => uri.scheme === FILE || gitSide(uri) !== undefined
+
+/** The settings of a `git:` side come from the folder of its file. */
+const scopeOf = (uri: vscode.Uri): vscode.Uri => {
+  const side = gitSide(uri)
+  return side === undefined ? uri : vscode.Uri.file(side.path)
+}
+
+const refusalOf = (result: Exclude<AnchorResult, { kind: 'found' }>): string =>
+  result.kind === 'noCommit' ? NO_COMMIT : (result.reason ?? NO_PLACE)
+
+/** A thread on a diff side names the revision of that side in its label. */
+const revisionOf = (uri: vscode.Uri, anchor: Anchor): string | undefined =>
+  uri.scheme === GIT ? revisionLabel(anchor.head, anchor.dirty === true) : undefined
+
+const linesLabel = (range: RecordRange, revision: string | undefined): string =>
+  revision === undefined
+    ? `Lines ${compactRange(range)}`
+    : `Lines ${compactRange(range)} ${revision}`
 
 export interface Shown {
   readonly thread: vscode.CommentThread
@@ -99,17 +136,17 @@ const commentKey = (stored: StoredComment): string =>
     isShared(stored.ref),
   ])
 
-const labelOf = (stored: StoredComment): string | undefined => {
+const labelOf = (stored: StoredComment, revision: string | undefined): string | undefined => {
   const range = stored.record.location?.range
-  return range === undefined ? undefined : `Lines ${compactRange(range)}`
+  return range === undefined ? undefined : linesLabel(range, revision)
 }
 
-const openView = (stored: StoredComment, range: vscode.Range) => ({
+const openView = (stored: StoredComment, range: vscode.Range, revision: string | undefined) => ({
   comments: [commentOf(stored)],
   canReply: false,
   contextValue: OPEN,
   state: vscode.CommentThreadState.Unresolved,
-  label: labelOf(stored),
+  label: labelOf(stored, revision),
   range: firstLine(range),
 })
 
@@ -120,10 +157,15 @@ const resolvedView = {
 }
 
 /** Sets only the parts that changed, so VS Code does not redraw a thread that is the same. */
-const refresh = (old: Shown, stored: StoredComment, range: vscode.Range): vscode.CommentThread =>
+const refresh = (
+  old: Shown,
+  stored: StoredComment,
+  range: vscode.Range,
+  revision: string | undefined,
+): vscode.CommentThread =>
   Object.assign(old.thread, {
     ...(commentKey(old.stored) === commentKey(stored) ? {} : { comments: [commentOf(stored)] }),
-    ...(labelOf(old.stored) === labelOf(stored) ? {} : { label: labelOf(stored) }),
+    ...(old.thread.label === labelOf(stored, revision) ? {} : { label: labelOf(stored, revision) }),
     ...(old.thread.range?.isEqual(firstLine(range)) ? {} : { range: firstLine(range) }),
   })
 
@@ -212,7 +254,7 @@ export class ReviewComments implements vscode.Disposable {
   ) {
     this.controller.commentingRangeProvider = {
       provideCommentingRanges: (document) =>
-        document.uri.scheme === 'file'
+        canComment(document.uri)
           ? [new vscode.Range(0, 0, Math.max(document.lineCount - 1, 0), 0)]
           : undefined,
     }
@@ -256,7 +298,7 @@ export class ReviewComments implements vscode.Disposable {
         guard(log, 'Delete', (comment: vscode.Comment) => this.remove(comment)),
       ),
       vscode.languages.registerCodeActionsProvider(
-        { scheme: 'file' },
+        [{ scheme: FILE }, { scheme: GIT }],
         {
           provideCodeActions: () => [
             Object.assign(
@@ -304,9 +346,9 @@ export class ReviewComments implements vscode.Disposable {
 
   /** Keeps the thread of each known comment id, so a reload does not make the threads flicker. */
   private async load(uri: vscode.Uri): Promise<void> {
-    if (uri.scheme !== 'file') return
+    if (!canComment(uri)) return
     const known = new Set(this.snapshot(uri).map((entry) => entry.stored.id))
-    const found = await this.service.anchorOf(uri.fsPath)
+    const found = await this.anchorFor(uri)
     if (found.kind !== 'found') {
       this.clear(uri)
       this.decorate(uri)
@@ -318,7 +360,7 @@ export class ReviewComments implements vscode.Disposable {
     const document = await vscode.workspace.openTextDocument(uri)
     const ids = new Set(stored.map((entry) => entry.id))
     const before = this.snapshot(uri)
-    const expanded = !this.shown.has(uri.toString()) && readSettings(uri).editorMarks
+    const expanded = !this.shown.has(uri.toString()) && readSettings(scopeOf(uri)).editorMarks
     before
       .filter((entry) => known.has(entry.stored.id) && !ids.has(entry.stored.id))
       .forEach((entry) => entry.thread.dispose())
@@ -328,7 +370,9 @@ export class ReviewComments implements vscode.Disposable {
         const old = before.find((shown) => shown.stored.id === entry.id)
         return {
           thread:
-            old === undefined ? this.draw(uri, entry, range, expanded) : refresh(old, entry, range),
+            old === undefined
+              ? this.draw(uri, entry, found.anchor, range, expanded)
+              : refresh(old, entry, range, revisionOf(uri, found.anchor)),
           stored: entry,
           anchor: found.anchor,
           range,
@@ -337,6 +381,15 @@ export class ReviewComments implements vscode.Disposable {
       ...before.filter((entry) => !known.has(entry.stored.id) && !ids.has(entry.stored.id)),
     ])
     this.decorate(uri)
+  }
+
+  /** A `git:` side anchors at the revision of its ref, and a file at HEAD or in a folder store. */
+  private anchorFor(uri: vscode.Uri): Promise<AnchorResult> {
+    const side = gitSide(uri)
+    if (side !== undefined) return this.service.anchorOfRevision(side.path, side.ref)
+    return uri.scheme === FILE
+      ? this.service.anchorOf(uri.fsPath)
+      : Promise.resolve({ kind: 'noPlace' })
   }
 
   /** The count of git processes so far. Tests use it. */
@@ -353,7 +406,7 @@ export class ReviewComments implements vscode.Disposable {
 
   /** The commented text of one file, split by the number of open comments that cover it. */
   segmentsOf(uri: vscode.Uri): Segment[] {
-    return readSettings(uri).editorMarks
+    return readSettings(scopeOf(uri)).editorMarks
       ? segments(
           this.snapshot(uri).map(({ range }) => ({
             start: plain(range.start),
@@ -388,12 +441,13 @@ export class ReviewComments implements vscode.Disposable {
   private draw(
     uri: vscode.Uri,
     stored: StoredComment,
+    anchor: Anchor,
     range: vscode.Range,
     expanded: boolean,
   ): vscode.CommentThread {
     return Object.assign(
       this.controller.createCommentThread(uri, firstLine(range), []),
-      openView(stored, range),
+      openView(stored, range, revisionOf(uri, anchor)),
       {
         collapsibleState: expanded
           ? vscode.CommentThreadCollapsibleState.Expanded
@@ -437,7 +491,7 @@ export class ReviewComments implements vscode.Disposable {
   /** The setting picks the state of the threads when a file loads, and again when it changes. */
   private applyMarks(): void {
     visibleUris().forEach((uri) => {
-      const collapsibleState = readSettings(uri).editorMarks
+      const collapsibleState = readSettings(scopeOf(uri)).editorMarks
         ? vscode.CommentThreadCollapsibleState.Expanded
         : vscode.CommentThreadCollapsibleState.Collapsed
       this.snapshot(uri).forEach(({ thread }) => Object.assign(thread, { collapsibleState }))
@@ -485,7 +539,7 @@ export class ReviewComments implements vscode.Disposable {
     return [
       { dispose: () => clearTimeout(timer.handle) },
       ...(vscode.workspace.workspaceFolders ?? []).flatMap((folder) =>
-        ['.git/refs/notes/**', '.git/packed-refs'].map((glob) => {
+        ['.git/refs/notes/**', '.git/packed-refs', '.y-review/notes/**'].map((glob) => {
           const watcher = vscode.workspace.createFileSystemWatcher(
             new vscode.RelativePattern(folder, glob),
           )
@@ -575,8 +629,15 @@ export class ReviewComments implements vscode.Disposable {
   /** VS Code opens a comment box itself, with the focus in it, on the first line of the selection. */
   private async startThread(): Promise<void> {
     const editor = vscode.window.activeTextEditor
-    if (editor === undefined || editor.document.uri.scheme !== 'file') return
+    if (editor === undefined || !canComment(editor.document.uri)) return
     const { document, selection } = editor
+    // A diff side with no file at its revision opens no box. The save of a file box gives its reason.
+    const found =
+      gitSide(document.uri) === undefined ? undefined : await this.anchorFor(document.uri)
+    if (found !== undefined && found.kind !== 'found') {
+      vscode.window.showErrorMessage(refusalOf(found)).then(undefined, () => undefined)
+      return
+    }
     const at = selection.start.line
     this.pending.set(pendingKey(document.uri, at), new vscode.Range(selection.start, selection.end))
     const glyphOnLine = this.find(
@@ -597,7 +658,11 @@ export class ReviewComments implements vscode.Disposable {
       line: at,
       thread: Object.assign(
         this.controller.createCommentThread(document.uri, firstLine(selection), []),
-        { canReply: true, collapsibleState: vscode.CommentThreadCollapsibleState.Expanded },
+        {
+          canReply: true,
+          collapsibleState: vscode.CommentThreadCollapsibleState.Expanded,
+          label: found === undefined ? undefined : revisionOf(document.uri, found.anchor),
+        },
       ),
     }
   }
@@ -684,10 +749,8 @@ export class ReviewComments implements vscode.Disposable {
       collapsibleState: vscode.CommentThreadCollapsibleState.Collapsed,
     })
     try {
-      const found = await this.service.anchorOf(document.uri.fsPath)
-      if (found.kind !== 'found') {
-        throw new Error(found.kind === 'noCommit' ? NO_COMMIT : (found.reason ?? NO_PLACE))
-      }
+      const found = await this.anchorFor(document.uri)
+      if (found.kind !== 'found') throw new Error(refusalOf(found))
       const result = await this.write(found.anchor.root, () =>
         this.service.addComment(found.anchor, range, text, shared),
       )
@@ -695,7 +758,10 @@ export class ReviewComments implements vscode.Disposable {
       this.pending.delete(key)
       this.forgetBox(thread)
       const shownRange = fullRange(result.stored, document)
-      Object.assign(thread, openView(result.stored, shownRange))
+      Object.assign(
+        thread,
+        openView(result.stored, shownRange, revisionOf(document.uri, found.anchor)),
+      )
       const twins = this.snapshot(document.uri).filter(
         (entry) => entry.stored.id === result.stored.id,
       )
@@ -705,6 +771,10 @@ export class ReviewComments implements vscode.Disposable {
         { thread, stored: result.stored, anchor: found.anchor, range: shownRange },
       ])
       this.decorate(document.uri)
+      // A message that waits for a click would hold the command, so the notices do not wait.
+      result.notices?.forEach((notice) => {
+        vscode.window.showInformationMessage(notice).then(undefined, () => undefined)
+      })
       if (result.shareError !== undefined) {
         await vscode.window.showWarningMessage(
           `The comment is in the local notes, but the push failed. ${result.shareError}`,
@@ -775,7 +845,7 @@ export class ReviewComments implements vscode.Disposable {
           )
         }
       } catch (error) {
-        const thread = this.draw(uri, entry.stored, entry.range, false)
+        const thread = this.draw(uri, entry.stored, entry.anchor, entry.range, false)
         const back = {
           ...entry,
           thread: wasResolved ? Object.assign(thread, resolvedView) : thread,

@@ -581,6 +581,8 @@ handle closes it in either editor. These differences stay:
 | IntelliJ takes the TODO text from its index range, and joins the continuation lines of a multi-line TODO with `\n`. VS Code takes one line. | A one-line TODO that both editors find has one identifier when both extract the same text. A multi-line TODO gets two identifiers. |
 | The repository part names the project folder. IntelliJ uses `project.basePath`, VS Code uses the workspace folder that holds the repository. | Equal when both editors open the same folder. A root outside the folder uses the full path, which differs between machines. |
 | Kotlin `trim()` and JavaScript `trim()` remove different characters (U+001C to U+001F, U+FEFF). | The TypeScript port uses the Kotlin character set. Vectors in `todo-ids.json` cover each character. |
+| IntelliJ takes the root of a folder store from the project folder first, then from the longest content root. VS Code has no project folder, so it takes the longest workspace folder that holds the file. | Equal when both editors open the same single folder. |
+| VS Code takes the TODO text from the part of the line that the pattern matches. A part of a line ends after a comment closer (`*/`, `-->`, `*)`, `#}`, `%}`, `-}`). The closer and the space around the text go. | `/* TODO: a */ /* TODO: b */` gives two items in both editors. |
 
 ## 16. Vectors
 
