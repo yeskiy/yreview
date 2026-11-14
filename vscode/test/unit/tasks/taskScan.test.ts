@@ -238,6 +238,14 @@ describe('taskScan', function taskScan() {
     assert.deepEqual(ofKind(repoTasks, 'comment'), ofKind(shared.found[0], 'comment'))
   })
 
+  it('gives a folder store entry no TODO item of a dirty document', () => {
+    const folder = { root: 'E:/plain', commit: '', tasks: [] }
+    assert.deepEqual(
+      withOverlays([folder], new Map([['E:/plain/a.ts', '// TODO: x\n']]), defaults, [], () => ''),
+      [folder],
+    )
+  })
+
   it('changes nothing for an overlay outside the root', () => {
     assert.deepEqual(
       withOverlays(

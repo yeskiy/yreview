@@ -207,6 +207,8 @@ export const withOverlays = (
   basePathOf: (root: string) => string | undefined,
 ): readonly RepositoryTasks[] =>
   found.map((repo) => {
+    // A folder store entry has no TODO items, the same as in a full scan.
+    if (!roots.includes(repo.root)) return repo
     const mine = [...overlays].filter(
       ([filePath]) =>
         ownsFile(repo.root, filePath, roots) &&
