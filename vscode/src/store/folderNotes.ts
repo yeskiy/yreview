@@ -3,7 +3,14 @@ import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promise
 import path from 'node:path'
 
 import { NotesWriteError } from '../git/errors'
-import { type Change, type NoteStore, isNoteRef, splitNote, withLock } from '../git/notes'
+import {
+  type Change,
+  type Line,
+  type NoteStore,
+  isNoteRef,
+  splitNote,
+  withLock,
+} from '../git/notes'
 
 export const FOLDER = '.y-review'
 export const NOTES = 'notes'
@@ -94,8 +101,9 @@ export class FolderNotes implements NoteStore {
     }
   }
 
-  async append(ref: string, commit: string, line: string): Promise<void> {
-    await this.edit(ref, commit, (lines) => [...lines, line])
+  async append(ref: string, commit: string, line: Line): Promise<void> {
+    const text = await line
+    await this.edit(ref, commit, (lines) => [...lines, text])
   }
 
   rewrite(ref: string, commit: string, lines: readonly string[]): Promise<void> {
