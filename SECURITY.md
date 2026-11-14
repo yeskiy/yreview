@@ -65,6 +65,44 @@ Read this before you look for a weakness. Every item is a place where a defect m
   of a shared comment, and that push goes to the remote of the user.
 - It writes no token, no key, and no password into a repository, a log file, or a command
   line.
+- It writes no text of the agent command into the diagnostic report or a session record. The
+  report says only `custom` or `default` for the command. A session record keeps the base name
+  of the program and the count of its arguments.
+
+## The VS Code extension
+
+The extension `yeskiy.yreview` reads and writes the same git notes. It keeps its own files
+apart from the files of the plugin, so both editors can open one folder at the same time.
+
+### What it touches
+
+| Place | When | The guard today |
+|---|---|---|
+| `refs/notes/y-review/local` and `refs/notes/devtools/discuss` | You save, resolve or delete a comment. A shared comment also pushes its ref to your remote. | The extension runs git with an argument list and `--end-of-options`, never through a shell. |
+| `remote.<name>.fetch` in the git configuration | Only after you click Add in the question that follows a share | The extension adds one line and writes no other git setting. |
+| `<git dir>/y-review/vscode-<window>/` | You send or copy the review tasks | The git directory is outside the working tree, and git never tracks it. |
+| `.y-review/` in a workspace folder outside git | Only after you save a comment on a file outside git. A send then also writes `.y-review/vscode-<window>/` there. | No other file of the working tree changes. |
+| `.cursor/mcp.json` in a workspace folder | Only after a modal confirmation that shows the whole text of the file | Every other server and key of the file stays. |
+| `~/.y-review/bridge/vscode/` | While the window is open and the setting `yreview.channel` is on | The file has mode 0600 and holds the bridge address and token. The extension deletes it when the window closes or the channel goes off. |
+| `~/.y-review/mcp/<agent>-vscode.json` | A session of an agent that reads this file starts | The file has mode 0600 and holds no secret. |
+| `~/.y-review/secret/` | An OpenCode session starts | The file has mode 0600 and holds the OpenCode password. The extension deletes it when the session ends. |
+| `~/.y-review/vscode/bin/` | You add the review server to Cursor or Antigravity, or copy its entry | The launcher holds no secret. It names the runtime of VS Code and the channel script. |
+| The review bridge | While the window is open and the setting `yreview.channel` is on | The server binds `127.0.0.1` only, on a port that the operating system picks. Each request must carry a token of 32 random bytes and a `Host` header that names the loopback address. The check compares SHA-256 digests with `timingSafeEqual`, so the time tells a caller nothing. |
+
+### What it never does
+
+- It sends no measurement and contributes no telemetry setting.
+- It does not run in an untrusted workspace.
+- It writes no file of the working tree without a user action.
+- It writes nothing for a `vscode://yeskiy.yreview/comment` link. The link opens the source and
+  an empty comment box only.
+- It starts no program that a workspace setting names. The agent settings have machine scope,
+  and the extension reads only the user value of `git.path`.
+- It writes no text of the agent command into the diagnostic report or a session record. The
+  report says only `custom` or `default` for the command. A session record keeps the base name
+  of the program and the count of its arguments.
+- Its integration tests write into a temporary home folder, never into the home folder of the
+  machine.
 
 ## What is out of scope
 

@@ -195,6 +195,35 @@ flatten the directories, the preview pane, the kind filter, and the resolved swi
 resolved switch lists the comments that somebody already resolved. It starts off, and each
 tab keeps its own answer.
 
+### The VS Code settings
+
+The VS Code extension keeps its settings under the `yreview.` keys. Run Yreview: Open Settings
+to see them. The table names the field of the IntelliJ plugin for each key.
+
+| VS Code key                | IntelliJ field                                         |
+|----------------------------|--------------------------------------------------------|
+| `yreview.newComments`      | New comments:                                          |
+| `yreview.remote`           | Remote for shared comments:                            |
+| `yreview.writeRefspec`     | Add the notes refspec to the git configuration         |
+| `yreview.editorMarks`      | Show comment marks in the editor                       |
+| `yreview.channel`          | Send the review tasks through the channel              |
+| `yreview.sessionLocation`  | Show the session tool window                           |
+| `yreview.agent`            | Command line agent:                                    |
+| `yreview.agentCommands`    | Command:                                               |
+| `yreview.autoStartSession` | Start a session when the session tool window opens     |
+| `yreview.intellijKey`      | None. The IntelliJ key is the default of the IDE keymap. |
+| `yreview.todoPatterns`     | None. The TODO patterns are a setting of the IDE.      |
+| `yreview.todoFilters`      | None. The TODO filters are a setting of the IDE.       |
+
+These IntelliJ settings have no VS Code key.
+
+| IntelliJ setting                               | In VS Code                                                                         |
+|------------------------------------------------|------------------------------------------------------------------------------------|
+| Hide the editor beside a maximized tool window | Not possible. Use the Maximize Panel Size command of VS Code.                      |
+| The tool window tabs and their scope           | Each task view keeps its view state. The Filter quick pick of a view holds a glob. |
+| Settings, Editor, Color Scheme                 | The color `yreview.commentRangeBackground`. A theme or `workbench.colorCustomizations` changes it. |
+| The Add button of Cursor CLI                   | The command Yreview: Add the Review Server to Cursor. It asks before each write.   |
+
 ## Report a problem
 
 1. Open an issue at https://github.com/yeskiy/yreview/issues .
@@ -212,3 +241,16 @@ tab keeps its own answer.
 The log of the IDE at Help, Show Log in Explorer holds one line for each record. Help,
 Collect Logs and Diagnostic Data writes the same report into `troubleshooting.txt` inside
 the archive.
+
+### Report a problem from VS Code
+
+| Command or button                 | What it does                                                                                                                                      |
+|-----------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------|
+| Yreview: Copy Diagnostic Report   | Copies the report to the clipboard. The report holds the same facts and the same records as the report of the plugin, with the same redaction. |
+| The Report button                 | A failed command shows an error with this button. The button shows a privacy notice, then opens a filled issue form in the browser.            |
+| Yreview: Show Log                 | Shows the log of the extension. The log holds the report head and one line for each record.                                                     |
+| Developer: Export Logs            | A command of VS Code that exports the log files. The remote check of the extension records if the export holds the Yreview log.               |
+| Developer: Open Logs Folder       | A command of VS Code that opens the folder of the log files. Use it when the export does not hold the Yreview log.                              |
+
+Nothing goes anywhere until you press Submit in the issue form. A crash of the extension host
+itself makes no report. VS Code starts the host again and shows its own message.
