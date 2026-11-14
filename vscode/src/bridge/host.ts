@@ -1,5 +1,11 @@
 import { type BatchTask, buildBatches } from './batchBuilder'
-import { bridgeFilePath, deleteBridgeFile, writeBridgeFile } from './discoveryFile'
+import {
+  type BridgeEntry,
+  bridgeFilePath,
+  deleteBridgeFile,
+  readBridgeToken,
+  writeBridgeFile,
+} from './discoveryFile'
 import type { SendReport } from './sendReport'
 import { BridgeServer, type ResolveHandler, type Route } from './server'
 
@@ -23,6 +29,7 @@ export type AvailableLookup = BridgeLookup & { readonly kind: 'available' }
 interface Running {
   readonly server: BridgeServer
   readonly lookup: AvailableLookup
+  readonly entry: BridgeEntry
 }
 
 /** Owns the bridge of one window. It opens a port only when a session, a send or a tool needs it. */
@@ -107,7 +114,7 @@ export class BridgeHost {
   }
 
   private async open(): Promise<BridgeLookup> {
-    if (this.running !== undefined) return this.running.lookup
+    if (this.running !== undefined) return this.reclaim(this.running)
     if (!this.deps.channelOn()) return { kind: 'channelOff' }
     if (this.disposed) return { kind: 'unavailable', reason: 'The window closed.' }
     const projectPath = this.deps.projectPath()
@@ -121,12 +128,13 @@ export class BridgeHost {
       return { kind: 'unavailable', reason: 'The review bridge did not open a port.' }
     }
     const file = bridgeFilePath(projectPath, this.deps.home())
-    const written = await writeBridgeFile(file, {
+    const entry: BridgeEntry = {
       url: address.url,
       token: address.token,
       projectPath,
       pid: this.deps.pid,
-    }).then(
+    }
+    const written = await writeBridgeFile(file, entry).then(
       () => true,
       () => false,
     )
@@ -138,7 +146,7 @@ export class BridgeHost {
       }
     }
     const lookup: AvailableLookup = { kind: 'available', url: address.url, path: file }
-    this.running = { server, lookup }
+    this.running = { server, lookup, entry }
     this.openListeners.forEach((listener) => listener(lookup))
     return lookup
   }
@@ -147,7 +155,19 @@ export class BridgeHost {
     const current = this.running
     this.running = undefined
     if (current === undefined) return
-    await deleteBridgeFile(current.lookup.path).catch(() => undefined)
+    if ((await readBridgeToken(current.lookup.path)) === current.entry.token) {
+      await deleteBridgeFile(current.lookup.path).catch(() => undefined)
+    }
     await current.server.stop()
+  }
+
+  /** Another window on the same folder can replace or remove the file, so a start writes it again. */
+  private async reclaim(current: Running): Promise<BridgeLookup> {
+    if ((await readBridgeToken(current.lookup.path)) !== current.entry.token) {
+      await writeBridgeFile(current.lookup.path, current.entry).catch(() =>
+        this.deps.warn('The review bridge did not write the file that a session reads.'),
+      )
+    }
+    return current.lookup
   }
 }

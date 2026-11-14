@@ -2,7 +2,7 @@ import { rm } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
 
-import { writeAtomic } from '../core/atomicWrite'
+import { readIfFile, writeAtomic } from '../core/atomicWrite'
 import { isKotlinBlank } from '../core/kotlinText'
 import { discoveryFileName } from '../core/paths'
 
@@ -38,3 +38,16 @@ export const writeBridgeFile = (file: string, entry: BridgeEntry): Promise<void>
   )
 
 export const deleteBridgeFile = (file: string): Promise<void> => rm(file, { force: true })
+
+/** The token in the file, or undefined when the file is missing or does not parse. */
+export const readBridgeToken = async (file: string): Promise<string | undefined> => {
+  const text = await readIfFile(file)
+  const token = (() => {
+    try {
+      return text === undefined ? undefined : (JSON.parse(text) as { token?: unknown }).token
+    } catch {
+      return undefined
+    }
+  })()
+  return typeof token === 'string' ? token : undefined
+}

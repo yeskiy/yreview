@@ -176,6 +176,37 @@ describe('bridge host (BridgeCloseTest.kt, ReceiverCountTest.kt, LiveChoicesTest
     assert.equal(entry.pid, 4242)
   })
 
+  it('a window that closes keeps the file that another window wrote', async () => {
+    const first = newHost()
+    available(await first.start())
+    const second = available(await newHost().start())
+    const { token } = entryOf(second.path)
+    await first.dispose()
+    assert.equal(entryOf(second.path).token, token)
+  })
+
+  it('a start writes the file again when another window removed it', async () => {
+    const first = newHost()
+    const lookup = available(await first.start())
+    const { token } = entryOf(lookup.path)
+    const second = newHost()
+    available(await second.start())
+    await second.dispose()
+    assert.equal(existsSync(lookup.path), false)
+    available(await first.start())
+    assert.equal(entryOf(lookup.path).token, token)
+  })
+
+  it('a start writes the file again when it holds the token of another window', async () => {
+    const first = newHost()
+    const lookup = available(await first.start())
+    const { token } = entryOf(lookup.path)
+    available(await newHost().start())
+    assert.notEqual(entryOf(lookup.path).token, token)
+    available(await first.start())
+    assert.equal(entryOf(lookup.path).token, token)
+  })
+
   it('a send names the folder that is not a repository', async () => {
     const report = await newHost().sendTasks('main', undefined, [task('yabc12')])
     assert.equal(report.problem, 'The repository has no commit yet.')
