@@ -19,11 +19,13 @@ Click Resolve on a comment to close it. Click Delete to remove it from the notes
 
 ## Requirements
 
-| Item      | Requirement                                                            |
-| --------- | ---------------------------------------------------------------------- |
-| git       | On the PATH, or in the setting `git.path`                              |
-| Workspace | Trusted. Yreview runs git, and git reads the repository configuration. |
-| File      | Inside a git repository with at least one commit                       |
+| Item      | Requirement                                                                                                     |
+| --------- | --------------------------------------------------------------------------------------------------------------- |
+| VS Code   | 1.101 or later                                                                                                  |
+| git       | 2.24 or later, on the PATH or in the user setting `git.path`. With an older git, the comment commands stay off. |
+| Folder    | A git repository. Yreview keeps comments in git notes only, so a folder outside git gets no comments.           |
+| Workspace | Trusted. Yreview runs git, and git reads the repository configuration.                                          |
+| File      | Inside the git repository, which has at least one commit                                                        |
 
 ## Settings
 
