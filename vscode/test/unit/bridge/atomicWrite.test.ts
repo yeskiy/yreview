@@ -1,5 +1,7 @@
 import { strict as assert } from 'node:assert'
-import { readFileSync, readdirSync, rmSync } from 'node:fs'
+import { execFileSync } from 'node:child_process'
+import { chmodSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { userInfo } from 'node:os'
 import path from 'node:path'
 
 import { readIfFile, writeAtomic } from '../../../src/core/atomicWrite'
@@ -36,4 +38,22 @@ describe('atomic write', () => {
     assert.equal(await readIfFile(path.join(held.dir, 'gone.json')), undefined))
 
   it('reads nothing from a folder', async () => assert.equal(await readIfFile(held.dir), undefined))
+
+  it('throws for a file that does not read, so no caller writes over it', async function denied() {
+    if (process.platform !== 'win32' && process.getuid?.() === 0) this.skip()
+    const file = path.join(held.dir, 'mcp.json')
+    writeFileSync(file, '{"mcpServers":{"other":{}}}')
+    const user = userInfo().username
+    const lock = (on: boolean): unknown =>
+      process.platform === 'win32'
+        ? execFileSync('icacls', [file, on ? '/deny' : '/remove:d', on ? `${user}:(RD)` : user])
+        : chmodSync(file, on ? 0o000 : 0o600)
+    lock(true)
+    try {
+      await assert.rejects(readIfFile(file))
+    } finally {
+      lock(false)
+    }
+    assert.equal(readFileSync(file, 'utf8'), '{"mcpServers":{"other":{}}}')
+  })
 })

@@ -25,7 +25,8 @@ export const writeAtomic = async (target: string, text: string, mode = 0o600): P
   })
 }
 
+/** A file that exists but does not read throws, so no caller writes over it. */
 export const readIfFile = async (target: string): Promise<string | undefined> =>
   (await stat(target).catch(() => undefined))?.isFile() === true
-    ? readFile(target, 'utf8').catch(() => undefined)
+    ? readFile(target, 'utf8')
     : undefined
