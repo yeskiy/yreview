@@ -6,6 +6,8 @@ import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorFactory
+import com.intellij.openapi.editor.colors.EditorColorsListener
+import com.intellij.openapi.editor.colors.EditorColorsManager
 import com.intellij.openapi.editor.ex.util.EditorUtil
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.RangeHighlighter
@@ -32,18 +34,26 @@ import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
 import java.util.concurrent.ConcurrentHashMap
 
-/** The icons and the ranges that one file needs. The plugin builds this off the user interface thread. */
-data class CommentMarks(val byLine: Map<Int, List<StoredComment>>, val ranges: List<Range>) {
+/**
+ * The icons, the ranges, and the count of open comments on each icon line of one file.
+ * The plugin builds this off the user interface thread.
+ */
+data class CommentMarks(
+    val byLine: Map<Int, List<StoredComment>>,
+    val ranges: List<Range>,
+    val covers: Map<Int, Int>,
+) {
 
     companion object {
-        val EMPTY = CommentMarks(emptyMap(), emptyList())
+        val EMPTY = CommentMarks(emptyMap(), emptyList(), emptyMap())
     }
 }
 
 /**
  * Draws one comment icon per range in the markup model of an open editor, and a quiet background
- * over the text that the range covers. The plugin reads the git notes once per editor, and again
- * after every write, in place of once per daemon pass.
+ * over the text that the range covers. Text under more open comments shows a stronger background.
+ * The plugin reads the git notes once per editor, and again after every write, in place of once
+ * per daemon pass.
  *
  * The same class holds the boxes that the editor shows under the lines. A click on the icon opens
  * the card of that range, and the Add Review Comment action opens the box that writes a comment.
@@ -59,6 +69,7 @@ class CommentGutter(private val project: Project) : Disposable {
         val bus = project.messageBus.connect(this)
         bus.subscribe(REVIEW_COMMENTS, ReviewCommentListener { repaintAll() })
         bus.subscribe(GitRepository.GIT_REPO_CHANGE, GitRepositoryChangeListener { repaintAll() })
+        bus.subscribe(EditorColorsManager.TOPIC, EditorColorsListener { repaintAll() })
     }
 
     fun attach(editor: Editor) {
@@ -207,10 +218,9 @@ class CommentGutter(private val project: Project) : Disposable {
     private fun marksOf(anchor: ReviewAnchor?): CommentMarks {
         if (anchor == null) return CommentMarks.EMPTY
         val open = ReviewService.getInstance(project).bookFor(anchor).open(anchor.key)
-        return CommentMarks(
-            CommentIndex.byStartLine(open, anchor.path),
-            CommentIndex.ranges(open, anchor.path),
-        )
+        val byLine = CommentIndex.byStartLine(open, anchor.path)
+        val ranges = CommentIndex.ranges(open, anchor.path)
+        return CommentMarks(byLine, ranges, CommentIndex.covers(ranges, byLine.keys))
     }
 
     /**
@@ -225,7 +235,9 @@ class CommentGutter(private val project: Project) : Disposable {
         painted[editor] =
             if (root == null) emptyList()
             else CommentLayers.paint(editor, marks.ranges) +
-                marks.byLine.entries.mapNotNull { (line, here) -> mark(editor, root, line, here) }
+                marks.byLine.entries.mapNotNull { (line, here) ->
+                    mark(editor, root, line, here, marks.covers[line] ?: 0)
+                }
     }
 
     private fun mark(
@@ -233,10 +245,11 @@ class CommentGutter(private val project: Project) : Disposable {
         root: VirtualFile,
         line: Int,
         here: List<StoredComment>,
+        cover: Int,
     ): RangeHighlighter? {
         if (line < 1 || line > editor.document.lineCount) return null
         return editor.markupModel.addLineHighlighter(null, line - 1, HighlighterLayer.LAST).also {
-            it.gutterIconRenderer = CommentIconRenderer(project, root, here)
+            it.gutterIconRenderer = CommentIconRenderer(project, root, here, cover)
         }
     }
 

@@ -12,29 +12,33 @@ import com.yeskiy.yreview.ui.CommentCard
 import icons.CollaborationToolsIcons
 import javax.swing.Icon
 
-/** The speech bubble of the platform code review. One icon stands for one comment range. */
+/**
+ * The speech bubble of the platform code review. One icon stands for one comment range.
+ * [cover] is the number of open comments on the icon line, and the card states it above one.
+ */
 class CommentIconRenderer(
     private val project: Project,
     private val root: VirtualFile,
     private val comments: List<StoredComment>,
+    private val cover: Int = 0,
 ) : GutterIconRenderer() {
 
     override fun getIcon(): Icon = CollaborationToolsIcons.Comment
 
     override fun getAlignment(): Alignment = Alignment.LEFT
 
-    override fun getTooltipText(): String = CommentCard.html(comments)
+    override fun getTooltipText(): String = CoverNote.html(cover, CommentCard.html(comments))
 
     override fun getAccessibleName(): String = "Review comment"
 
-    override fun getAccessibleTooltipText(): String = CommentCard.plain(comments)
+    override fun getAccessibleTooltipText(): String = CoverNote.plain(cover, CommentCard.plain(comments))
 
     override fun getClickAction(): AnAction = DumbAwareAction.create { open(it) }
 
     override fun equals(other: Any?): Boolean =
-        other is CommentIconRenderer && other.root == root && other.comments == comments
+        other is CommentIconRenderer && other.root == root && other.comments == comments && other.cover == cover
 
-    override fun hashCode(): Int = 31 * root.hashCode() + comments.hashCode()
+    override fun hashCode(): Int = 31 * (31 * root.hashCode() + comments.hashCode()) + cover
 
     /** The gutter of the editor puts the editor itself in the context of the click. */
     private fun open(event: AnActionEvent) {

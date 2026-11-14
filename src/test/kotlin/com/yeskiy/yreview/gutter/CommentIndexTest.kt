@@ -85,6 +85,23 @@ class CommentIndexTest {
     }
 
     @Test
+    fun `counts the open comments that cover each icon line`() {
+        val ranges = listOf(
+            Range(startLine = 10, endLine = 20),
+            Range(startLine = 12, startColumn = 4, endLine = 12, endColumn = 9),
+            Range(startLine = 14, endLine = 11),
+            Range(startLine = 30, endLine = 30),
+        )
+
+        assertEquals(mapOf(10 to 1, 11 to 2, 12 to 3, 30 to 1), CommentIndex.covers(ranges, setOf(10, 11, 12, 30)))
+    }
+
+    @Test
+    fun `a line that no comment covers counts zero`() {
+        assertEquals(mapOf(5 to 0), CommentIndex.covers(listOf(Range(startLine = 10, endLine = 20)), setOf(5)))
+    }
+
+    @Test
     fun `the box sits under the last line of one comment`() {
         assertEquals(20, CommentIndex.lastLine(listOf(stored("a.kt", 10, "one", endLine = 20))))
     }

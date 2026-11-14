@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.testFramework.EditorTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.yeskiy.yreview.store.Range
+import com.yeskiy.yreview.ui.ReviewColors
 
 /**
  * The marks that the comments of one file paint in a real editor.
@@ -91,4 +92,98 @@ class CommentLayersTest : BasePlatformTestCase() {
             paint(Range(startLine = 1, startColumn = 18, endLine = 1, endColumn = 28)).map { it.place() },
         )
     }
+
+    private fun layers(vararg ranges: Range): List<CommentLayer> =
+        CommentLayers.layersOf(myFixture.editor.document, ranges.toList())
+
+    fun `test two comments on the same characters paint one piece of depth two`() {
+        myFixture.configureByText("a.txt", text)
+        val words = Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 10)
+
+        assertEquals(listOf(CommentLayer(4, 10, 2, false)), layers(words, words))
+    }
+
+    fun `test two part comments that overlap split into three pieces`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(
+            listOf(CommentLayer(0, 4, 1, false), CommentLayer(4, 8, 2, false), CommentLayer(8, 12, 1, false)),
+            layers(
+                Range(startLine = 1, startColumn = 0, endLine = 1, endColumn = 8),
+                Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 12),
+            ),
+        )
+    }
+
+    fun `test two whole line comments that overlap give one line of depth two`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(
+            listOf(CommentLayer(0, 15, 1, true), CommentLayer(16, 29, 2, true)),
+            layers(Range(startLine = 1, endLine = 2), Range(startLine = 2, endLine = 2)),
+        )
+    }
+
+    fun `test a part comment inside a whole line comment counts both`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(
+            listOf(CommentLayer(0, 15, 1, true), CommentLayer(4, 10, 2, false)),
+            layers(
+                Range(startLine = 1, endLine = 1),
+                Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 10),
+            ),
+        )
+    }
+
+    fun `test comments that only touch do not overlap`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(
+            listOf(CommentLayer(0, 10, 1, false)),
+            layers(
+                Range(startLine = 1, startColumn = 0, endLine = 1, endColumn = 4),
+                Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 10),
+            ),
+        )
+    }
+
+    fun `test a deeper piece paints a stronger background than a single comment`() {
+        myFixture.configureByText("a.txt", text)
+        val scheme = myFixture.editor.colorsScheme
+        val words = Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 10)
+        val base = scheme.getAttributes(ReviewColors.COMMENT_RANGE).backgroundColor
+
+        assertEquals(
+            listOf(base, CommentLayers.shade(base, scheme.defaultBackground, 2)),
+            listOf(paint(words), paint(words, words)).map { it.single().getTextAttributes(scheme)?.backgroundColor },
+        )
+    }
+
+    fun `test a single comment keeps the color key of the scheme`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(ReviewColors.COMMENT_RANGE, paint(Range(startLine = 1, endLine = 1)).single().textAttributesKey)
+    }
+
+    fun `test many overlapping comments split in one pass and merge equal neighbors`() {
+        myFixture.configureByText("a.txt", "x".repeat(MANY) + "\n")
+        val many = (0 until MANY).map { Range(startLine = 1, startColumn = it, endLine = 1, endColumn = it + 3) }
+
+        val started = System.nanoTime()
+        val pieces = layers(*many.toTypedArray())
+        val took = (System.nanoTime() - started) / 1_000_000
+
+        assertEquals(
+            listOf(CommentLayer(0, 1, 1, false), CommentLayer(1, 2, 2, false), CommentLayer(2, MANY, 3, false)),
+            pieces,
+        )
+        assertTrue("the split of $MANY comments took $took ms", took < LIMIT_MILLIS)
+    }
 }
+
+/** How many comments the cost guard builds. A file can hold one comment for every line. */
+private const val MANY = 100_000
+
+/** The bound is far above the real time of one sorted pass, so a slow machine still passes. */
+private const val LIMIT_MILLIS = 2_000L
