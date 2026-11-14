@@ -12,6 +12,7 @@ export const CONNECT_TIMEOUT_MS = 10_000
 // The same limit stands in src/bridge/batchBuilder.ts and in BatchBuilder.kt. Keep the copies equal.
 export const MAX_EVENT_CHARS = 4_000_000
 const EVENT_END_TAIL = 3
+const MAX_REASON_CHARS = 400
 const EVENT_END = /\r?\n\r?\n/
 
 export interface Drained {
@@ -88,8 +89,11 @@ export class BridgeClient {
   /** A refusal keeps the comments open, so the model reads a reason and can report again. */
   async resolve(ids: readonly string[]): Promise<void> {
     const answer = await this.request('POST', RESOLVE_PATH, { ids })
-    if (!isOk(answer.status))
-      throw new Error(`the bridge refused the report with status ${answer.status}`)
+    if (isOk(answer.status)) return
+    const reason = answer.text.trim().slice(0, MAX_REASON_CHARS)
+    throw new Error(
+      `the bridge refused the report with status ${answer.status}${reason === '' ? '' : `: ${reason}`}`,
+    )
   }
 
   /** One call with a deadline. The message of a failure names the address and never the token. */

@@ -40,6 +40,10 @@ class FakeBridge(fixedToken: String? = null) {
     @Volatile
     var stallResolve: Boolean = false
 
+    /** The text of a 409 answer on the resolve path, or null for a 200 answer. */
+    @Volatile
+    var refusal: String? = null
+
     private val stalled = CountDownLatch(1)
 
     private val pool = Executors.newCachedThreadPool { runnable ->
@@ -112,6 +116,7 @@ class FakeBridge(fixedToken: String? = null) {
                 (Json.parseToJsonElement(body) as kotlinx.serialization.json.JsonObject)["ids"] as JsonArray
             }.getOrNull() ?: return answer(exchange, 400, "the body must hold an ids array of strings")
             resolved.add(ids.map { (it as JsonPrimitive).content })
+            refusal?.let { return answer(exchange, 409, it) }
             answer(exchange, 200, "ok")
         }
     }

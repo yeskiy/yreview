@@ -197,6 +197,24 @@ class BridgeClientTest {
     }
 
     @Test
+    fun `the reason of a refused report carries the text of the bridge`() {
+        bridge.refusal = "The comment yabc12 is gone."
+        val client = connect()
+        val failure = assertFailsWith<Exception> { runBlocking { client.resolve(listOf(fullId)) } }
+
+        assertEquals("the bridge refused the report with status 409: The comment yabc12 is gone.", failure.message)
+    }
+
+    @Test
+    fun `the reason of a refused report keeps a short part of a long text`() {
+        bridge.refusal = "x".repeat(5000)
+        val client = connect()
+        val failure = assertFailsWith<Exception> { runBlocking { client.resolve(listOf(fullId)) } }
+
+        assertTrue(failure.message.orEmpty().length < 600, "the reason has ${failure.message?.length} characters")
+    }
+
+    @Test
     fun `fails the resolve call when the bridge is gone`() {
         val client = connect()
         bridge.close()

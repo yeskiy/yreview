@@ -198,6 +198,20 @@ describe('channel bridge client (BridgeClientTest.kt)', function suite() {
     assert.match((await failureOf(connect(WRONG_TOKEN).resolve([fullId]))).message, /401/)
   })
 
+  it('the reason of a refused report carries the text of the bridge', async () => {
+    state.bridge.refusal = 'The comment yabc12 is gone.'
+    assert.equal(
+      (await failureOf(connect().resolve([fullId]))).message,
+      'the bridge refused the report with status 409: The comment yabc12 is gone.',
+    )
+  })
+
+  it('the reason of a refused report keeps a short part of a long text', async () => {
+    state.bridge.refusal = 'x'.repeat(5000)
+    const { message } = await failureOf(connect().resolve([fullId]))
+    assert.ok(message.length < 600, `the reason has ${message.length} characters`)
+  })
+
   it('fails the resolve call when the bridge is gone', async () => {
     const client = connect()
     await state.bridge.close()

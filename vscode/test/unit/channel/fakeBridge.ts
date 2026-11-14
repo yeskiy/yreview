@@ -33,6 +33,8 @@ export class FakeBridge {
 
   stallResolve = false
 
+  refusal: string | undefined = undefined
+
   private readonly open = new Set<ServerResponse>()
 
   private readonly http = createServer((request, response) => this.route(request, response))
@@ -121,7 +123,8 @@ export class FakeBridge {
       this.resolved.push(
         (JSON.parse(Buffer.concat(chunks).toString('utf8')) as { ids: string[] }).ids,
       )
-      if (!this.stallResolve) response.writeHead(200).end('ok')
+      if (this.refusal !== undefined) response.writeHead(409).end(this.refusal)
+      else if (!this.stallResolve) response.writeHead(200).end('ok')
     })
   }
 }

@@ -83,14 +83,18 @@ class BridgeClient(
             .timeout(Duration.ofMillis(resolveTimeoutMs))
             .POST(HttpRequest.BodyPublishers.ofString(Json.encodeToString(ResolveBody(ids))))
             .build()
-        val status = withContext(Dispatchers.IO) {
+        val answer = withContext(Dispatchers.IO) {
             try {
-                http.send(request, HttpResponse.BodyHandlers.discarding()).statusCode()
+                http.send(request, HttpResponse.BodyHandlers.ofString())
             } catch (broken: IOException) {
                 throw IOException(silent(broken))
             }
         }
-        if (status !in OK_RANGE) throw IOException("the bridge refused the report with status $status")
+        if (answer.statusCode() in OK_RANGE) return
+        val reason = answer.body().orEmpty().trim().take(MAX_REASON_CHARS)
+        throw IOException(
+            "the bridge refused the report with status ${answer.statusCode()}" + if (reason.isEmpty()) "" else ": $reason",
+        )
     }
 
     /** A readable reason that names the address only. The token never reaches a message. */
@@ -238,6 +242,8 @@ class BridgeClient(
         private const val READ_SIZE = 8192
 
         private val OK_RANGE = 200..299
+
+        private const val MAX_REASON_CHARS = 400
 
         /**
          * Takes whole Server-Sent Events out of the buffer and returns the incomplete rest.
