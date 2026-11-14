@@ -31,8 +31,8 @@ describe('manifest', () => {
 
   it('carries the license of the repository', () => {
     assert.equal(
-      readFileSync(path.join(root, 'LICENSE'), 'utf8'),
-      readFileSync(path.join(root, '..', 'LICENSE'), 'utf8'),
+      readFileSync(path.join(root, 'LICENSE'), 'utf8').replace(/\r\n/g, '\n'),
+      readFileSync(path.join(root, '..', 'LICENSE'), 'utf8').replace(/\r\n/g, '\n'),
     )
   })
 })
