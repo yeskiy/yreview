@@ -141,6 +141,27 @@ describe('comments in the editor', () => {
     assert.equal(shown.thread.collapsibleState, vscode.CommentThreadCollapsibleState.Collapsed)
   })
 
+  it('opens the comment box with focus on line 1 of a file with no thread', async () => {
+    const todo = vscode.Uri.file(path.join(workspace(), 'src', 'todo.ts'))
+    const comments = await reviewComments()
+    await comments.reload(todo)
+    assert.deepEqual(comments.snapshot(todo), [])
+    const editor = await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument(todo),
+    )
+    await focusWindow()
+    editor.selection = new vscode.Selection(0, 3, 0, 7)
+    await vscode.commands.executeCommand('yreview.addComment')
+    await wait(1500)
+    // The text goes into the box only while the box has the focus. Undo empties the box again.
+    await vscode.commands.executeCommand('type', { text: 'y' })
+    const dirty = editor.document.isDirty
+    if (dirty) await vscode.commands.executeCommand('workbench.action.files.revert')
+    else await vscode.commands.executeCommand('undo')
+    await vscode.commands.executeCommand('yreview.closeBox')
+    assert.equal(dirty, false, 'the comment box on line 1 did not get the focus')
+  })
+
   it('registers the comment commands', async () => {
     await api()
     const all = await vscode.commands.getCommands(true)
