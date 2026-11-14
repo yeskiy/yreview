@@ -33,11 +33,14 @@ sealed interface SessionRecord {
      * One start of a review session.
      *
      * The bridge token never reaches this record. The plan holds no token at all, and the
-     * address of the bridge is the only value of the bridge that [of] reads.
+     * address of the bridge is the only value of the bridge that [of] reads. The record keeps
+     * no argument text, because a custom agent command can carry a password.
      */
     data class Session(
         override val at: String,
-        val command: String,
+        val program: String,
+        val arguments: Int,
+        val customCommand: Boolean,
         val workingDirectory: String,
         val bridgeReady: Boolean,
         val bridgeUrl: String,
@@ -52,7 +55,9 @@ sealed interface SessionRecord {
         override val label: String = "session start"
 
         override fun facts(): List<Pair<String, String>> = listOf(
-            "command" to command,
+            "program" to program,
+            "arguments" to arguments.toString(),
+            "agent command" to if (customCommand) "custom" else "default",
             "directory" to workingDirectory,
             "bridge" to "${if (bridgeReady) "ready" else "not ready"} $bridgeUrl".trim(),
             "status" to status,
@@ -72,10 +77,13 @@ sealed interface SessionRecord {
                 configFile: String? = null,
                 terminalStarted: Boolean = false,
                 processId: Long? = null,
+                customCommand: Boolean = false,
                 now: LocalDateTime = LocalDateTime.now(),
             ): Session = Session(
                 at = CLOCK.format(now),
-                command = plan.command.joinToString(" "),
+                program = plan.command.firstOrNull()?.split('/', '\\')?.last() ?: NONE,
+                arguments = (plan.command.size - 1).coerceAtLeast(0),
+                customCommand = customCommand,
                 workingDirectory = plan.workingDirectory,
                 bridgeReady = plan.bridgeReady,
                 bridgeUrl = plan.bridgeUrl,

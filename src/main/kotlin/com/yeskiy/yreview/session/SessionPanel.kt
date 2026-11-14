@@ -16,6 +16,7 @@ import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.bridge.OpenCodeClient
 import com.yeskiy.yreview.bridge.OpenCodeTitle
 import com.yeskiy.yreview.bridge.SessionKey
+import com.yeskiy.yreview.diagnostic.DiagnosticReport
 import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.diagnostic.SessionLog
 import com.yeskiy.yreview.diagnostic.SessionRecord
@@ -394,7 +395,7 @@ class SessionPanel(
         val started = openTerminal(plan)
         if (started == null) {
             forget()
-            record(plan, setup.server, setup.javaPath, setup.configFile, terminalStarted = false)
+            record(plan, setup, terminalStarted = false)
             return failed(NO_TERMINAL)
         }
         terminal?.let { drop(it) }
@@ -413,7 +414,7 @@ class SessionPanel(
         add(started.view.component, BorderLayout.CENTER)
         onState(SessionState.RUNNING)
         setStatus(if (again) "$PORT_TAKEN ${plan.status}" else plan.status)
-        record(plan, setup.server, setup.javaPath, setup.configFile, terminalStarted = true)
+        record(plan, setup, terminalStarted = true)
         watchName(setup.agent, plan.workingDirectory)
         revalidate()
         repaint()
@@ -426,21 +427,17 @@ class SessionPanel(
      * The record reads the address of the bridge from the plan, and the plan holds no
      * token. The token therefore never reaches it.
      */
-    private fun record(
-        plan: SessionPlan,
-        server: ChannelServer.Answer,
-        javaPath: String?,
-        configFile: Path?,
-        terminalStarted: Boolean,
-    ) = SessionLog.getInstance(project).record(
-        SessionRecord.Session.of(
-            plan = plan,
-            server = server,
-            javaPath = javaPath,
-            configFile = configFile?.toString(),
-            terminalStarted = terminalStarted,
+    private fun record(plan: SessionPlan, setup: SessionSetup, terminalStarted: Boolean) =
+        SessionLog.getInstance(project).record(
+            SessionRecord.Session.of(
+                plan = plan,
+                server = setup.server,
+                javaPath = setup.javaPath,
+                configFile = setup.configFile?.toString(),
+                terminalStarted = terminalStarted,
+                customCommand = DiagnosticReport.customCommand(settings(), setup.agent.id),
+            )
         )
-    )
 
     /**
      * Follows the session behind the terminal. The view reports Terminated after the

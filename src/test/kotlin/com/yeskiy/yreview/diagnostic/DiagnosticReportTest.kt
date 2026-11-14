@@ -59,7 +59,9 @@ class DiagnosticReportTest {
     /** One record that carries every value the report must never show. */
     private val poisoned = SessionRecord.Session(
         at = "2026-09-04 10:11:12",
-        command = "claude --token $token --config C:/Users/alice/AppData/Local/Temp/mcp.json",
+        program = "claude",
+        arguments = 3,
+        customCommand = false,
         workingDirectory = project,
         bridgeReady = true,
         bridgeUrl = "http://127.0.0.1:64343",
@@ -201,6 +203,20 @@ class DiagnosticReportTest {
 
         assertTrue(text.contains(Regex("agent command +custom")), text)
         assertTrue(text.contains(Regex("agent +claude")), text)
+        assertFalse(text.contains("hunter2"), text)
+        assertFalse(text.contains("abc123"), text)
+    }
+
+    @Test
+    fun `the report never shows the text of a custom command from a session start`() {
+        val record = SessionRecord.Session.of(
+            plan = SessionPlan.of(project, BridgeLookup.ChannelOff, command = "--password hunter2 --api-key=abc123"),
+            customCommand = true,
+            now = at,
+        )
+        val text = DiagnosticReport.text(facts, listOf(record), listOf(home), project)
+
+        assertTrue(text.contains(Regex("agent command +custom")), text)
         assertFalse(text.contains("hunter2"), text)
         assertFalse(text.contains("abc123"), text)
     }

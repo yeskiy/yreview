@@ -94,6 +94,32 @@ class SessionRecordTest {
     }
 
     @Test
+    fun `the session record keeps no text of a custom command`() {
+        val record = SessionRecord.Session.of(
+            plan = SessionPlan.of(project, ready, command = "--password hunter2 --api-key=abc123", windows = true),
+            customCommand = true,
+            now = at,
+        )
+        val logLine = Redact.text(record.text(), listOf("C:/Users/alice"), project)
+
+        listOf(record.text(), logLine, record.toString()).forEach {
+            assertFalse(it.contains("hunter2"), it)
+            assertFalse(it.contains("abc123"), it)
+        }
+        assertTrue(record.text().contains(Regex("agent command +custom")), record.text())
+        assertTrue(record.text().contains(Regex("program +\\S+")), record.text())
+        assertTrue(record.arguments > 0, record.text())
+    }
+
+    @Test
+    fun `the session record names the default command and the program without its folder`() {
+        val text = session(ready).text()
+
+        assertTrue(text.contains(Regex("agent command +default")), text)
+        assertFalse(text.contains(Regex("program +\\S*[/\\\\]")), text)
+    }
+
+    @Test
     fun `the send record carries the route the store and the readers`() {
         val text = SessionRecord.Send.of(
             report = SendReport(tasks = 3, batches = 1, streams = 1, route = SendRoute.CHANNEL),
