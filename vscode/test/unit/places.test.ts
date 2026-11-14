@@ -37,6 +37,7 @@ describe('the places of the log', () => {
     const dir = scratchDir()
     const lines: string[] = []
     const sink = {
+      debug: (m: string) => lines.push(m),
       info: (m: string) => lines.push(m),
       warn: (m: string) => lines.push(m),
       error: (m: string) => lines.push(m),
