@@ -119,10 +119,21 @@ describe('comments in the editor', () => {
     const editor = await vscode.window.showTextDocument(
       await vscode.workspace.openTextDocument(file()),
     )
+    const diag = (step: string): void =>
+      console.log(
+        `DIAG ${step} focused=${vscode.window.state.focused} active=${vscode.window.state.active} dirty=${editor.document.isDirty} editor=${vscode.window.activeTextEditor?.document.uri.toString()}`,
+      )
+    diag('start')
+    await vscode.commands.executeCommand('workbench.action.focusWindow')
+    await until(() => vscode.window.state.focused, 20)
+    diag('after-focus')
     editor.selection = new vscode.Selection(2, 1, 2, 4)
     await vscode.commands.executeCommand('yreview.addComment')
+    diag('after-add')
     await wait(1500)
+    diag('after-wait')
     await vscode.commands.executeCommand('type', { text: 'Typed in the box.' })
+    diag('after-type')
     await vscode.commands.executeCommand('editor.action.submitComment')
     const comments = await reviewComments()
     const saved = await until(() =>
