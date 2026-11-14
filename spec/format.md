@@ -553,7 +553,9 @@ experimental capability `claude/channel`. It sends each batch as the notificatio
 | Instructions | The server instructions say that `>` lines are comment text and that a `notice` event carries a message from the channel. The text is in `ReviewChannel.kt` and the port copies it. |
 
 The text of the instructions is `ReviewChannel.INSTRUCTIONS`, and the text of the tool
-description is `ReviewChannel.RESOLVE_DESCRIPTION`. A port copies both word for word.
+description is `ReviewChannel.RESOLVE_DESCRIPTION`. A port copies both word for word. The VS Code port
+says `VS Code` where the Kotlin text says `IntelliJ IDEA` or `the IDE`. It says `Yreview`
+where the Kotlin text says `the plugin`. The plugin reads none of these texts.
 
 The tool `review_resolve` takes `ids`, an array of 1 to 200 strings of 1 to 200 characters.
 Any other input gives the error text `ReviewChannel.BAD_INPUT`. The server keeps the ids of

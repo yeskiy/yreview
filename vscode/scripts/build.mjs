@@ -1,4 +1,4 @@
-import { existsSync, globSync } from 'node:fs'
+import { globSync } from 'node:fs'
 
 import { build } from 'esbuild'
 
@@ -21,10 +21,7 @@ await Promise.all([
     outfile: 'dist/extension.js',
     external: ['vscode'],
   }),
-  // TODO: remove the check once task 5.2 adds src/channel/main.ts.
-  ...(existsSync('src/channel/main.ts')
-    ? [build({ ...common, entryPoints: ['src/channel/main.ts'], outfile: 'dist/channel.js' })]
-    : []),
+  build({ ...common, entryPoints: ['src/channel/main.ts'], outfile: 'dist/channel.js' }),
   ...(process.argv.includes('--tests')
     ? [
         build({

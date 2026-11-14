@@ -40,6 +40,10 @@ export default defineConfig([
           selector: "CallExpression[callee.object.name='log'] Identifier[name=/[Tt]oken/]",
           message: 'A log line never holds a token.',
         },
+        {
+          selector: "CallExpression[callee.object.property.name='log'] Identifier[name=/[Tt]oken/]",
+          message: 'A log line never holds a token.',
+        },
       ],
     },
   },
@@ -57,6 +61,26 @@ export default defineConfig([
           bundledDependencies: true,
           whitelist: ['vscode'],
         },
+      ],
+    },
+  },
+  {
+    // These folders run in plain Node.js, and the channel bundle has no vscode module.
+    // gitPath.ts asks the git extension of the editor for its git program.
+    name: 'project/no-vscode',
+    files: [
+      'src/core/**',
+      'src/git/**',
+      'src/store/**',
+      'src/bridge/**',
+      'src/channel/**',
+      'src/mcp/**',
+    ],
+    ignores: ['src/git/gitPath.ts'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        { paths: [{ name: 'vscode', message: 'This folder must not import vscode.' }] },
       ],
     },
   },
