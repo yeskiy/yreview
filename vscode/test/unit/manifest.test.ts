@@ -138,3 +138,26 @@ describe('manifest', () => {
     assert.equal(all.mcpServerDefinitionProviders, undefined)
   })
 })
+
+describe('diagnostic commands', () => {
+  const declared = manifest.contributes as {
+    readonly commands: readonly { command: string; title: string; category?: string }[]
+  }
+
+  it('contributes Copy Diagnostic Report under the product name', () =>
+    assert.deepEqual(
+      declared.commands.find((entry) => entry.command === 'yreview.copyDiagnosticReport'),
+      {
+        command: 'yreview.copyDiagnosticReport',
+        title: 'Copy Diagnostic Report',
+        category: 'Yreview',
+      },
+    ))
+
+  it('hides the failure report from the palette, because it needs a failure', () =>
+    assert.equal(
+      contributes.menus.commandPalette?.find((item) => item.command === 'yreview.reportFailure')
+        ?.when,
+      'false',
+    ))
+})

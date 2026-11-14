@@ -10,6 +10,7 @@ const common = {
   format: 'cjs',
   sourcemap: !production,
   minify: production,
+  keepNames: true,
   logLevel: 'info',
   mainFields: ['module', 'main'],
 }

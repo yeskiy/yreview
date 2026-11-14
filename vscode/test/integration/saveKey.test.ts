@@ -44,6 +44,7 @@ const log: Log = {
   info: () => undefined,
   warn: () => undefined,
   error: (message, failure) => errors.push(message, failure),
+  record: () => undefined,
 }
 
 const setup = (choice: string | undefined) => {

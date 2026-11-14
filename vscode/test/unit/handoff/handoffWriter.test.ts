@@ -27,6 +27,7 @@ const deps = (windowPath: string): HandoffDeps => ({
     info: () => undefined,
     warn: () => undefined,
     error: (_message, failure) => failures.push(failure),
+    record: () => undefined,
   },
   now: () => new Date('2026-11-14T10:00:00.123Z'),
 })

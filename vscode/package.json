@@ -300,6 +300,16 @@
         "command": "yreview.copyMcpEntry",
         "title": "Copy the Review Server Entry",
         "category": "Yreview"
+      },
+      {
+        "command": "yreview.copyDiagnosticReport",
+        "title": "Copy Diagnostic Report",
+        "category": "Yreview"
+      },
+      {
+        "command": "yreview.reportFailure",
+        "title": "Report a Failure",
+        "category": "Yreview"
       }
     ],
     "viewsContainers": {
@@ -522,6 +532,10 @@
         {
           "command": "yreview.addMcpAntigravity",
           "when": "workspaceFolderCount > 0"
+        },
+        {
+          "command": "yreview.reportFailure",
+          "when": "false"
         }
       ],
       "editor/context": [

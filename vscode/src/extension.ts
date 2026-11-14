@@ -4,11 +4,14 @@ import * as vscode from 'vscode'
 
 import { homeDirectory } from './bridge/discoveryFile'
 import { ReviewComments } from './comments/controller'
+import { registerDiagnostics } from './diagnostic/host'
+import { SessionLog } from './diagnostic/sessionLog'
+import { gitMissingNotice } from './git/gitMissing'
 import { checkGit, findGitPath } from './git/gitPath'
 import { type HandoffApi, registerHandoff } from './handoff/register'
 import { offerIntellijKey } from './keyOffer'
 import type { BridgeHost } from './bridge/host'
-import { redactingLog } from './log'
+import { type Places, redactingLog } from './log'
 import { withLongForms } from './places'
 import { offerSaveKey } from './saveKey'
 import { registerSessions } from './session/register'
@@ -65,11 +68,13 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   const homes = withLongForms(
     [...new Set([homeDirectory(), homedir()])].filter((home) => home !== ''),
   )
-  const log = redactingLog(output, () => ({
+  const places = (): Places => ({
     homes,
     projects: held.projects,
     repositories: [...(held.service?.knownRoots() ?? []), ...(held.tasks?.model.roots() ?? [])],
-  }))
+  })
+  const ring = new SessionLog()
+  const log = redactingLog(output, places, { ring, ownRoot: context.extensionPath })
   context.subscriptions.push(
     output,
     vscode.workspace.onDidChangeWorkspaceFolders(() => {
@@ -80,6 +85,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   const link = sessionLink(log)
   const sessions = registerSessions(context, log, link.prepare)
   const git = await findGitPath()
+  context.subscriptions.push(...registerDiagnostics(context, { log, ring, places, git }))
   const problem = await checkGit(git)
   if (problem !== undefined) {
     log.error(problem)
@@ -89,7 +95,11 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       ),
       ...placeholderViews(problem),
     )
-    vscode.window.showErrorMessage(problem)
+    gitMissingNotice(
+      problem,
+      (message, button) => vscode.window.showErrorMessage(message, button),
+      () => vscode.commands.executeCommand('workbench.action.openSettings', 'git.path'),
+    ).catch((error: unknown) => log.error('The git notice failed.', error))
     return {
       comments: undefined,
       service: undefined,

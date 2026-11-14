@@ -13,6 +13,7 @@ const log = {
   info: () => undefined,
   warn: () => undefined,
   error: () => undefined,
+  record: () => undefined,
 }
 
 describe('done watch', () => {
