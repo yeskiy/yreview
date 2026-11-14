@@ -61,7 +61,7 @@ data class CommentMarks(
 @Service(Service.Level.PROJECT)
 class CommentGutter(private val project: Project) : Disposable {
 
-    private val painted = ConcurrentHashMap<Editor, List<RangeHighlighter>>()
+    private val painted = ConcurrentHashMap<Editor, Drawn>()
 
     private val boxes = ConcurrentHashMap<Editor, EditorInlays>()
 
@@ -74,7 +74,7 @@ class CommentGutter(private val project: Project) : Disposable {
 
     fun attach(editor: Editor) {
         if (!ReviewSettings.getInstance(project).editorMarks) return
-        painted[editor] = emptyList()
+        painted[editor] = Drawn.NONE
         repaint(editor)
     }
 
@@ -88,8 +88,8 @@ class CommentGutter(private val project: Project) : Disposable {
     fun applyMarkSwitch(shown: Boolean) {
         if (shown) return editorsOfProject().forEach { attach(it) }
         painted.keys.toList().forEach { editor ->
-            val old = painted.remove(editor).orEmpty()
-            if (!editor.isDisposed) old.forEach { editor.markupModel.removeHighlighter(it) }
+            val old = painted.remove(editor)
+            if (!editor.isDisposed) old?.clear(editor)
             boxes[editor]?.closeKind(InlayKind.CARD)
         }
     }
@@ -231,13 +231,16 @@ class CommentGutter(private val project: Project) : Disposable {
         val old = painted[editor] ?: return
         if (editor.isDisposed) return
         boxes[editor]?.closeKind(InlayKind.CARD)
-        old.forEach { editor.markupModel.removeHighlighter(it) }
+        old.clear(editor)
         painted[editor] =
-            if (root == null) emptyList()
-            else CommentLayers.paint(editor, marks.ranges) +
-                marks.byLine.entries.mapNotNull { (line, here) ->
-                    mark(editor, root, line, here, marks.covers[line] ?: 0)
-                }
+            if (root == null) Drawn.NONE
+            else CommentLayers.paint(editor, marks.ranges).let { drawn ->
+                drawn.copy(
+                    highlighters = drawn.highlighters + marks.byLine.entries.mapNotNull { (line, here) ->
+                        mark(editor, root, line, here, marks.covers[line] ?: 0)
+                    },
+                )
+            }
     }
 
     private fun mark(

@@ -17,8 +17,11 @@ class CommentLayersTest : BasePlatformTestCase() {
 
     private val text = "val answer = 42\nval other = 1\n"
 
-    private fun paint(vararg ranges: Range): List<RangeHighlighter> =
-        CommentLayers.paint(myFixture.editor, ranges.toList())
+    private fun paint(vararg ranges: Range): List<RangeHighlighter> = draw(*ranges).highlighters
+
+    private fun draw(vararg ranges: Range): Drawn = CommentLayers.paint(myFixture.editor, ranges.toList())
+
+    private fun counts(drawn: Drawn) = drawn.inlays.map { it.offset to (it.renderer as CountRenderer).text }
 
     private fun RangeHighlighter.place() = Triple(startOffset, endOffset, targetArea)
 
@@ -148,15 +151,22 @@ class CommentLayersTest : BasePlatformTestCase() {
         )
     }
 
-    fun `test a deeper piece paints a stronger background than a single comment`() {
+    fun `test a piece of two or more comments takes the overlap key`() {
         myFixture.configureByText("a.txt", text)
-        val scheme = myFixture.editor.colorsScheme
         val words = Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 10)
-        val base = scheme.getAttributes(ReviewColors.COMMENT_RANGE).backgroundColor
 
         assertEquals(
-            listOf(base, CommentLayers.shade(base, scheme.defaultBackground, 2)),
-            listOf(paint(words), paint(words, words)).map { it.single().getTextAttributes(scheme)?.backgroundColor },
+            listOf(ReviewColors.COMMENT_RANGE, ReviewColors.COMMENT_OVERLAP, ReviewColors.COMMENT_OVERLAP),
+            listOf(paint(words), paint(words, words), paint(words, words, words)).map { it.single().textAttributesKey },
+        )
+    }
+
+    fun `test the overlap key has an amber background in the default scheme`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(
+            java.awt.Color(0xFB, 0xE7, 0xB0),
+            myFixture.editor.colorsScheme.getAttributes(ReviewColors.COMMENT_OVERLAP).backgroundColor,
         )
     }
 
@@ -164,6 +174,75 @@ class CommentLayersTest : BasePlatformTestCase() {
         myFixture.configureByText("a.txt", text)
 
         assertEquals(ReviewColors.COMMENT_RANGE, paint(Range(startLine = 1, endLine = 1)).single().textAttributesKey)
+    }
+
+    fun `test a single comment shows no count`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(emptyList<Pair<Int, String>>(), counts(draw(Range(startLine = 1, endLine = 2))))
+    }
+
+    fun `test an overlap shows its count after the end of its last line`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(
+            listOf(15 to "2"),
+            counts(
+                draw(
+                    Range(startLine = 1, startColumn = 0, endLine = 1, endColumn = 8),
+                    Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 12),
+                ),
+            ),
+        )
+    }
+
+    fun `test an overlap over two lines shows its count on the second line`() {
+        myFixture.configureByText("a.txt", text)
+        val both = Range(startLine = 1, startColumn = 4, endLine = 2, endColumn = 3)
+
+        assertEquals(listOf(29 to "3"), counts(draw(both, both, both)))
+    }
+
+    fun `test an overlap that ends at a line start counts on the line before`() {
+        myFixture.configureByText("a.txt", text)
+        val tail = Range(startLine = 1, startColumn = 4, endLine = 2, endColumn = 0)
+
+        assertEquals(listOf(15 to "2"), counts(draw(tail, tail)))
+    }
+
+    fun `test whole line overlaps show one count for each piece`() {
+        myFixture.configureByText("a.txt", text)
+
+        assertEquals(
+            listOf(15 to "2", 29 to "3"),
+            counts(
+                draw(
+                    Range(startLine = 1, endLine = 2),
+                    Range(startLine = 1, endLine = 2),
+                    Range(startLine = 2, endLine = 2),
+                ),
+            ),
+        )
+    }
+
+    fun `test a count does not move the text of its line`() {
+        myFixture.configureByText("a.txt", text)
+        val words = Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 10)
+
+        val inlay = draw(words, words).inlays.single()
+
+        assertTrue(inlay.placement == com.intellij.openapi.editor.Inlay.Placement.AFTER_LINE_END)
+        assertEquals(text, myFixture.editor.document.text)
+    }
+
+    fun `test a clear removes the highlighters and the counts`() {
+        myFixture.configureByText("a.txt", text)
+        val words = Range(startLine = 1, startColumn = 4, endLine = 1, endColumn = 10)
+
+        draw(words, words).clear(myFixture.editor)
+
+        assertEquals(0, myFixture.editor.markupModel.allHighlighters.size)
+        assertEquals(0, myFixture.editor.inlayModel.getAfterLineEndElementsInRange(0, text.length).size)
     }
 
     fun `test many overlapping comments split in one pass and merge equal neighbors`() {

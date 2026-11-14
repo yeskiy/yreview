@@ -24,13 +24,18 @@ class ReviewColorsPage : ColorSettingsPage {
             val trimmed = <range>text.trim()</range>
         <range>    return Result(trimmed)</range>
         }
+
+        fun check(<range>value: </range><overlap>Int</overlap><range> = 0</range>) = value > 0
         """.trimIndent()
 
     override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> =
-        mapOf("range" to ReviewColors.COMMENT_RANGE)
+        mapOf("range" to ReviewColors.COMMENT_RANGE, "overlap" to ReviewColors.COMMENT_OVERLAP)
 
     override fun getAttributeDescriptors(): Array<AttributesDescriptor> =
-        arrayOf(AttributesDescriptor("Text of an open comment", ReviewColors.COMMENT_RANGE))
+        arrayOf(
+            AttributesDescriptor("Text of an open comment", ReviewColors.COMMENT_RANGE),
+            AttributesDescriptor("Text that two or more open comments cover", ReviewColors.COMMENT_OVERLAP),
+        )
 
     override fun getColorDescriptors(): Array<ColorDescriptor> = ColorDescriptor.EMPTY_ARRAY
 }

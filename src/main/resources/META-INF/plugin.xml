@@ -65,6 +65,9 @@
     <editorFactoryListener implementation="com.yeskiy.yreview.gutter.CommentGutterListener" />
 
     <colorSettingsPage implementation="com.yeskiy.yreview.settings.ReviewColorsPage" />
+    <additionalTextAttributes scheme="Default" file="colorSchemes/YReviewDefault.xml" />
+    <additionalTextAttributes scheme="Darcula" file="colorSchemes/YReviewDarcula.xml" />
+    <additionalTextAttributes scheme="High contrast" file="colorSchemes/YReviewHighContrast.xml" />
 
     <postStartupActivity implementation="com.yeskiy.yreview.bridge.BridgeStartup" />
     <postStartupActivity implementation="com.yeskiy.yreview.settings.MaximizeStartup" />

@@ -1,0 +1,9 @@
+<?xml version='1.0'?>
+<list>
+  <option name="Y_REVIEW_COMMENT_OVERLAP">
+    <value>
+      <option name="EFFECT_COLOR" value="FFC800"/>
+      <option name="EFFECT_TYPE" value="0"/>
+    </value>
+  </option>
+</list>

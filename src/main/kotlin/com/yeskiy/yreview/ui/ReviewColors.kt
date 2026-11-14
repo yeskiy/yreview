@@ -16,4 +16,11 @@ object ReviewColors {
      */
     val COMMENT_RANGE: TextAttributesKey =
         TextAttributesKey.createTextAttributesKey("Y_REVIEW_COMMENT_RANGE", EditorColors.INJECTED_LANGUAGE_FRAGMENT)
+
+    /**
+     * The text that two or more open comments cover. The scheme files of the plugin give it an
+     * amber background, and the High contrast scheme a box border.
+     */
+    val COMMENT_OVERLAP: TextAttributesKey =
+        TextAttributesKey.createTextAttributesKey("Y_REVIEW_COMMENT_OVERLAP", EditorColors.SEARCH_RESULT_ATTRIBUTES)
 }

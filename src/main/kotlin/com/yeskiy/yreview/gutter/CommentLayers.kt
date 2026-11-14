@@ -2,14 +2,15 @@ package com.yeskiy.yreview.gutter
 
 import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
+import com.intellij.openapi.editor.Inlay
+import com.intellij.openapi.editor.InlayProperties
 import com.intellij.openapi.editor.markup.HighlighterLayer
 import com.intellij.openapi.editor.markup.HighlighterTargetArea
 import com.intellij.openapi.editor.markup.RangeHighlighter
-import com.intellij.openapi.editor.markup.TextAttributes
+import com.intellij.openapi.util.Disposer
 import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.RangeText
 import com.yeskiy.yreview.ui.ReviewColors
-import java.awt.Color
 
 /** The document offsets that one comment covers. [wholeLines] paints the full width of each line. */
 data class CommentPlace(val start: Int, val end: Int, val wholeLines: Boolean)
@@ -23,35 +24,57 @@ private data class Step(val at: Int, val text: Int, val lines: Int)
 /** One stretch of a sweep with the counts that hold over the whole stretch. */
 private data class Stretch(val from: Int, val to: Int, val text: Int, val lines: Int)
 
+/** What one repaint drew in one editor: the highlighters and the count marks. */
+data class Drawn(val highlighters: List<RangeHighlighter>, val inlays: List<Inlay<*>>) {
+
+    fun clear(editor: Editor) {
+        highlighters.forEach { editor.markupModel.removeHighlighter(it) }
+        inlays.filter { it.isValid }.forEach { Disposer.dispose(it) }
+    }
+
+    companion object {
+        val NONE = Drawn(emptyList(), emptyList())
+    }
+}
+
 /**
  * Paints the open comments of one file: the characters of a comment with columns, else whole lines.
- * Each comment adds one layer of the same tint, up to [MAX_DEPTH] layers.
+ * A piece of two or more comments takes the overlap color and shows its count after its last line.
  */
 object CommentLayers {
-
-    const val MAX_DEPTH = 3
 
     /** Both layers stay under the caret row. A piece of text sits over a whole line. */
     private const val TEXT_LAYER = HighlighterLayer.CARET_ROW - 1
 
     private const val LINE_LAYER = HighlighterLayer.CARET_ROW - 2
 
-    fun paint(editor: Editor, ranges: List<Range>): List<RangeHighlighter> {
-        val scheme = editor.colorsScheme
-        val base = scheme.getAttributes(ReviewColors.COMMENT_RANGE)?.backgroundColor
-        return layersOf(editor.document, ranges).map { layer ->
+    fun paint(editor: Editor, ranges: List<Range>): Drawn {
+        val layers = layersOf(editor.document, ranges)
+        val highlighters = layers.map { layer ->
             val area = if (layer.wholeLines) HighlighterTargetArea.LINES_IN_RANGE else HighlighterTargetArea.EXACT_RANGE
-            val level = if (layer.wholeLines) LINE_LAYER else TEXT_LAYER
-            if (layer.depth == 1 || base == null) {
-                editor.markupModel.addRangeHighlighter(ReviewColors.COMMENT_RANGE, layer.start, layer.end, level, area)
-            } else {
-                val shaded = TextAttributes().apply {
-                    backgroundColor = shade(base, scheme.defaultBackground, layer.depth)
-                }
-                editor.markupModel.addRangeHighlighter(layer.start, layer.end, level, shaded, area)
-            }
+            val key = if (layer.depth > 1) ReviewColors.COMMENT_OVERLAP else ReviewColors.COMMENT_RANGE
+            editor.markupModel.addRangeHighlighter(
+                key, layer.start, layer.end, if (layer.wholeLines) LINE_LAYER else TEXT_LAYER, area,
+            )
         }
+        val inlays = countsOf(editor.document, layers).mapNotNull { (offset, count) ->
+            editor.inlayModel.addAfterLineEndElement(offset, InlayProperties(), CountRenderer(count.toString()))
+        }
+        return Drawn(highlighters, inlays)
     }
+
+    /**
+     * The line end offset and the count of each overlap piece, once for each pair. A piece of
+     * text that ends at a line start counts on the line before.
+     */
+    fun countsOf(document: Document, layers: List<CommentLayer>): List<Pair<Int, Int>> =
+        layers.filter { it.depth > 1 }
+            .map { layer ->
+                val line = document.getLineNumber(if (layer.wholeLines) layer.end else maxOf(layer.start, layer.end - 1))
+                document.getLineEndOffset(line) to layer.depth
+            }
+            .distinct()
+            .sortedBy { it.first }
 
     /**
      * The pieces to paint, whole lines first, from one sorted sweep. A piece of text also counts
@@ -71,17 +94,6 @@ object CommentLayers {
         val textLayers = sweep(textSteps).filter { it.text > 0 }
             .map { CommentLayer(it.from, it.to, it.text + it.lines, false) }
         return merge(lineLayers) + merge(textLayers)
-    }
-
-    /** Each extra comment adds the step from [background] to [base] once more, up to [MAX_DEPTH]. */
-    fun shade(base: Color, background: Color, depth: Int): Color {
-        val times = depth.coerceIn(1, MAX_DEPTH)
-        fun channel(b: Int, s: Int) = (s + (b - s) * times).coerceIn(0, 255)
-        return Color(
-            channel(base.red, background.red),
-            channel(base.green, background.green),
-            channel(base.blue, background.blue),
-        )
     }
 
     /**
