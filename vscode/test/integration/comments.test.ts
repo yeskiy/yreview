@@ -8,6 +8,8 @@ import * as vscode from 'vscode'
 import type { ReviewComments, Shown } from '../../src/comments/controller'
 import type { YreviewApi } from '../../src/extension'
 
+import { focusWindow, until } from './window'
+
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
 const git = (...args: string[]): string =>
@@ -21,8 +23,6 @@ const reviewComments = async (): Promise<ReviewComments> =>
 const localNotes = (): string => git('notes', '--ref', 'refs/notes/y-review/local', 'show', 'HEAD')
 const textOf = (shown: Shown): string =>
   (shown.thread.comments[0]?.body as vscode.MarkdownString).value
-const until = async (check: () => boolean, tries = 40): Promise<boolean> =>
-  check() || (tries > 0 && wait(250).then(() => until(check, tries - 1)))
 
 describe('comments in the editor', () => {
   const file = (): vscode.Uri => vscode.Uri.file(path.join(workspace(), 'src', 'a.txt'))
@@ -119,14 +119,7 @@ describe('comments in the editor', () => {
     const editor = await vscode.window.showTextDocument(
       await vscode.workspace.openTextDocument(file()),
     )
-    // A test window can start without OS focus, and then no editor widget gets the keyboard focus.
-    const focusWindow = 'workbench.action.focusWindow'
-    if (
-      !vscode.window.state.focused &&
-      (await vscode.commands.getCommands(true)).includes(focusWindow)
-    )
-      await vscode.commands.executeCommand(focusWindow)
-    assert.ok(await until(() => vscode.window.state.focused, 20), 'the VS Code window has no focus')
+    await focusWindow()
     editor.selection = new vscode.Selection(2, 1, 2, 4)
     await vscode.commands.executeCommand('yreview.addComment')
     await wait(1500)

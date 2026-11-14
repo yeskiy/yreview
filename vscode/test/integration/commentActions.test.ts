@@ -9,6 +9,8 @@ import * as vscode from 'vscode'
 import type { ReviewComments } from '../../src/comments/controller'
 import type { YreviewApi } from '../../src/extension'
 
+import { focusWindow, until } from './window'
+
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
 const reviewComments = async (): Promise<ReviewComments> =>
@@ -33,9 +35,6 @@ const recorded = (
     }),
   }
 }
-
-const until = async (check: () => boolean, tries = 40): Promise<boolean> =>
-  check() || (tries > 0 && wait(250).then(() => until(check, tries - 1)))
 
 describe('comment box actions', () => {
   const file = (): vscode.Uri => vscode.Uri.file(path.join(workspace(), 'src', 'a.txt'))
@@ -64,8 +63,6 @@ describe('comment box actions', () => {
     )
     editor.selection = new vscode.Selection(1, 0, 1, 2)
     await vscode.commands.executeCommand('yreview.addComment')
-    await wait(500)
-    await vscode.commands.executeCommand('workbench.action.hideComment')
     const draft = controller.createCommentThread(file(), new vscode.Range(1, 0, 1, 0), [])
     await assert.rejects(
       Promise.resolve(
@@ -96,7 +93,7 @@ describe('comment box actions', () => {
     editor.selection = new vscode.Selection(0, 1, 0, 2)
     const before = ourInputs()
     // The close command acts on the focused editor, so the window must have the focus.
-    await vscode.commands.executeCommand('workbench.action.focusWindow')
+    await focusWindow()
     await vscode.commands.executeCommand('yreview.addComment')
     assert.ok(await until(() => ourInputs() > before), 'the comment box did not open')
     await wait(1000)
