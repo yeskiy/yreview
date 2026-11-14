@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
+import { setTimeout as wait } from 'node:timers/promises'
 
 import * as vscode from 'vscode'
 
@@ -40,6 +41,32 @@ describe('comments in a folder outside git', () => {
     assert.equal(shown.thread.label, 'Lines 1-1')
     await vscode.commands.executeCommand('yreview.resolve', shown.thread)
     assert.match(readFileSync(store(), 'utf8'), /"resolved":true/)
+  })
+
+  it('a folder store write of this window starts no reload of the visible editors', async () => {
+    const { comments } = await api()
+    assert.ok(comments)
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file()))
+    await comments.reload(file())
+    const reloads: string[] = []
+    const reload = comments.reload.bind(comments)
+    Object.assign(comments, {
+      reload: (uri: vscode.Uri) => {
+        // The comment input editors of VS Code reload too, and their load stops at once.
+        if (uri.scheme === 'file') reloads.push(uri.fsPath)
+        return reload(uri)
+      },
+    })
+    try {
+      await save('No reload.')
+      const [shown] = comments.snapshot(file())
+      assert.ok(shown)
+      await vscode.commands.executeCommand('yreview.resolve', shown.thread)
+      await wait(2000)
+    } finally {
+      Reflect.deleteProperty(comments, 'reload')
+    }
+    assert.deepEqual(reloads, [])
   })
 
   it('moves the folder store into the git notes after a repository with a commit exists', async () => {

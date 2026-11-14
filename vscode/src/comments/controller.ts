@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import path from 'node:path'
 
 import * as vscode from 'vscode'
@@ -13,6 +13,7 @@ import type { Log } from '../log'
 import { watchNotes } from '../noteWatch'
 import { readSettings } from '../settings'
 import type { StoredComment } from '../store/commentBook'
+import { FOLDER, NOTES } from '../store/folderNotes'
 import { ALL_REFS, isShared } from '../store/noteRefs'
 import {
   type Anchor,
@@ -237,7 +238,7 @@ export class ReviewComments implements vscode.Disposable {
   /** The writes of this window that run now. A note watcher waits for them. */
   private readonly writes = new Set<Promise<unknown>>()
 
-  /** The content of each note ref file after the last write of this window, by file. */
+  /** The content of each note ref file or folder store file after the last write of this window. */
   private readonly ownTips = new Map<string, string | undefined>()
 
   /** The author of the last saved comment. A new comment shows it while git writes the record. */
@@ -560,19 +561,24 @@ export class ReviewComments implements vscode.Disposable {
     return answers.includes(true)
   }
 
-  /** Keeps the note ref files as this window wrote them. Git keeps a loose ref under .git. */
-  private async rememberTips(root: string): Promise<void> {
+  /** Keeps the files of the store as this window wrote them. Git keeps a loose ref under .git. */
+  private async rememberTips({ store, root }: Anchor): Promise<void> {
+    const notes = path.join(root, FOLDER, NOTES)
+    const files =
+      store === 'git'
+        ? ALL_REFS.map((ref) => path.join(root, '.git', ...ref.split('/')))
+        : (await readdir(notes, { recursive: true }).catch(() => [])).map((name) =>
+            path.join(notes, name),
+          )
     await Promise.all(
-      ALL_REFS.map((ref) => path.join(root, '.git', ...ref.split('/'))).map(async (file) =>
-        this.ownTips.set(fileKey(file), await contentOf(file)),
-      ),
+      files.map(async (file) => this.ownTips.set(fileKey(file), await contentOf(file))),
     )
   }
 
-  /** Runs one write of this window. The note watchers wait for it before they look at the refs. */
-  private async write<T>(root: string, work: () => Promise<T>): Promise<T> {
+  /** Runs one write of this window. The note watchers wait for it before they look at the store. */
+  private async write<T>(anchor: Anchor, work: () => Promise<T>): Promise<T> {
     const done = work().then(async (result) => {
-      await this.rememberTips(root)
+      await this.rememberTips(anchor)
       return result
     })
     this.writes.add(done)
@@ -738,7 +744,7 @@ export class ReviewComments implements vscode.Disposable {
     try {
       const found = await this.anchorFor(document.uri)
       if (found.kind !== 'found') throw new Error(refusalOf(found))
-      const result = await this.write(found.anchor.root, () =>
+      const result = await this.write(found.anchor, () =>
         this.service.addComment(found.anchor, range, text, shared),
       )
       this.author = result.stored.record.author
@@ -782,7 +788,7 @@ export class ReviewComments implements vscode.Disposable {
   private async resolve(thread: vscode.CommentThread): Promise<void> {
     const entry = this.snapshot(thread.uri).find((shown) => shown.thread === thread)
     if (entry === undefined) return
-    const result = await this.write(entry.anchor.root, () =>
+    const result = await this.write(entry.anchor, () =>
       this.service.resolve(entry.anchor, entry.stored.id),
     )
     this.shown.set(
@@ -823,7 +829,7 @@ export class ReviewComments implements vscode.Disposable {
     this.deleting.add(entry.stored.id)
     await this.timed('Delete', async () => {
       try {
-        const result = await this.write(entry.anchor.root, () =>
+        const result = await this.write(entry.anchor, () =>
           this.service.removeStored(entry.anchor, [entry.stored]),
         )
         if (result.shareError !== undefined) {

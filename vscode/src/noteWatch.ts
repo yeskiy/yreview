@@ -7,6 +7,8 @@ export const watchNotes = (onChange: (files: readonly string[]) => void): vscode
   const timer: { handle?: NodeJS.Timeout } = {}
   const changed = new Set<string>()
   const later = (uri: vscode.Uri): void => {
+    // A folder store writes a temporary file first and renames it over the note file.
+    if (uri.fsPath.endsWith('.tmp')) return
     changed.add(uri.fsPath)
     clearTimeout(timer.handle)
     timer.handle = setTimeout(() => {
