@@ -521,6 +521,25 @@ the token header and the session header of section 13. Each answer is one JSON o
 | `/comments/resolve` | POST | `{ id }` | `{ id, resolved: true }` or `{ error }` |
 | `/comments/open` | POST | `{ id }` | `{ id, opened, path, line, revision }` or `{ error }` |
 
+The checks run in this order: an unknown path gives 404, a bad token gives 401, a `Host` header
+other than `127.0.0.1:<port>` or `localhost:<port>` gives 403, and a wrong method gives 405. The
+VS Code bridge also makes the `Host` check on `/events` and `/resolve`. The IntelliJ bridge does
+not make the `Host` check.
+
+| Answer | Meaning |
+|---|---|
+| 200 with the payload | The editor did the work |
+| 200 with `{ error }` | The editor refused the work, for example for an unknown id |
+| 400 with `{ error }` | The body or the query breaks the rule of the route |
+| 413 | The body is larger than 1,000,000 bytes |
+
+A query value of `resolved`, `analyses` or `local` is `true`, `false`, or empty. An empty or
+absent value takes the default: `false`, `false`, `true`.
+
+A body is a JSON object with exactly the keys of the route. `id` is a string of 1 to 200
+characters. `path` is a string of 1 to 1,024 characters, `text` is a string of 20,000
+characters or fewer, and `startLine` and `endLine` are integers.
+
 A `CommentRow` has these fields, in this order: `id` (the short handle), `path`,
 `startLine`, `startColumn` (optional), `endLine`, `endColumn` (optional), `revision`,
 `author`, `text`, `shared`, `resolved`. In the answer of `/comments/open`, `opened` is a
