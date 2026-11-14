@@ -17,6 +17,9 @@ to `refs/notes/devtools/discuss`, and Yreview pushes that ref to your remote at 
 
 Click Resolve on a comment to close it. Click Delete to remove it from the notes.
 
+The comment box opens on the first line of the commented text, and Yreview colors the full
+text. For this reason, the VS Code Comments view shows only the first line of each comment.
+
 ## Requirements
 
 | Item      | Requirement                                                                                                     |

@@ -164,6 +164,26 @@
           "highContrast": null,
           "highContrastLight": null
         }
+      },
+      {
+        "id": "yreview.commentRangeBackground2",
+        "description": "The second layer of background on text that two or more open review comments cover. It goes over the first layer.",
+        "defaults": {
+          "dark": "yreview.commentRangeBackground",
+          "light": "yreview.commentRangeBackground",
+          "highContrast": "yreview.commentRangeBackground",
+          "highContrastLight": "yreview.commentRangeBackground"
+        }
+      },
+      {
+        "id": "yreview.commentRangeBackground3",
+        "description": "The third layer of background on text that three or more open review comments cover. It goes over the first two layers.",
+        "defaults": {
+          "dark": "yreview.commentRangeBackground",
+          "light": "yreview.commentRangeBackground",
+          "highContrast": "yreview.commentRangeBackground",
+          "highContrastLight": "yreview.commentRangeBackground"
+        }
       }
     ],
     "configuration": {
