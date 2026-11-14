@@ -1,5 +1,6 @@
 {
   "spec": ["test/unit/**/*.test.ts"],
+  "require": ["test/unit/gitIdentity.ts"],
   "node-option": ["import=tsx"],
   "timeout": 30000
 }
