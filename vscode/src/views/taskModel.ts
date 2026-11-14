@@ -9,7 +9,16 @@ import { changeFiles } from '../tasks/changeScan'
 import { type ChangeFacts, NO_CHANGES } from '../tasks/changeTab'
 import { basePathOf } from '../tasks/roots'
 import { type ScanPhase, ScanRuns, ScanState } from '../tasks/scanRuns'
-import { type RepositoryTasks, scanProject, withOverlays } from '../tasks/taskScan'
+import {
+  type RepositoryTasks,
+  SCAN_DELAY_MS,
+  type ScanInput,
+  type ScanKind,
+  ScanSchedule,
+  rescanNotes,
+  scanProject,
+  withOverlays,
+} from '../tasks/taskScan'
 import { type CompiledPattern, compilePatterns, refusedMessage } from '../tasks/todoPatterns'
 import {
   type GitApi,
@@ -40,7 +49,6 @@ const EMPTY: Base = {
   folders: [],
   patterns: [],
 }
-const SCAN_DELAY_MS = 400
 const EDIT_DELAY_MS = 300
 
 const changesOf = async (
@@ -75,11 +83,15 @@ export class TaskModel implements vscode.Disposable {
 
   private readonly timers = new Map<string, NodeJS.Timeout>()
 
+  private readonly schedule = new ScanSchedule((kind) => this.scanLater(kind))
+
   private readonly disposables: vscode.Disposable[] = []
 
   private base: Base = EMPTY
 
   private pending: Promise<void> = Promise.resolve()
+
+  private running: ScanKind | undefined
 
   private refused = ''
 
@@ -90,19 +102,20 @@ export class TaskModel implements vscode.Disposable {
     private readonly gitPath: string,
     private readonly log: Log,
   ) {
-    const stopListening = service.onDidChange(() => this.later('scan', () => this.refresh()))
+    const stopListening = service.onDidChange(() => this.schedule.request('notes'))
     this.disposables.push(
       this.emitter,
       { dispose: stopListening },
       {
         dispose: () => {
           this.timers.forEach((timer) => clearTimeout(timer))
+          this.schedule.cancel()
           this.runs.cancel()
         },
       },
-      ...watchNotes(() => this.later('scan', () => this.refresh())),
+      ...watchNotes(() => this.schedule.request('notes')),
       vscode.workspace.onDidSaveTextDocument((document) =>
-        this.overlay(document).then(() => this.later('scan', () => this.refresh())),
+        this.overlay(document).then(() => this.schedule.request('full')),
       ),
       vscode.workspace.onDidChangeTextDocument((event) =>
         this.later(
@@ -112,10 +125,9 @@ export class TaskModel implements vscode.Disposable {
         ),
       ),
       vscode.workspace.onDidCloseTextDocument((document) => this.overlay(document)),
-      vscode.workspace.onDidChangeWorkspaceFolders(() => this.later('scan', () => this.refresh())),
+      vscode.workspace.onDidChangeWorkspaceFolders(() => this.schedule.request('full')),
       vscode.workspace.onDidChangeConfiguration((event) => {
-        if (event.affectsConfiguration('yreview.todoPatterns'))
-          this.later('scan', () => this.refresh())
+        if (event.affectsConfiguration('yreview.todoPatterns')) this.schedule.request('full')
       }),
     )
   }
@@ -149,8 +161,8 @@ export class TaskModel implements vscode.Disposable {
 
   /** Scans now. A later signal starts a new scan, which aborts this one. */
   refresh(): Promise<void> {
-    clearTimeout(this.timers.get('scan'))
-    this.pending = this.scan()
+    this.schedule.cancel()
+    this.pending = this.scan('full')
     return this.pending
   }
 
@@ -175,6 +187,13 @@ export class TaskModel implements vscode.Disposable {
     this.disposables.forEach((disposable) => disposable.dispose())
   }
 
+  /** A note change reads the comments only, unless a full scan runs or no full scan read the tasks yet. */
+  private scanLater(kind: ScanKind): void {
+    this.pending = this.scan(this.running === 'full' || this.base === EMPTY ? 'full' : kind).catch(
+      (error: unknown) => this.log.error('The update of the review tasks failed.', error),
+    )
+  }
+
   private later(name: string, work: () => Promise<void>, delay = SCAN_DELAY_MS): void {
     clearTimeout(this.timers.get(name))
     this.timers.set(
@@ -188,12 +207,16 @@ export class TaskModel implements vscode.Disposable {
     )
   }
 
-  private async scan(): Promise<void> {
+  private async scan(kind: ScanKind): Promise<void> {
     const signal = this.runs.next()
     const ticket = this.state.start()
-    this.anchors.clear()
+    this.running = kind
+    if (kind === 'full') this.anchors.clear()
     this.emitter.fire()
-    const outcome = await this.runs.run(signal, () => inBackground(() => this.read(signal)))
+    const outcome = await this.runs.run(signal, () =>
+      inBackground(() => (kind === 'full' ? this.read(signal) : this.readNotes(signal))),
+    )
+    if (this.state.current(ticket)) this.running = undefined
     if (outcome === undefined) return
     if (outcome.failure !== undefined) {
       this.log.error('The scan of the review tasks failed.', outcome.failure)
@@ -209,18 +232,40 @@ export class TaskModel implements vscode.Disposable {
     const folders = await workspaceFolders()
     const roots = await repositoryRoots(this.api, this.gitPath, folders, signal)
     return {
-      repositories: await scanProject({
-        gitPath: this.gitPath,
-        roots,
-        basePathOf: basePathOf(folders),
-        patterns: compiled.patterns,
-        unshared: (id) => this.service.unshared(id),
-        signal,
-      }),
+      repositories: await scanProject(await this.input(roots, folders, compiled.patterns, signal)),
       changes: { gitFound: roots.length > 0, files: await changesOf(roots, this.gitPath, signal) },
       roots,
       folders,
       patterns: compiled.patterns,
+    }
+  }
+
+  /** The comments of the last scan read again, with its roots, TODO items and changed files. */
+  private async readNotes(signal: AbortSignal): Promise<Base> {
+    const { base } = this
+    return {
+      ...base,
+      repositories: await rescanNotes(
+        await this.input(base.roots, base.folders, base.patterns, signal),
+        base.repositories,
+      ),
+    }
+  }
+
+  private async input(
+    roots: readonly string[],
+    folders: readonly string[],
+    patterns: readonly CompiledPattern[],
+    signal: AbortSignal,
+  ): Promise<ScanInput> {
+    return {
+      gitPath: this.gitPath,
+      roots,
+      basePathOf: basePathOf(folders),
+      patterns,
+      unshared: (id) => this.service.unshared(id),
+      signal,
+      folderStores: await this.service.folderStores(true),
     }
   }
 

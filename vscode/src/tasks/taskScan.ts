@@ -1,7 +1,8 @@
+import { WORKTREE } from '../core/anchor'
 import { kotlinTrim } from '../core/kotlinText'
 import { isRelativeUnder } from '../core/paths'
 import { assignTodoIds, repositoryOf } from '../core/taskIds'
-import { NotesGateway } from '../git/notes'
+import { type NoteStore, NotesGateway } from '../git/notes'
 import { type GitRunner, ProcessGitRunner, isOk, ran } from '../git/runner'
 import { CommentBook } from '../store/commentBook'
 import { type ScanRecord, commentTask, pickRecords } from './commentTask'
@@ -25,7 +26,12 @@ export interface ScanInput {
   readonly patterns: readonly CompiledPattern[]
   readonly unshared: (id: string) => boolean
   readonly signal?: AbortSignal
+  readonly folderStores?: readonly { readonly root: string; readonly store: NoteStore }[]
 }
+
+export type ScanKind = 'notes' | 'full'
+
+export const SCAN_DELAY_MS = 300
 
 /** The open records and the resolved records. A view drops the resolved ones while its switch is off. */
 export const recordsOf = async (book: CommentBook): Promise<readonly ScanRecord[]> =>
@@ -49,6 +55,13 @@ export const gitRecords = async (
       noAuthor,
     ),
   )
+
+const commentsOf = (
+  input: ScanInput,
+  root: string,
+  records: readonly ScanRecord[],
+): readonly ReviewTask[] =>
+  records.flatMap((record) => commentTask(record, root, input.unshared(record.stored.id)) ?? [])
 
 const todoTask = (hit: TodoHit, root: string, path: string, commit: string): ReviewTask => ({
   id: '',
@@ -96,9 +109,7 @@ export const scanRepository = async (input: ScanInput, root: string): Promise<Re
     root,
     commit,
     tasks: [
-      ...records.flatMap(
-        (record) => commentTask(record, root, input.unshared(record.stored.id)) ?? [],
-      ),
+      ...commentsOf(input, root, records),
       ...[...hitsByFile(lines, input.patterns)].flatMap(([path, hits]) =>
         isRelativeUnder(root, path) && ownsFile(root, `${root}/${path}`, input.roots)
           ? todosOfFile(repository, root, path, commit, hits)
@@ -108,13 +119,84 @@ export const scanRepository = async (input: ScanInput, root: string): Promise<Re
   }
 }
 
+/** A folder store gives comments only. Its TODO items come from the repositories under it. */
+const folderTasks = async (input: ScanInput): Promise<readonly RepositoryTasks[]> =>
+  (
+    await Promise.all(
+      (input.folderStores ?? []).map(async ({ root, store }) => ({
+        root,
+        commit: WORKTREE,
+        tasks: commentsOf(input, root, await recordsOf(new CommentBook(store, noAuthor))),
+      })),
+    )
+  ).filter((entry) => entry.tasks.length > 0)
+
 /** The repositories one after the other, so a large workspace does not start many git processes at once. */
-export const scanProject = (input: ScanInput): Promise<readonly RepositoryTasks[]> =>
+const inTurn = (
+  input: ScanInput,
+  read: (root: string) => Promise<RepositoryTasks>,
+): Promise<readonly RepositoryTasks[]> =>
   input.roots.reduce<Promise<readonly RepositoryTasks[]>>(async (done, root) => {
     const found = await done
     input.signal?.throwIfAborted()
-    return [...found, await scanRepository(input, root)]
+    return [...found, await read(root)]
   }, Promise.resolve([]))
+
+export const scanProject = async (input: ScanInput): Promise<readonly RepositoryTasks[]> => [
+  ...(await inTurn(input, (root) => scanRepository(input, root))),
+  ...(await folderTasks(input)),
+]
+
+/** Reads the comments again and keeps the TODO items. A ref tip that did not move starts no git grep. */
+export const rescanNotes = async (
+  input: ScanInput,
+  found: readonly RepositoryTasks[],
+): Promise<readonly RepositoryTasks[]> => {
+  const known = new Map(found.map((repo) => [repo.root, repo]))
+  return [
+    ...(await inTurn(input, async (root) => {
+      const old = known.get(root)
+      if (old === undefined) return scanRepository(input, root)
+      const git = new ProcessGitRunner(root, input.gitPath)
+      return {
+        ...old,
+        tasks: [
+          ...commentsOf(input, root, await gitRecords(git, root, input.signal)),
+          ...old.tasks.filter((task) => task.kind === 'todo'),
+        ],
+      }
+    })),
+    ...(await folderTasks(input)),
+  ]
+}
+
+/** Starts one scan after a burst of requests. A full request in the burst makes the scan full. */
+export class ScanSchedule {
+  private timer: NodeJS.Timeout | undefined
+
+  private wanted: ScanKind | undefined
+
+  constructor(
+    private readonly start: (kind: ScanKind) => void,
+    private readonly delayMs = SCAN_DELAY_MS,
+  ) {}
+
+  request(kind: ScanKind): void {
+    this.wanted = kind === 'full' || this.wanted === 'full' ? 'full' : 'notes'
+    clearTimeout(this.timer)
+    this.timer = setTimeout(() => {
+      const wanted = this.wanted ?? kind
+      this.cancel()
+      this.start(wanted)
+    }, this.delayMs)
+  }
+
+  cancel(): void {
+    clearTimeout(this.timer)
+    this.timer = undefined
+    this.wanted = undefined
+  }
+}
 
 /** The scan with the TODO items of each dirty document in place of the items that git read from the disk. */
 export const withOverlays = (
