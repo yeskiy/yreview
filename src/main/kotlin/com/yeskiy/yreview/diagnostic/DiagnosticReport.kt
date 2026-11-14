@@ -5,6 +5,8 @@ import com.intellij.ide.plugins.cl.PluginAwareClassLoader
 import com.intellij.openapi.application.ApplicationInfo
 import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
+import com.yeskiy.yreview.session.AgentCatalog
+import com.yeskiy.yreview.session.AgentId
 import com.yeskiy.yreview.settings.ProductName
 import com.yeskiy.yreview.settings.ReviewSettings
 
@@ -29,7 +31,8 @@ data class ReportFacts(
     val channel: Boolean,
     val sharing: String,
     val sessionWindow: String,
-    val agentCommand: String,
+    val agent: String,
+    val customCommand: Boolean,
 )
 
 /**
@@ -76,7 +79,8 @@ object DiagnosticReport {
             line("channel", state(facts.channel)),
             line("sharing", facts.sharing),
             line("session window", facts.sessionWindow),
-            line("agent command", facts.agentCommand),
+            line("agent", facts.agent),
+            line("agent command", if (facts.customCommand) "custom" else "default"),
             "",
             "Records, newest first (${records.size} of ${SessionLog.LIMIT})",
             if (records.isEmpty()) "  none" else records.joinToString("\n\n") { it.text() },
@@ -99,9 +103,14 @@ object DiagnosticReport {
             channel = settings.channel,
             sharing = settings.sharing.label,
             sessionWindow = choice(settings.sessionWindow),
-            agentCommand = settings.command(settings.agentOrDefault()),
+            agent = settings.agent?.name?.lowercase() ?: "not chosen",
+            customCommand = customCommand(settings, settings.agentOrDefault()),
         )
     }
+
+    /** The report names only the kind of the command. A custom command can carry a password. */
+    fun customCommand(settings: ReviewSettings, id: AgentId): Boolean =
+        settings.command(id) != AgentCatalog.of(id).defaultCommand
 
     fun machine(): MachineFacts = MachineFacts(
         pluginVersion = version(),

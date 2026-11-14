@@ -2,9 +2,11 @@ package com.yeskiy.yreview.diagnostic
 
 import com.yeskiy.yreview.bridge.SendReport
 import com.yeskiy.yreview.bridge.SendRoute
+import com.yeskiy.yreview.session.AgentId
 import com.yeskiy.yreview.session.BridgeLookup
 import com.yeskiy.yreview.session.SessionPlan
 import com.yeskiy.yreview.settings.ProductName
+import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.StoreKind
 import java.io.IOException
 import java.time.LocalDateTime
@@ -50,7 +52,8 @@ class DiagnosticReportTest {
         channel = true,
         sharing = "Local only",
         sessionWindow = "not chosen",
-        agentCommand = "claude",
+        agent = "claude",
+        customCommand = false,
     )
 
     /** One record that carries every value the report must never show. */
@@ -184,6 +187,28 @@ class DiagnosticReportTest {
         assertFalse(text.contains(token), "the token rule must not depend on the home folder")
         assertFalse(text.contains(email), "the mail rule must not depend on the home folder")
         assertFalse(text.contains(remote), "the remote rule must not depend on the home folder")
+    }
+
+    @Test
+    fun `the report names a custom agent command and never shows its text`() {
+        val settings = ReviewSettings().apply { setCommand(AgentId.CLAUDE, "--password hunter2 --api-key=abc123") }
+        val text = DiagnosticReport.text(
+            facts.copy(customCommand = DiagnosticReport.customCommand(settings, AgentId.CLAUDE)),
+            emptyList(),
+            listOf(home),
+            project,
+        )
+
+        assertTrue(text.contains(Regex("agent command +custom")), text)
+        assertTrue(text.contains(Regex("agent +claude")), text)
+        assertFalse(text.contains("hunter2"), text)
+        assertFalse(text.contains("abc123"), text)
+    }
+
+    @Test
+    fun `the report names the default agent command when no custom command is stored`() {
+        assertFalse(DiagnosticReport.customCommand(ReviewSettings(), AgentId.CLAUDE))
+        assertTrue(report.contains(Regex("agent command +default")), report)
     }
 
     /**
