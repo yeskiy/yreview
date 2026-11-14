@@ -2,6 +2,7 @@ import { homedir } from 'node:os'
 
 import * as vscode from 'vscode'
 
+import { offerIntellijKey } from './keyOffer'
 import { redactingLog } from './log'
 
 export type YreviewApi = Record<string, never>
@@ -16,6 +17,9 @@ export const activate = (context: vscode.ExtensionContext): YreviewApi => {
   context.subscriptions.push(
     output,
     vscode.commands.registerCommand('yreview.showLog', () => output.show(true)),
+  )
+  offerIntellijKey(context.globalState).catch((error: unknown) =>
+    log.error('The key offer failed.', error),
   )
   log.info('Yreview started.')
   return {}
