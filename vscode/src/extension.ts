@@ -6,6 +6,7 @@ import { ReviewComments } from './comments/controller'
 import { checkGit, findGitPath } from './git/gitPath'
 import { offerIntellijKey } from './keyOffer'
 import { redactingLog } from './log'
+import { withLongForms } from './places'
 import { ReviewService } from './store/reviewService'
 import { vscodeHost } from './vscodeHost'
 
@@ -22,16 +23,27 @@ const COMMENT_COMMANDS = [
   'yreview.delete',
 ]
 
+const projectFolders = (): readonly string[] =>
+  withLongForms((vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath))
+
 export const activate = async (context: vscode.ExtensionContext): Promise<YreviewApi> => {
   const output = vscode.window.createOutputChannel('Yreview', { log: true })
-  const held: { service?: ReviewService } = {}
+  const held: { service?: ReviewService; projects: readonly string[] } = {
+    projects: projectFolders(),
+  }
+  const homes = withLongForms(
+    [process.env.USERPROFILE ?? '', homedir()].filter((home) => home !== ''),
+  )
   const log = redactingLog(output, () => ({
-    homes: [process.env.USERPROFILE ?? '', homedir()].filter((home) => home !== ''),
-    projects: (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath),
+    homes,
+    projects: held.projects,
     repositories: held.service?.knownRoots() ?? [],
   }))
   context.subscriptions.push(
     output,
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      held.projects = projectFolders()
+    }),
     vscode.commands.registerCommand('yreview.showLog', () => output.show(true)),
   )
   const git = await findGitPath()
