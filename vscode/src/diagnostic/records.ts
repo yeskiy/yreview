@@ -4,18 +4,24 @@ import path from 'node:path'
 import type { SendReport } from '../bridge/sendReport'
 import type { BridgeExtras } from '../session/bridgePlan'
 import type { SessionPlan } from '../session/sessionPlan'
+import type { CommandKind } from './report'
 import { NONE, type SendFacts, type SessionStart } from './sessionRecord'
 
 /** The folder and the name of a file. The install folder of the editor can be outside each place. */
 const tail = (file: string): string => file.split(/[\\/]/).slice(-2).join('/')
 
-/** Reads no field of the plan environment or of `extras.env`, because both can hold a bridge variable. */
+/** Reads no environment and no argument text, because each can hold a bridge variable or a password. */
 export const startOf = async (
   plan: SessionPlan,
   extras: Partial<BridgeExtras>,
-  facts: { readonly terminalStarted: boolean; readonly processId?: number },
+  facts: {
+    readonly agentCommand: CommandKind
+    readonly terminalStarted: boolean
+    readonly processId?: number
+  },
 ): Promise<SessionStart> => ({
-  command: [path.basename(plan.shellPath), ...plan.shellArgs].join(' '),
+  program: path.win32.basename(plan.shellPath),
+  arguments: plan.shellArgs.length,
   directory: plan.workingDirectory,
   status: plan.status,
   runtime: process.version,

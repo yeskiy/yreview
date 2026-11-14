@@ -12,7 +12,9 @@ import {
 const at = new Date(2026, 8, 4, 10, 11, 12)
 const ownRoot = path.resolve(__dirname, '../../..')
 const ready: SessionStart = {
-  command: 'claude --mcp-config C:/Users/alice/.y-review/mcp/claude-vscode.json',
+  program: 'zsh',
+  arguments: 2,
+  agentCommand: 'default',
   directory: 'E:/work/demo-repo',
   bridgeReady: true,
   bridgeUrl: 'http://127.0.0.1:64343',
@@ -32,7 +34,9 @@ describe('session records', () => {
     assert.deepEqual(
       sessionRecord(ready, at).facts.map(([name]) => name),
       [
-        'command',
+        'program',
+        'arguments',
+        'agent command',
         'directory',
         'bridge',
         'status',

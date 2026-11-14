@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import path from 'node:path'
 
 import { PROJECT_MARK } from '../../../src/core/redact'
+import { startOf } from '../../../src/diagnostic/records'
 import {
   type MachineFacts,
   type ReportFacts,
@@ -10,13 +11,17 @@ import {
   reportHead,
   reportText,
 } from '../../../src/diagnostic/report'
-import { LIMIT } from '../../../src/diagnostic/sessionLog'
+import { LIMIT, SessionLog } from '../../../src/diagnostic/sessionLog'
 import {
   factLine,
   failureRecord,
   sendRecord,
   sessionRecord,
 } from '../../../src/diagnostic/sessionRecord'
+import { redactingLog } from '../../../src/log'
+import { agentOf } from '../../../src/session/catalog'
+import { planSession } from '../../../src/session/sessionPlan'
+import { NO_REACH } from '../../../src/session/sessionReach'
 
 // Every private value of the machine goes into a record on purpose. The report must drop all of them.
 const home = 'C:/Users/alice'
@@ -46,7 +51,9 @@ const facts: ReportFacts = {
 }
 const poisoned = sessionRecord(
   {
-    command: `claude --token ${token} --config C:/Users/alice/AppData/Local/Temp/mcp.json`,
+    program: 'claude',
+    arguments: 3,
+    agentCommand: 'default',
     directory: project,
     bridgeReady: true,
     bridgeUrl: 'http://127.0.0.1:64343',
@@ -126,7 +133,9 @@ describe('the diagnostic report', () => {
     it('removes a project path inside WSL under both spellings', () => {
       const wslRecord = sessionRecord(
         {
-          command: 'claude',
+          program: 'claude',
+          arguments: 0,
+          agentCommand: 'default',
           directory: 'E:/work/demo-repo',
           bridgeReady: false,
           bridgeUrl: '',
@@ -166,6 +175,41 @@ describe('the diagnostic report', () => {
       assert.ok(text.includes(factLine('agent command', 'custom')), text)
       assert.ok(!text.includes('hunter2'), text)
       assert.ok(!text.includes('abc123'), text)
+    })
+    it('keeps the text of a custom command out of a session start record', async () => {
+      const custom = '--password hunter2 --api-key=abc123'
+      const plan = planSession({
+        projectPath: project,
+        agent: agentOf('claude'),
+        command: custom,
+        extras: { args: [], env: {}, reach: NO_REACH },
+        windows: true,
+      })
+      const record = sessionRecord(
+        await startOf(
+          plan,
+          {},
+          { agentCommand: commandKind('claude', { claude: custom }), terminalStarted: true },
+        ),
+        at,
+      )
+      const lines: string[] = []
+      const ring = new SessionLog()
+      redactingLog(
+        {
+          debug: () => undefined,
+          info: (m) => lines.push(m),
+          warn: () => undefined,
+          error: () => undefined,
+        },
+        () => places,
+        { ring },
+      ).record(record)
+      const text = [...lines, reportText(facts, ring.recent(), places)].join('\n')
+      assert.ok(text.includes(factLine('agent command', 'custom')), text)
+      ;['hunter2', 'abc123', '--password', '--api-key'].forEach((probe) =>
+        assert.ok(!text.includes(probe), `${probe} in ${text}`),
+      )
     })
     it('names the default agent command when no custom command is stored', () => {
       assert.equal(commandKind('claude', {}), 'default')

@@ -52,11 +52,11 @@ describe('records of sessions and sends', () => {
     const start = await startOf(
       plan,
       { bridgeReady: true, bridgeUrl: 'http://127.0.0.1:1', configFile: 'x.json' },
-      { terminalStarted: true, processId: 7 },
+      { agentCommand: 'default', terminalStarted: true, processId: 7 },
     )
-    assert.ok(start.command.startsWith('sh -l -c '), start.command)
-    assert.ok(start.command.includes('claude'), start.command)
-    assert.ok(start.command.includes('--mcp-config'), start.command)
+    assert.equal(start.program, 'sh')
+    assert.equal(start.arguments, plan.shellArgs.length)
+    assert.equal(start.agentCommand, 'default')
     assert.equal(start.directory, plan.workingDirectory)
     assert.equal(start.status, plan.status)
     assert.equal(start.bridgeUrl, 'http://127.0.0.1:1')
@@ -67,6 +67,7 @@ describe('records of sessions and sends', () => {
 
   it('a start with no preparer extras has no bridge', async () => {
     const start = await startOf(plan, await NO_EXTRAS(agentOf('claude'), 'k'), {
+      agentCommand: 'default',
       terminalStarted: false,
     })
     assert.equal(start.bridgeReady, false)
@@ -85,7 +86,7 @@ describe('records of sessions and sends', () => {
             bridgeUrl: 'http://127.0.0.1:1',
             channelScript: '/ext/dist/channel.js',
           },
-          { terminalStarted: true },
+          { agentCommand: 'default', terminalStarted: true },
         )
       ).channelServer,
       { kind: 'missing', path: 'dist/channel.js' },
@@ -93,8 +94,13 @@ describe('records of sessions and sends', () => {
 
   it('a channel script that exists is found', async () =>
     assert.equal(
-      (await startOf(plan, { channelScript: __filename }, { terminalStarted: true })).channelServer
-        ?.kind,
+      (
+        await startOf(
+          plan,
+          { channelScript: __filename },
+          { agentCommand: 'default', terminalStarted: true },
+        )
+      ).channelServer?.kind,
       'found',
     ))
 
@@ -143,7 +149,7 @@ describe('records of sessions and sends', () => {
           await startOf(
             withToken,
             { bridgeReady: true, bridgeUrl: address.url },
-            { terminalStarted: true },
+            { agentCommand: 'default', terminalStarted: true },
           ),
         ),
       )
@@ -183,7 +189,11 @@ describe('records of sessions and sends', () => {
         windows: false,
         shell: '/usr/local/probe/bin/zsh',
       })
-      const text = exits(sessionRecord(await startOf(start, extras, { terminalStarted: true })))
+      const text = exits(
+        sessionRecord(
+          await startOf(start, extras, { agentCommand: 'default', terminalStarted: true }),
+        ),
+      )
       ;[
         address.token,
         PASSWORD,

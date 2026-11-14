@@ -2,6 +2,7 @@ import * as vscode from 'vscode'
 
 import { isKotlinBlank } from '../core/kotlinText'
 import { startOf } from '../diagnostic/records'
+import { commandKind } from '../diagnostic/report'
 import { sessionRecord } from '../diagnostic/sessionRecord'
 import type { Log } from '../log'
 import { commandOf } from './agentCommands'
@@ -121,7 +122,8 @@ export class ReviewSessions implements vscode.Disposable {
       vscode.window.showErrorMessage(NO_FOLDER)
       return undefined
     }
-    const command = commandOf(agent.id, readAgentSettings().commands)
+    const { commands } = readAgentSettings()
+    const command = commandOf(agent.id, commands)
     if (isKotlinBlank(command)) {
       askCommand(NO_COMMAND)
       return undefined
@@ -164,7 +166,13 @@ export class ReviewSessions implements vscode.Disposable {
     this.registry.add(key, nameOf(session), extras.reach)
     // The process id comes later, so the record waits for it and the start does not.
     Promise.resolve(session.terminal.processId)
-      .then((processId) => startOf(plan, extras, { terminalStarted: true, processId }))
+      .then((processId) =>
+        startOf(plan, extras, {
+          agentCommand: commandKind(agent.id, commands),
+          terminalStarted: true,
+          processId,
+        }),
+      )
       .then(
         (start) => this.log.record(sessionRecord(start)),
         (error: unknown) => this.log.error('The record of the session start failed.', error),

@@ -1,3 +1,5 @@
+import type { CommandKind } from './report'
+
 export const NONE = 'none'
 export const UNKNOWN = 'unknown'
 /** The width of the name column. It keeps the values of every record in one column. */
@@ -17,9 +19,11 @@ export interface ChannelServerState {
   readonly path: string
 }
 
-/** The facts of one session start. No field holds the bridge token. */
+/** The facts of one session start. No field holds the bridge token or the text of an argument. */
 export interface SessionStart {
-  readonly command: string
+  readonly program: string
+  readonly arguments: number
+  readonly agentCommand: CommandKind
   readonly directory: string
   readonly bridgeReady: boolean
   readonly bridgeUrl: string
@@ -60,7 +64,9 @@ export const sessionRecord = (start: SessionStart, now: Date = new Date()): Sess
   at: clock(now),
   label: 'session start',
   facts: [
-    ['command', start.command],
+    ['program', start.program],
+    ['arguments', String(start.arguments)],
+    ['agent command', start.agentCommand],
     ['directory', start.directory],
     ['bridge', `${start.bridgeReady ? 'ready' : 'not ready'} ${start.bridgeUrl}`.trim()],
     ['status', start.status],
