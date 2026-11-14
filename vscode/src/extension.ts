@@ -8,6 +8,8 @@ import { offerIntellijKey } from './keyOffer'
 import { redactingLog } from './log'
 import { withLongForms } from './places'
 import { offerSaveKey } from './saveKey'
+import { registerSessions } from './session/register'
+import type { ReviewSessions } from './session/terminals'
 import { shareLogOf } from './shareLogState'
 import { ReviewService } from './store/reviewService'
 import { projectCompletionHost } from './tasks/completionHost'
@@ -24,6 +26,7 @@ export interface YreviewApi {
   readonly tasks: TaskViews | undefined
   readonly completion: TaskCompletion | undefined
   readonly writes: TaskWrites | undefined
+  readonly sessions: ReviewSessions
 }
 
 const COMMENT_COMMANDS = [
@@ -61,6 +64,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     }),
     vscode.commands.registerCommand('yreview.showLog', () => output.show(true)),
   )
+  const sessions = registerSessions(context, log)
   const git = await findGitPath()
   const problem = await checkGit(git)
   if (problem !== undefined) {
@@ -78,6 +82,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       tasks: undefined,
       completion: undefined,
       writes: undefined,
+      sessions,
     }
   }
   held.service = new ReviewService(
@@ -114,7 +119,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     log.error('The save key offer failed.', error),
   )
   log.info('Yreview started.')
-  return { comments, service: held.service, tasks, completion, writes }
+  return { comments, service: held.service, tasks, completion, writes, sessions }
 }
 
 export const deactivate = (): void => undefined

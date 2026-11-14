@@ -239,6 +239,40 @@
         "command": "yreview.changes.delete",
         "title": "Delete",
         "icon": "$(trash)"
+      },
+      {
+        "command": "yreview.startSession",
+        "title": "Start Review Session",
+        "category": "Yreview",
+        "icon": "$(add)"
+      },
+      {
+        "command": "yreview.stopSession",
+        "title": "Stop Review Session",
+        "category": "Yreview",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "yreview.renameSession",
+        "title": "Rename Review Session",
+        "category": "Yreview",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "yreview.showSession",
+        "title": "Show Review Session",
+        "category": "Yreview"
+      },
+      {
+        "command": "yreview.chooseAgent",
+        "title": "Choose Agent",
+        "category": "Yreview",
+        "icon": "$(settings-gear)"
+      },
+      {
+        "command": "yreview.setAgentCommand",
+        "title": "Set Agent Command",
+        "category": "Yreview"
       }
     ],
     "viewsContainers": {
@@ -247,6 +281,13 @@
           "id": "yreview",
           "title": "Yreview",
           "icon": "images/activity.svg"
+        }
+      ],
+      "panel": [
+        {
+          "id": "yreviewSession",
+          "title": "Yreview Session",
+          "icon": "images/icon.png"
         }
       ]
     },
@@ -269,8 +310,26 @@
           "contextualTitle": "Yreview",
           "visibility": "collapsed"
         }
+      ],
+      "yreviewSession": [
+        {
+          "id": "yreview.sessions",
+          "name": "Sessions"
+        }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "yreview.sessions",
+        "contents": "Choose the command line agent of the review sessions.\n[Choose Agent](command:yreview.chooseAgent)",
+        "when": "!yreview.agentChosen"
+      },
+      {
+        "view": "yreview.sessions",
+        "contents": "No review session runs.\n[Start Review Session](command:yreview.startSession)",
+        "when": "yreview.agentChosen"
+      }
+    ],
     "menus": {
       "commandPalette": [
         {
@@ -423,6 +482,10 @@
         },
         {
           "command": "yreview.changes.delete",
+          "when": "false"
+        },
+        {
+          "command": "yreview.showSession",
           "when": "false"
         }
       ],
@@ -629,6 +692,16 @@
           "command": "yreview.changes.delete",
           "when": "view == yreview.changes",
           "group": "3_write@2"
+        },
+        {
+          "command": "yreview.startSession",
+          "when": "view == yreview.sessions",
+          "group": "navigation@1"
+        },
+        {
+          "command": "yreview.chooseAgent",
+          "when": "view == yreview.sessions",
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -661,6 +734,16 @@
           "command": "yreview.changes.delete",
           "when": "view == yreview.changes && viewItem =~ /^yreview\\./",
           "group": "1_write@2"
+        },
+        {
+          "command": "yreview.renameSession",
+          "when": "view == yreview.sessions && viewItem == yreview.session",
+          "group": "inline@1"
+        },
+        {
+          "command": "yreview.stopSession",
+          "when": "view == yreview.sessions && viewItem == yreview.session",
+          "group": "inline@2"
         }
       ]
     },
@@ -812,6 +895,55 @@
             }
           },
           "markdownDescription": "Named sets of TODO patterns. The Filter button of a task view offers each set. Each entry of `patterns` is a `pattern` value of `yreview.todoPatterns`."
+        },
+        "yreview.agent": {
+          "type": "string",
+          "enum": [
+            "",
+            "claude",
+            "opencode",
+            "codex",
+            "antigravity",
+            "gemini",
+            "copilot",
+            "cursor",
+            "aider",
+            "amp",
+            "custom",
+            "none"
+          ],
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "The command line agent of the review sessions. Run **Yreview: Choose Agent** to choose one with the result of the agent search. A repository cannot set this value."
+        },
+        "yreview.agentCommands": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {},
+          "scope": "machine",
+          "markdownDescription": "The command of each agent, by agent id, for example `{ \"claude\": \"C:/tools/claude.exe\" }`. An agent without a value runs its default command. A repository cannot set this value."
+        },
+        "yreview.autoStartSession": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Start a review session when the **Yreview Session** panel opens and an agent is chosen."
+        },
+        "yreview.sessionLocation": {
+          "type": "string",
+          "enum": [
+            "panel",
+            "editor"
+          ],
+          "enumDescriptions": [
+            "The terminal of a session opens in the panel.",
+            "The terminal of a session opens as an editor tab."
+          ],
+          "default": "panel",
+          "scope": "window",
+          "markdownDescription": "Where the terminal of a new review session opens."
         }
       }
     }
