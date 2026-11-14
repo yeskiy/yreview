@@ -6,11 +6,17 @@ import {
   type MachineFacts,
   type ReportFacts,
   REPORT_TITLE,
+  commandKind,
   reportHead,
   reportText,
 } from '../../../src/diagnostic/report'
 import { LIMIT } from '../../../src/diagnostic/sessionLog'
-import { failureRecord, sendRecord, sessionRecord } from '../../../src/diagnostic/sessionRecord'
+import {
+  factLine,
+  failureRecord,
+  sendRecord,
+  sessionRecord,
+} from '../../../src/diagnostic/sessionRecord'
 
 // Every private value of the machine goes into a record on purpose. The report must drop all of them.
 const home = 'C:/Users/alice'
@@ -146,6 +152,25 @@ describe('the diagnostic report', () => {
       assert.ok(!text.includes(token))
       assert.ok(!text.includes(email))
       assert.ok(!text.includes(remote))
+    })
+    it('names a custom agent command and never shows its text', () => {
+      const text = reportText(
+        {
+          ...facts,
+          agentCommand: commandKind('claude', { claude: '--password hunter2 --api-key=abc123' }),
+        },
+        [],
+        places,
+      )
+      assert.ok(text.includes(factLine('agent', 'claude')), text)
+      assert.ok(text.includes(factLine('agent command', 'custom')), text)
+      assert.ok(!text.includes('hunter2'), text)
+      assert.ok(!text.includes('abc123'), text)
+    })
+    it('names the default agent command when no custom command is stored', () => {
+      assert.equal(commandKind('claude', {}), 'default')
+      assert.equal(commandKind('claude', { claude: '  ' }), 'default')
+      assert.equal(commandKind(undefined, {}), 'default')
     })
   })
 })

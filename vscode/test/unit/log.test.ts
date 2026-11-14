@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 
 import { newToken } from '../../src/bridge/token'
-import { reportText } from '../../src/diagnostic/report'
+import { type ReportFacts, reportText } from '../../src/diagnostic/report'
 import { SessionLog } from '../../src/diagnostic/sessionLog'
 import { sendRecord } from '../../src/diagnostic/sessionRecord'
 import { redactingLog } from '../../src/log'
@@ -114,7 +114,7 @@ describe('records in the log', () => {
       })
       probing.error('Bridge failed.', new Error(`X-Y-Review-Token: ${probes['bridge token']}`))
       probing.error('OpenCode failed.', `OPENCODE_SERVER_PASSWORD=${probes.password}`)
-      const facts = {
+      const facts: ReportFacts = {
         machine: {
           extension: '1.0.0',
           editor: 'Visual Studio Code 1.146.0',

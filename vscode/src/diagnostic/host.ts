@@ -8,7 +8,16 @@ import { ProcessGitRunner } from '../git/runner'
 import { guard } from '../guard'
 import type { Log, Places } from '../log'
 import { ISSUE_URL, failureStack, issueBody, issueLink, issueTitle } from './issueForm'
-import { type MachineFacts, type ReportFacts, cleanWith, reportHead, reportText } from './report'
+import { commandsOf } from '../session/agentCommands'
+import { parseAgent } from '../session/catalog'
+import {
+  type MachineFacts,
+  type ReportFacts,
+  cleanWith,
+  commandKind,
+  reportHead,
+  reportText,
+} from './report'
 import type { SessionLog } from './sessionLog'
 import { UNKNOWN } from './sessionRecord'
 
@@ -52,14 +61,13 @@ export const machineFacts = async (
 const reportFacts = (machine: MachineFacts): ReportFacts => {
   const config = vscode.workspace.getConfiguration('yreview')
   const agent = config.get<string>('agent') ?? ''
-  const command = (config.get<Record<string, unknown>>('agentCommands') ?? {})[agent]
   return {
     machine,
     channel: config.get<boolean>('channel', true),
     sharing: config.get<string>('newComments', 'local'),
     sessionLocation: config.get<string>('sessionLocation', 'panel'),
     agent: agent === '' ? 'not chosen' : agent,
-    agentCommand: typeof command === 'string' && command.trim() !== '' ? command : 'default',
+    agentCommand: commandKind(parseAgent(agent), commandsOf(config.get('agentCommands'))),
   }
 }
 

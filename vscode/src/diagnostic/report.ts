@@ -1,5 +1,7 @@
 import { redactText } from '../core/redact'
 import type { Places } from '../log'
+import { type AgentCommands, commandOf } from '../session/agentCommands'
+import { type AgentId, agentOf, defaultCommand } from '../session/catalog'
 import { LIMIT } from './sessionLog'
 import { type SessionRecord, factLine, recordText } from './sessionRecord'
 
@@ -24,8 +26,16 @@ export interface ReportFacts {
   readonly sharing: string
   readonly sessionLocation: string
   readonly agent: string
-  readonly agentCommand: string
+  readonly agentCommand: CommandKind
 }
+
+/** The report names only the kind of the command. A custom command can carry a password. */
+export type CommandKind = 'custom' | 'default'
+
+export const commandKind = (agent: AgentId | undefined, commands: AgentCommands): CommandKind =>
+  agent !== undefined && commandOf(agent, commands) !== defaultCommand(agentOf(agent))
+    ? 'custom'
+    : 'default'
 
 const state = (on: boolean): string => (on ? 'on' : 'off')
 
