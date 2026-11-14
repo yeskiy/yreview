@@ -120,10 +120,8 @@ class ReviewChannel(private val sink: ResolveSink) {
         val given = readIds(arguments) ?: return text(BAD_INPUT, isError = true)
         val matches = given.map { match(it) }
         val wanted = matches.filterIsInstance<Match.Open>().map { it.id }.distinct()
-        val unknown = matches.filterIsInstance<Match.Unknown>().map { it.given }
         val ambiguous = matches.filterIsInstance<Match.Ambiguous>().map { it.given }
         val notes = listOfNotNull(
-            unknown.takeIf { it.isNotEmpty() }?.let { "No open comment matches these ids: ${it.joinToString(", ")}." },
             ambiguous.takeIf { it.isNotEmpty() }?.let {
                 "Several open comments match these ids: ${it.joinToString(", ")}. Give more characters of the id."
             },
@@ -163,26 +161,19 @@ class ReviewChannel(private val sink: ResolveSink) {
 
         data class Open(val id: String) : Match
 
-        data class Unknown(val given: String) : Match
-
         data class Ambiguous(val given: String) : Match
     }
 
     /**
-     * A full id wins. One open comment that starts with the given text also wins.
-     *
-     * With no open batch the server knows nothing about the work of this session, so it
-     * passes the given text on and the IDE decides. An agent that takes no push reads the
-     * ids from tasks.json, and this is the only way those ids reach the IDE.
+     * A full id or one open comment that starts with the given text wins. Other text goes
+     * on unchanged and the IDE decides, because ids also come from tasks.json and the clipboard.
      */
     private fun match(given: String): Match = synchronized(lock) {
         val open = openBatches.values.flatten()
-        if (open.isEmpty()) return Match.Open(given)
         val prefixed = open.filter { it.startsWith(given) }
         when {
-            open.contains(given) -> Match.Open(given)
+            open.contains(given) || prefixed.isEmpty() -> Match.Open(given)
             prefixed.size == 1 -> Match.Open(prefixed.first())
-            prefixed.isEmpty() -> Match.Unknown(given)
             else -> Match.Ambiguous(given)
         }
     }

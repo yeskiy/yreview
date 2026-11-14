@@ -74,7 +74,7 @@ interface ChannelNotification extends Notification {
 
 type Match =
   | { readonly kind: 'open'; readonly id: string }
-  | { readonly kind: 'unknown' | 'ambiguous'; readonly given: string }
+  | { readonly kind: 'ambiguous'; readonly given: string }
 
 const RESOLVE_TOOL: Tool = {
   name: TOOL_NAME,
@@ -182,18 +182,13 @@ export class ReviewChannel {
     const wanted = [
       ...new Set(matches.flatMap((match) => (match.kind === 'open' ? [match.id] : []))),
     ]
-    const named = (kind: 'unknown' | 'ambiguous'): string[] =>
-      matches.flatMap((match) => (match.kind === kind ? [match.given] : []))
-    const notes = [
-      ...(named('unknown').length > 0
-        ? [`No open comment matches these ids: ${named('unknown').join(', ')}.`]
-        : []),
-      ...(named('ambiguous').length > 0
+    const ambiguous = matches.flatMap((match) => (match.kind === 'ambiguous' ? [match.given] : []))
+    const notes =
+      ambiguous.length > 0
         ? [
-            `Several open comments match these ids: ${named('ambiguous').join(', ')}. Give more characters of the id.`,
+            `Several open comments match these ids: ${ambiguous.join(', ')}. Give more characters of the id.`,
           ]
-        : []),
-    ]
+        : []
     if (wanted.length === 0)
       return text([`Nothing was reported to ${PRODUCT}.`, ...notes].join(' '), true)
     return this.sink(wanted).then(
@@ -217,13 +212,13 @@ export class ReviewChannel {
     )
   }
 
-  /** With no open batch, the given id goes on unchanged and the editor decides, as in ReviewChannel.kt. */
+  /** An id that matches no open comment goes on unchanged and the editor decides, as in ReviewChannel.kt. */
   private match(given: string): Match {
     const open = [...this.openBatches.values()].flatMap((ids) => [...ids])
-    if (open.length === 0 || open.includes(given)) return { kind: 'open', id: given }
     const prefixed = open.filter((id) => id.startsWith(given))
+    if (open.includes(given) || prefixed.length === 0) return { kind: 'open', id: given }
     if (prefixed.length === 1) return { kind: 'open', id: prefixed[0] ?? given }
-    return { kind: prefixed.length === 0 ? 'unknown' : 'ambiguous', given }
+    return { kind: 'ambiguous', given }
   }
 
   private forget(ids: readonly string[]): void {

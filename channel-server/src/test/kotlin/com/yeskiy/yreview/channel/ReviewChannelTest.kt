@@ -213,30 +213,12 @@ class ReviewChannelTest {
     }
 
     @Test
-    fun `does not report an id that matches no open comment`() = runBlocking<Unit> {
+    fun `passes an id that matches no open comment on unchanged`() = runBlocking<Unit> {
         val client = setUp()
         push(batch)
         client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("c3f9a12", "ffffff0")))
 
-        assertEquals(listOf(listOf("c3f9a12aabbccddeeff00112233445566778899a")), reported.toList())
-    }
-
-    @Test
-    fun `names the id that matches no open comment in the tool result`() = runBlocking<Unit> {
-        val client = setUp()
-        push(batch)
-        val result = client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("c3f9a12", "ffffff0")))
-
-        assertContains(textOf(result), "ffffff0")
-    }
-
-    @Test
-    fun `fails the tool call when no id matches an open comment`() = runBlocking<Unit> {
-        val client = setUp()
-        push(batch)
-        val result = client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("ffffff0")))
-
-        assertEquals(true, result.isError)
+        assertEquals(listOf(listOf("c3f9a12aabbccddeeff00112233445566778899a", "ffffff0")), reported.toList())
     }
 
     @Test
@@ -261,9 +243,9 @@ class ReviewChannelTest {
         val client = setUp()
         push(batch)
         client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("c3f9a12")))
-        val again = client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("c3f9a12")))
+        client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("c3f9a12")))
 
-        assertEquals(true, again.isError)
+        assertEquals(listOf(listOf("c3f9a12aabbccddeeff00112233445566778899a"), listOf("c3f9a12")), reported.toList())
     }
 
     @Test
@@ -311,14 +293,16 @@ class ReviewChannelTest {
                 ),
             )
         }
-        val oldest = client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("0000aaa")))
-        val newest = client.callTool(
+        client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("0000aaa")))
+        client.callTool(
             ReviewChannel.TOOL_NAME,
             mapOf("ids" to listOf((count - 1).toString().padStart(4, '0') + "aaa")),
         )
 
-        assertEquals(true, oldest.isError)
-        assertNull(newest.isError)
+        assertEquals(
+            listOf(listOf("0000aaa"), listOf((count - 1).toString().padStart(4, '0') + "aaaabbbbccccddddeeeeffff00001111")),
+            reported.toList(),
+        )
         assertTrue(notifications.size == count, "every batch must reach the model")
     }
 
@@ -340,14 +324,14 @@ class ReviewChannelTest {
     }
 
     @Test
-    fun `an open batch still guards the match`() = runBlocking<Unit> {
-        // The guard stays for a session that receives a push, so a wrong id is still refused.
+    fun `passes an id from tasks json on while a batch is open`() = runBlocking<Unit> {
+        // A session that got a push can also get ids from tasks.json or the clipboard prompt.
         val client = setUp()
         push(batch)
-        val result = client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("ffffff0")))
+        val result = client.callTool(ReviewChannel.TOOL_NAME, mapOf("ids" to listOf("yb1234")))
 
-        assertEquals(true, result.isError)
-        assertEquals(emptyList(), reported.toList())
+        assertNull(result.isError)
+        assertEquals(listOf(listOf("yb1234")), reported.toList())
     }
 
     @Test

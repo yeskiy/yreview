@@ -201,23 +201,11 @@ describe('review channel (ReviewChannelTest.kt)', () => {
     assert.deepEqual(state.reported, [[parserId, lexerId]])
   })
 
-  it('does not report an id that matches no open comment', async () => {
+  it('passes an id that matches no open comment on unchanged', async () => {
     const { channel, client } = await setUp()
     await push(channel, batch)
     await resolve(client, ['c3f9a12', 'ffffff0'])
-    assert.deepEqual(state.reported, [[parserId]])
-  })
-
-  it('names the id that matches no open comment in the tool result', async () => {
-    const { channel, client } = await setUp()
-    await push(channel, batch)
-    assert.match(textOf(await resolve(client, ['c3f9a12', 'ffffff0'])), /ffffff0/)
-  })
-
-  it('fails the tool call when no id matches an open comment', async () => {
-    const { channel, client } = await setUp()
-    await push(channel, batch)
-    assert.equal((await resolve(client, ['ffffff0'])).isError, true)
+    assert.deepEqual(state.reported, [[parserId, 'ffffff0']])
   })
 
   it('does not report an id that several open comments match', async () => {
@@ -237,7 +225,8 @@ describe('review channel (ReviewChannelTest.kt)', () => {
     const { channel, client } = await setUp()
     await push(channel, batch)
     await resolve(client, ['c3f9a12'])
-    assert.equal((await resolve(client, ['c3f9a12'])).isError, true)
+    await resolve(client, ['c3f9a12'])
+    assert.deepEqual(state.reported, [[parserId], ['c3f9a12']])
   })
 
   it('keeps the comment open when the bridge call fails', async () => {
@@ -273,10 +262,9 @@ describe('review channel (ReviewChannelTest.kt)', () => {
         ),
       Promise.resolve(),
     )
-    const oldest = await resolve(client, ['0000aaa'])
-    const newest = await resolve(client, [`${String(count - 1).padStart(4, '0')}aaa`])
-    assert.equal(oldest.isError, true)
-    assert.equal(newest.isError, undefined)
+    await resolve(client, ['0000aaa'])
+    await resolve(client, [`${String(count - 1).padStart(4, '0')}aaa`])
+    assert.deepEqual(state.reported, [['0000aaa'], [idOf(count - 1)]])
     assert.equal(state.notifications.length, count, 'every batch must reach the model')
   })
 
@@ -293,12 +281,12 @@ describe('review channel (ReviewChannelTest.kt)', () => {
     assert.deepEqual(state.reported, [['c3f9a12']])
   })
 
-  it('an open batch still guards the match', async () => {
-    // The guard stays for a session that receives a push, so a wrong id is still refused.
+  it('passes an id from tasks.json on while a batch is open', async () => {
+    // A session that got a push can also get ids from tasks.json or the clipboard prompt.
     const { channel, client } = await setUp()
     await push(channel, batch)
-    assert.equal((await resolve(client, ['ffffff0'])).isError, true)
-    assert.deepEqual(state.reported, [])
+    assert.equal((await resolve(client, ['yb1234'])).isError, undefined)
+    assert.deepEqual(state.reported, [['yb1234']])
   })
 
   it('the instructions name the file that holds the ids without a push', () => {
