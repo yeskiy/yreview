@@ -64,6 +64,9 @@ writeFileSync(
 // On VS Code 1.101 a DevTools port leaves the window without focus for the repository tests.
 const webviewUser = path.join(scratch, 'webview-user-data')
 rmSync(webviewUser, { recursive: true, force: true })
+// On macOS the default menu style is native, and a native context menu is not in the page of the window.
+mkdirSync(path.join(webviewUser, 'User'), { recursive: true })
+writeFileSync(path.join(webviewUser, 'User', 'settings.json'), '{ "window.menuStyle": "custom" }\n')
 
 const common = {
   version: process.env.VSCODE_TEST_VERSION ?? 'stable',
