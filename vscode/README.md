@@ -56,12 +56,33 @@ the original text, and the lines get the color `yreview.commentOutdatedBackgroun
 the file is removed, the comment shows only in the task views, with the words
 `file removed`. Click that row to open the file as it was at the commit of the comment.
 
-In the Markdown preview, Add Review Comment opens the comment box in the source file. When the
-source is not in view, it opens beside the preview, so the preview stays. Right-click a selection
-or a block of the preview and select Add Review Comment to comment on the source lines of that
-text. The title bar button and Ctrl+Alt+G use the selection or the caret of the source, because
-VS Code gives a key and a title button no data from the preview. The preview marks each block
-that an open comment covers.
+### The review preview
+
+Run **Yreview: Open Review Preview to the Side**, or click its button in the title bar of a
+Markdown file. The review preview renders the file with the engine and the styles of the
+built-in Markdown preview, and it loads the preview styles and scripts of your Markdown
+extensions, for example Mermaid. It follows your edits before a save, your theme, and the
+`markdown.preview` font settings. It scrolls with the source editor. Double-click a block
+to show its source line. Show Source in the title bar opens the source file.
+
+Select text in the review preview, then press Ctrl+Alt+G (Cmd+Alt+G on macOS), click Add
+Review Comment in the title bar, or right-click and select Add Review Comment. The comment box
+opens below the selection, on the source lines of the selected text. Inside a paragraph or a
+code block, these are the exact lines. Ctrl+Enter (Cmd+Enter on macOS) saves with the first
+button. Escape closes the box. When the box has text, press Escape two times.
+
+The review preview marks each block that an open comment covers, and outdated comments get
+a dim mark. Click the count at the right of a block to read its comments, to resolve or
+delete one, or to show it in the source.
+
+### The built-in Markdown preview
+
+The built-in preview also marks the commented blocks. Right-click a selection or a block and
+select Add Review Comment to comment on the source lines of that text. Its title bar button
+and Ctrl+Alt+G use the selection or the caret of the source, because VS Code gives a key and
+a title button no data from the built-in preview. Use the review preview for a key press on a
+preview selection. In the built-in preview, the comment box opens in the source file. When the
+source is not in view, it opens beside the preview, so the preview stays.
 
 VS Code 1.146 and later also has a rich Markdown editor. To open it, select Reopen Editor With,
 then Markdown Editor. Its title bar button and Ctrl+Alt+G open the box in the source on the
@@ -120,6 +141,8 @@ says "not checked yet". The table fills after the check of the maintainer.
 | 9. The Report button opens the issue form     | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 | 10. The log export holds the Yreview log      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 | 11. The bridge file goes when the window goes | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 12. The review preview opens and renders      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 13. The key in the review preview saves lines | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 
 ## Settings
 
