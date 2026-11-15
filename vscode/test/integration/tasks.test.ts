@@ -132,6 +132,47 @@ describe('task views', function views() {
     }
   })
 
+  it('a comment of a removed file names the file removed and opens it at the comment commit', async () => {
+    const tasks = await taskViews()
+    const project = tasks.view('project')
+    const text = 'On a file that goes.'
+    const controller = vscode.comments.createCommentController('yreview-removed', 'Removed')
+    writeFileSync(fileOf('gone.txt').fsPath, 'one\ntwo\n')
+    git('add', 'src/gone.txt')
+    git('commit', '-q', '-m', 'add gone')
+    const old = git('rev-parse', 'HEAD').trim()
+    try {
+      await vscode.window.showTextDocument(
+        await vscode.workspace.openTextDocument(fileOf('gone.txt')),
+      )
+      await vscode.commands.executeCommand('yreview.saveLocal', {
+        thread: controller.createCommentThread(
+          fileOf('gone.txt'),
+          new vscode.Range(1, 0, 1, 0),
+          [],
+        ),
+        text,
+      })
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor')
+      git('rm', '-q', 'src/gone.txt')
+      git('commit', '-q', '-m', 'remove gone')
+      await tasks.model.refresh()
+      const find = (): ReviewTask | undefined =>
+        project.rows().tasks.find((entry) => entry.text === text)
+      await until(() => find()?.carry?.kind === 'removed')
+      await tasks.open(find() ?? assert.fail('no task'))
+      const uri = vscode.window.activeTextEditor?.document.uri
+      assert.equal(uri?.scheme, 'git')
+      assert.ok(uri?.query.includes(old), uri?.query)
+    } finally {
+      controller.dispose()
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor')
+      git('notes', '--ref', 'refs/notes/y-review/local', 'remove', '--ignore-missing', old)
+      git('reset', '-q', '--hard', `${old}~1`)
+      await tasks.model.refresh()
+    }
+  })
+
   it('the check box of a file row checks every task, and the checks outlive a refresh', async () => {
     const tasks = await taskViews()
     const project = tasks.view('project')

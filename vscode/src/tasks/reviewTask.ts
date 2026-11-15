@@ -1,6 +1,14 @@
 import { WORKTREE } from '../core/anchor'
+import type { RecordRange } from '../core/record'
 
 export type TaskKind = 'comment' | 'todo'
+
+/** Where a comment of another commit stands in the working tree, its note commit and its stored range. */
+export interface TaskCarry {
+  readonly kind: 'same' | 'outdated' | 'removed' | 'missing'
+  readonly commit: string
+  readonly was?: RecordRange
+}
 
 /** One row of a task view. The fields up to `author` go to tasks.json, in this order. */
 export interface ReviewTask {
@@ -25,6 +33,8 @@ export interface ReviewTask {
   /** The TODO pattern that found the item, as the setting spells it. */
   readonly patternRule: string
   readonly resolved: boolean
+  /** The place of an open comment in the working tree. A TODO and a resolved comment have none. */
+  readonly carry?: TaskCarry
 }
 
 /** A repository with no commit gives WORKTREE, so the tasks name the working tree. */

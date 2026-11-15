@@ -137,6 +137,32 @@ describe('comment pick', () => {
     }
     assert.equal(commentTask({ stored: closed, resolved: true }, 'E:/repo', false)?.resolved, true)
   })
+
+  const record = { stored: storedWith({ startLine: 3, endLine: 4 }), resolved: false }
+
+  it('takes the mapped lines of an outdated comment and keeps the stored range', () => {
+    const task = commentTask(record, '/r', false, {
+      kind: 'outdated',
+      range: { startLine: 9, endLine: 10 },
+      original: ['x'],
+    })
+    assert.deepEqual([task?.startLine, task?.endLine], [9, 10])
+    assert.deepEqual(task?.carry, {
+      kind: 'outdated',
+      commit: record.stored.commit,
+      was: record.stored.record.location?.range,
+    })
+  })
+
+  it('keeps the stored lines of a removed file', () => {
+    const task = commentTask(record, '/r', false, { kind: 'gone' })
+    assert.equal(task?.startLine, record.stored.record.location?.range?.startLine)
+    assert.equal(task?.carry?.kind, 'removed')
+  })
+
+  it('a task with no carry has no carry field', () => {
+    assert.equal(commentTask(record, '/r', false)?.carry, undefined)
+  })
 })
 
 describe('task revision', () => {

@@ -1,6 +1,6 @@
 import { kotlinTrim, kotlinTrimEnd } from '../core/kotlinText'
 import { compactRange, hasColumns } from '../core/range'
-import type { ReviewTask } from './reviewTask'
+import type { ReviewTask, TaskCarry } from './reviewTask'
 import { cleanPath, cleanText, cutText } from './taskText'
 import { type TaskFolder, type TaskGroup, tasksOfFolder } from './taskTree'
 
@@ -37,9 +37,20 @@ export const firstLine = (text: string): string => textLines(text)[0] ?? ''
 
 export const taskTitle = (task: ReviewTask): string => `${linesOf(task)}: ${rowText(task.text)}`
 
-/** A comment shows how it is stored, and a TODO shows its word. */
+const CARRY_WORDS: Readonly<Record<TaskCarry['kind'], string | undefined>> = {
+  same: undefined,
+  outdated: 'outdated',
+  removed: 'file removed',
+  missing: 'commit missing',
+}
+
+/** A comment shows how it is stored and where it stands, and a TODO shows its word. */
 export const taskState = (task: ReviewTask): string =>
-  task.kind === 'todo' ? (task.pattern ?? '') : task.state
+  task.kind === 'todo'
+    ? (task.pattern ?? '')
+    : [task.state, task.carry === undefined ? undefined : CARRY_WORDS[task.carry.kind]]
+        .filter((word) => word !== undefined && word !== '')
+        .join(', ')
 
 export const fileTitle = (group: TaskGroup): string => group.name
 

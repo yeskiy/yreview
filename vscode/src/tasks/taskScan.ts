@@ -5,8 +5,9 @@ import { assignTodoIds, repositoryOf } from '../core/taskIds'
 import { type NoteStore, NotesGateway } from '../git/notes'
 import { type GitRunner, ProcessGitRunner, isOk, ran } from '../git/runner'
 import { CommentBook } from '../store/commentBook'
-import { type ScanRecord, commentTask, pickRecords } from './commentTask'
+import { commentTask } from './commentTask'
 import { noAuthor, readNotes } from './noteScan'
+import { placedComments } from './placedComments'
 import { type ReviewTask, revisionOf } from './reviewTask'
 import { ownsFile } from './roots'
 import { type CompiledPattern, searchWords } from './todoPatterns'
@@ -33,35 +34,35 @@ export type ScanKind = 'notes' | 'full'
 
 export const SCAN_DELAY_MS = 300
 
-/** The open records and the resolved records. A view drops the resolved ones while its switch is off. */
-export const recordsOf = async (book: CommentBook): Promise<readonly ScanRecord[]> =>
-  (
-    await Promise.all(
-      (await book.commits()).map(async (commit) =>
-        pickRecords(await book.open(commit), await book.closed(commit), true),
-      ),
-    )
-  ).flat()
-
 /** Two git processes in the common case, and one read for each note when git gave no full answer. */
-export const gitRecords = async (
+export const notesOfRoot = async (
   git: GitRunner,
   root: string,
   signal?: AbortSignal,
-): Promise<readonly ScanRecord[]> =>
-  recordsOf(
-    new CommentBook(
-      (await readNotes(git, root, undefined, signal)) ?? new NotesGateway(git),
-      noAuthor,
-    ),
-  )
+): Promise<NoteStore> => (await readNotes(git, root, undefined, signal)) ?? new NotesGateway(git)
 
-const commentsOf = (
+/** The comment rows of one store. The open rows come from `placedComments`, the same function the editor reads. */
+const commentTasksOf = async (
   input: ScanInput,
+  git: GitRunner,
   root: string,
-  records: readonly ScanRecord[],
-): readonly ReviewTask[] =>
-  records.flatMap((record) => commentTask(record, root, input.unshared(record.stored.id)) ?? [])
+  head: string,
+  notes: NoteStore,
+): Promise<readonly ReviewTask[]> => {
+  const book = new CommentBook(notes, noAuthor)
+  const closed = (
+    await Promise.all((await book.commits()).map((commit) => book.closed(commit)))
+  ).flat()
+  return [
+    ...(await placedComments(git, root, head, notes, undefined, input.signal)).flatMap(
+      ({ stored, carry }) =>
+        commentTask({ stored, resolved: false }, root, input.unshared(stored.id), carry) ?? [],
+    ),
+    ...closed.flatMap(
+      (stored) => commentTask({ stored, resolved: true }, root, input.unshared(stored.id)) ?? [],
+    ),
+  ]
+}
 
 const todoTask = (hit: TodoHit, root: string, path: string, commit: string): ReviewTask => ({
   id: '',
@@ -98,8 +99,10 @@ export const scanRepository = async (input: ScanInput, root: string): Promise<Re
   if (!ran(head)) throw new Error(head.stderr.trim() || 'Git did not answer.')
   const commit = revisionOf(isOk(head) ? kotlinTrim(head.stdout) : undefined)
   const repository = repositoryOf(input.basePathOf(root), root)
-  const [records, lines] = await Promise.all([
-    gitRecords(git, root, input.signal),
+  const [comments, lines] = await Promise.all([
+    notesOfRoot(git, root, input.signal).then((notes) =>
+      commentTasksOf(input, git, root, commit, notes),
+    ),
     grepTodos(git, searchWords(input.patterns), input.signal),
   ])
   if (lines === undefined) {
@@ -109,7 +112,7 @@ export const scanRepository = async (input: ScanInput, root: string): Promise<Re
     root,
     commit,
     tasks: [
-      ...commentsOf(input, root, records),
+      ...comments,
       ...[...hitsByFile(lines, input.patterns)].flatMap(([path, hits]) =>
         isRelativeUnder(root, path) && ownsFile(root, `${root}/${path}`, input.roots)
           ? todosOfFile(repository, root, path, commit, hits)
@@ -126,7 +129,13 @@ const folderTasks = async (input: ScanInput): Promise<readonly RepositoryTasks[]
       (input.folderStores ?? []).map(async ({ root, store }) => ({
         root,
         commit: WORKTREE,
-        tasks: commentsOf(input, root, await recordsOf(new CommentBook(store, noAuthor))),
+        tasks: await commentTasksOf(
+          input,
+          new ProcessGitRunner(root, input.gitPath),
+          root,
+          WORKTREE,
+          store,
+        ),
       })),
     )
   ).filter((entry) => entry.tasks.length > 0)
@@ -161,7 +170,13 @@ export const rescanNotes = async (
       return {
         ...old,
         tasks: [
-          ...commentsOf(input, root, await gitRecords(git, root, input.signal)),
+          ...(await commentTasksOf(
+            input,
+            git,
+            root,
+            old.commit,
+            await notesOfRoot(git, root, input.signal),
+          )),
           ...old.tasks.filter((task) => task.kind === 'todo'),
         ],
       }

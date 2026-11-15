@@ -22,6 +22,7 @@ import {
   tooltipLines,
   tooltipPlace,
 } from '../../../src/tasks/taskLabels'
+import type { TaskCarry } from '../../../src/tasks/reviewTask'
 import type { TaskGroup } from '../../../src/tasks/taskTree'
 import { task, todo as todoTask } from './fixtures'
 
@@ -83,6 +84,15 @@ describe('task labels', () => {
 
   it('shows how a comment is stored', () => {
     assert.equal(taskState(comment), 'local')
+  })
+
+  it('names an outdated, removed and missing comment', () => {
+    const at = (kind: TaskCarry['kind']) =>
+      taskState({ ...comment, state: 'shared', carry: { kind, commit: 'c' } })
+    assert.deepEqual(
+      [at('outdated'), at('removed'), at('missing'), at('same')],
+      ['shared, outdated', 'shared, file removed', 'shared, commit missing', 'shared'],
+    )
   })
 
   it('shows the word of a todo', () => {

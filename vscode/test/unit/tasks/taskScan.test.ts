@@ -9,14 +9,13 @@ import { NotesGateway } from '../../../src/git/notes'
 import { type GitRunner, ProcessGitRunner } from '../../../src/git/runner'
 import { CommentBook } from '../../../src/store/commentBook'
 import { ALL_REFS, DISCUSS, LOCAL } from '../../../src/store/noteRefs'
-import type { ScanRecord } from '../../../src/tasks/commentTask'
+import { type ScanRecord, pickRecords } from '../../../src/tasks/commentTask'
 import { forgetNotes, noAuthor } from '../../../src/tasks/noteScan'
 import type { ReviewTask } from '../../../src/tasks/reviewTask'
 import {
   type RepositoryTasks,
   type ScanInput,
-  gitRecords,
-  recordsOf,
+  notesOfRoot,
   scanProject,
   scanRepository,
   withOverlays,
@@ -55,6 +54,15 @@ const ofKind = (repo: RepositoryTasks | undefined, kind: ReviewTask['kind']): Re
 
 const byId = (records: readonly ScanRecord[]): readonly ScanRecord[] =>
   [...records].sort((a, b) => a.stored.id.localeCompare(b.stored.id))
+
+const recordsOf = async (book: CommentBook): Promise<readonly ScanRecord[]> =>
+  (
+    await Promise.all(
+      (await book.commits()).map(async (each) =>
+        pickRecords(await book.open(each), await book.closed(each), true),
+      ),
+    )
+  ).flat()
 
 const counting = (inner: GitRunner) => {
   const calls: (readonly string[])[] = []
@@ -161,6 +169,18 @@ describe('taskScan', function taskScan() {
     assert.deepEqual(ofKind(await scanRepository(input(dir), dir), 'comment'), [])
   })
 
+  it('moves a comment of an old commit to the lines that git added above it', async () => {
+    const dir = repo()
+    const old = commit(dir, 'src/m.txt', 'a\nb\n')
+    await bookOf(dir).add(LOCAL, old, 'src/m.txt', line(1), 'on a')
+    commit(dir, 'src/m.txt', 'x\ny\na\nb\n')
+    const [found] = await scanProject(input(dir))
+    const [task, ...more] = ofKind(found, 'comment')
+    assert.deepEqual(more, [])
+    assert.deepEqual([task?.startLine, task?.endLine, task?.carry?.kind], [3, 3, 'same'])
+    assert.equal(task?.carry?.commit, old)
+  })
+
   it('gives a TODO item of a nested repository to the inner root only', async () => {
     const outer = repo()
     commit(outer, 'inner/t.ts', '// TODO: inner\n')
@@ -191,7 +211,7 @@ describe('taskScan', function taskScan() {
       )
     }, Promise.resolve())
     const runner = new ProcessGitRunner(dir)
-    const fast = byId(await gitRecords(runner, dir))
+    const fast = byId(await recordsOf(new CommentBook(await notesOfRoot(runner, dir), noAuthor)))
     assert.equal(fast.length, 12)
     assert.deepEqual(
       fast,
@@ -201,9 +221,9 @@ describe('taskScan', function taskScan() {
 
   it('reads the notes once for two scans', async () => {
     const { calls, runner } = counting(new ProcessGitRunner(shared.dir))
-    await gitRecords(runner, shared.dir)
+    await notesOfRoot(runner, shared.dir)
     const first = calls.length
-    await gitRecords(runner, shared.dir)
+    await notesOfRoot(runner, shared.dir)
     assert.deepEqual(
       calls.slice(first).map((args) => args[0]),
       ['for-each-ref'],

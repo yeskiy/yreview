@@ -1,4 +1,5 @@
 import { kotlinTrim } from '../core/kotlinText'
+import { type Carry, shownRange } from '../core/lineMap'
 import { isRelativeUnder } from '../core/paths'
 import { endColumnOf, startColumnOf } from '../core/range'
 import type { StoredComment } from '../store/commentBook'
@@ -40,11 +41,14 @@ export const commentWord = (
   return worktree || unshared ? COMMENT_WORDS.notShared : COMMENT_WORDS.shared
 }
 
-/** Undefined for a record with no place, no text, or a path that leaves the root. */
+const KINDS = { same: 'same', outdated: 'outdated', gone: 'removed', missing: 'missing' } as const
+
+/** Undefined for a record with no place, no text, or a path that leaves the root. A carry gives the mapped lines. */
 export const commentTask = (
   record: ScanRecord,
   rootPath: string,
   unshared: boolean,
+  carry?: Carry,
 ): ReviewTask | undefined => {
   const { stored } = record
   const { location } = stored.record
@@ -52,7 +56,7 @@ export const commentTask = (
   if (location === undefined || text === '' || !isRelativeUnder(rootPath, location.path)) {
     return undefined
   }
-  const { range } = location
+  const range = (carry === undefined ? undefined : shownRange(carry)) ?? location.range
   return {
     id: stored.id,
     kind: 'comment',
@@ -70,5 +74,8 @@ export const commentTask = (
     folder: '',
     patternRule: '',
     resolved: record.resolved,
+    ...(carry === undefined
+      ? {}
+      : { carry: { kind: KINDS[carry.kind], commit: stored.commit, was: location.range } }),
   }
 }

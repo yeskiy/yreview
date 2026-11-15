@@ -25,11 +25,25 @@ export interface TaskViews extends vscode.Disposable {
 const LEAVES_ROOT =
   'The path of this task leaves its repository, so the extension does not open it.'
 
-/** Opens the file at the task in a preview editor, and expands the thread of an open comment. */
+/** Opens the file at the task in a preview editor, and expands the thread of an open comment.
+ * A comment of a removed file opens the file as it was at the comment commit. */
 const openTask = async (task: ReviewTask, comments: ReviewComments): Promise<void> => {
   const file = await containedPath(task.rootPath, task.path)
   if (file === undefined) {
     await vscode.window.showWarningMessage(LEAVES_ROOT)
+    return
+  }
+  if (task.carry?.kind === 'removed') {
+    const side = vscode.Uri.file(file).with({
+      scheme: 'git',
+      query: JSON.stringify({ path: file, ref: task.carry.commit }),
+    })
+    const start = new vscode.Position(Math.max(task.startLine - 1, 0), 0)
+    const editor = await vscode.window.showTextDocument(side, {
+      selection: new vscode.Range(start, start),
+      preview: true,
+    })
+    await comments.reveal(editor.document.uri, task.id)
     return
   }
   const at = new vscode.Position(
