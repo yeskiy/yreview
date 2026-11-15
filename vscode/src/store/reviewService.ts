@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises'
 import path from 'node:path'
 
 import { WORKTREE, planAnchor, relativeTo, slashPath } from '../core/anchor'
+import { lineTextOnDisk } from '../core/lineText'
 import { containedPath, isRelativeUnder, realOf } from '../core/paths'
 import type { RecordRange } from '../core/record'
 import { gitAuthor } from '../git/author'
@@ -214,6 +215,7 @@ export class ReviewService {
     range: RecordRange,
     text: string,
     shared: boolean,
+    lineText?: string | null,
   ): Promise<WriteResult> {
     const stored = await this.book(anchor).add(
       refFor(shared),
@@ -221,6 +223,9 @@ export class ReviewService {
       anchor.path,
       range,
       text,
+      lineText === undefined
+        ? await lineTextOnDisk(anchor.root, anchor.path, range)
+        : (lineText ?? undefined),
     )
     this.notify()
     if (anchor.store === 'folder') {

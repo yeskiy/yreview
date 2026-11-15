@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 
 import { sha1Hex } from '../../src/core/digest'
 import { type ReviewRecord, decodeRecord, encodeRecord, recordId } from '../../src/core/record'
@@ -96,6 +98,19 @@ describe('record', () => {
         ?.description,
       undefined,
     )
+  })
+
+  it('writes location.text last in location and leaves it out of the identifier', () => {
+    const [compat] = (
+      JSON.parse(
+        readFileSync(path.resolve(__dirname, '../../../spec/vectors/carry.json'), 'utf8'),
+      ) as { compat: [{ line: string; id: string }] }
+    ).compat
+    const record = decodeRecord(compat.line)
+    assert.equal(record?.location?.text, 'b\nc')
+    assert.equal(record && encodeRecord(record), compat.line)
+    assert.equal(record && recordId(record), compat.id)
+    assert.notEqual(compat.id, sha1Hex(compat.line))
   })
 
   it('reads a key named like an object property as unknown', () => {

@@ -23,6 +23,7 @@ export interface RecordLocation {
   readonly commit: string
   readonly path: string
   readonly range?: RecordRange
+  readonly text?: string
 }
 
 export interface ReviewRecord {
@@ -79,6 +80,7 @@ const encodeLocation = (location: RecordLocation): string =>
     ['commit', quote(location.commit)],
     ['path', quote(location.path)],
     ['range', location.range && encodeRange(location.range)],
+    ['text', optionalText(location.text)],
   ])
 
 /** The line that kotlinx.serialization writes: field order of Comment.kt, no defaults. */
@@ -94,7 +96,18 @@ export const encodeRecord = (record: ReviewRecord): string =>
     ['v', nonZero(record.v)],
   ])
 
-export const recordId = (record: ReviewRecord): string => sha1Hex(encodeRecord(record))
+/** The location without `text`, which a 1.0.x reader drops and the identifier leaves out. */
+export const withoutText = (location: RecordLocation): RecordLocation =>
+  plain<RecordLocation>({ commit: location.commit, path: location.path, range: location.range })
+
+export const recordId = (record: ReviewRecord): string =>
+  sha1Hex(
+    encodeRecord(
+      record.location === undefined
+        ? record
+        : { ...record, location: withoutText(record.location) },
+    ),
+  )
 
 const readRange: Reader = (lexer) => {
   const values = readObject(
@@ -124,12 +137,14 @@ const readLocation: Reader = (lexer) => {
       ['commit', text],
       ['path', text],
       ['range', nullable(readRange)],
+      ['text', nullable(text)],
     ]),
   )
   return plain<RecordLocation>({
     commit: required(values, 'commit'),
     path: required(values, 'path'),
     range: optional(values, 'range'),
+    text: optional(values, 'text'),
   })
 }
 

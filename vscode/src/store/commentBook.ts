@@ -4,6 +4,7 @@ import {
   decodeRecord,
   encodeRecord,
   recordId,
+  withoutText,
 } from '../core/record'
 import { NotesWriteError } from '../git/errors'
 import type { NoteStore } from '../git/notes'
@@ -61,6 +62,7 @@ export class CommentBook {
     path: string,
     range: RecordRange,
     text: string,
+    lineText?: string,
   ): Promise<StoredComment> {
     if (LONE_SURROGATE.test(text)) {
       throw new NotesWriteError(
@@ -73,7 +75,8 @@ export class CommentBook {
       timestamp,
       author,
       description: text,
-      location: { commit, path, range },
+      location:
+        lineText === undefined ? { commit, path, range } : { commit, path, range, text: lineText },
     }))
     const line = pending.then(encodeRecord)
     pending.catch(() => undefined)
@@ -90,7 +93,7 @@ export class CommentBook {
       author: await this.authorOf(),
       original: stored.id,
       resolved: true,
-      location: stored.record.location,
+      location: stored.record.location && withoutText(stored.record.location),
     }
     await this.store.edit(stored.ref, stored.commit, (lines) =>
       lines.some((line) => idOf(line) === stored.id) ? [...lines, encodeRecord(record)] : gone(),
