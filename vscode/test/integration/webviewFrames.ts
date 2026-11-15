@@ -65,8 +65,8 @@ export const untilInWebview = async (marker: string, body: string, tries = 40): 
   Boolean(await inWebview(marker, body)) ||
   (tries > 0 && wait(250).then(() => untilInWebview(marker, body, tries - 1)))
 
-/** The keys reach the element of the page: the workbench, the webview host and the page focus the chain. */
-export const keyboardIn = async (marker: string, selector: string): Promise<boolean> =>
+/** The keys reach the page, or its element: the workbench, the webview host and the page focus the chain. */
+export const keyboardIn = async (marker: string, selector?: string): Promise<boolean> =>
   (await evaluate(
     await workbench(),
     `document.activeElement?.matches('iframe.webview') === true`,
@@ -74,13 +74,13 @@ export const keyboardIn = async (marker: string, selector: string): Promise<bool
   (await inWebview(
     marker,
     `return document.activeElement === document.getElementById('active-frame') &&
-      doc.activeElement === doc.querySelector(${JSON.stringify(selector)})`,
+      ${selector === undefined ? 'true' : `doc.activeElement === doc.querySelector(${JSON.stringify(selector)})`}`,
   )) === true
 
-/** Waits until the keys reach the element of the page. */
+/** Waits until the keys reach the page, or its element. */
 export const untilKeyboardIn = async (
   marker: string,
-  selector: string,
+  selector?: string,
   tries = 40,
 ): Promise<boolean> =>
   (await keyboardIn(marker, selector)) ||
@@ -111,6 +111,8 @@ export const pressAddKey = (): Promise<void> =>
 
 /** Right-clicks the first element of the page that matches `selector`, with a real mouse. */
 export const rightClickAt = async (marker: string, selector: string): Promise<void> => {
+  // A new webview takes the focus late, and that closes a context menu that is already open.
+  assert.ok(await untilKeyboardIn(marker), 'the page did not get the focus before the right-click')
   const inner = (await inWebview(
     marker,
     `const rect = doc.querySelector(${JSON.stringify(selector)}).getBoundingClientRect()
@@ -136,7 +138,16 @@ export const chooseMenuItem = async (label: string): Promise<void> => {
   const shown = async (tries: number): Promise<boolean> =>
     ((await evaluate(page, labels)) as string[]).includes(label) ||
     (tries > 0 && wait(250).then(() => shown(tries - 1)))
-  assert.ok(await shown(20), `no menu item "${label}"`)
+  if (!(await shown(20)))
+    assert.fail(
+      `no menu item "${label}": ${JSON.stringify(
+        await evaluate(
+          page,
+          `({ menus: document.querySelectorAll('.monaco-menu').length,
+            focus: document.activeElement?.className ?? null })`,
+        ),
+      )}`,
+    )
   const focus = async (tries: number): Promise<boolean> => {
     await pressKey(keyOf('ArrowUp', 38))
     return (await evaluate(page, focusedLabel)) === label || (tries > 0 && focus(tries - 1))

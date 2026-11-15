@@ -203,6 +203,13 @@ describe('comments in the review preview', () => {
   it('opens the box on the block of a real right-click', async () => {
     await openReview()
     await rightClickAt(REVIEW_PAGE, '[data-line="7"]')
+    assert.ok(
+      await untilInWebview(
+        REVIEW_PAGE,
+        `return doc.documentElement.dataset.vscodeContext !== undefined`,
+      ),
+      'the right-click did not reach the page',
+    )
     await chooseMenuItem('Add Review Comment')
     assert.ok(await boxHasFocus(), 'the box has no focus')
     assert.equal(await boxLines(), '8-8')
