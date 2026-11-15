@@ -43,6 +43,24 @@ writeFileSync(
   '{ "extensions.allowed": { "*": true, "k--kato": true } }\n',
 )
 
+// The Mermaid test installs a Mermaid extension on hosts without the built-in one, into a profile of its own.
+const mermaidExtensions = path.join(scratch, 'mermaid-extensions')
+const mermaidUser = path.join(scratch, 'mermaid-user-data', 'User')
+const mermaidWorkspace = path.join(scratch, 'mermaid-workspace')
+rmSync(mermaidExtensions, { recursive: true, force: true })
+rmSync(path.dirname(mermaidUser), { recursive: true, force: true })
+rmSync(mermaidWorkspace, { recursive: true, force: true })
+mkdirSync(mermaidUser, { recursive: true })
+mkdirSync(mermaidWorkspace, { recursive: true })
+writeFileSync(
+  path.join(mermaidUser, 'settings.json'),
+  '{ "extensions.allowed": { "*": true, "bierner": true } }\n',
+)
+writeFileSync(
+  path.join(mermaidWorkspace, 'flow.md'),
+  '# Flow\n\n```mermaid\ngraph TD\n  A-->B\n```\n',
+)
+
 // On VS Code 1.101 a DevTools port leaves the window without focus for the repository tests.
 const webviewUser = path.join(scratch, 'webview-user-data')
 rmSync(webviewUser, { recursive: true, force: true })
@@ -97,6 +115,20 @@ export default defineConfig([
     launchArgs: [
       ...common.launchArgs,
       `--user-data-dir=${webviewUser}`,
+      '--remote-debugging-port=0',
+    ],
+  },
+  {
+    // The Mermaid test reads the drawing in the page through a DevTools port.
+    ...common,
+    label: 'mermaid',
+    files: 'out/test/integration/mermaid/*.test.js',
+    workspaceFolder: mermaidWorkspace,
+    env: { ...common.env, YREVIEW_USER_DATA: path.dirname(mermaidUser) },
+    launchArgs: [
+      ...common.launchArgs,
+      `--extensions-dir=${mermaidExtensions}`,
+      `--user-data-dir=${path.dirname(mermaidUser)}`,
       '--remote-debugging-port=0',
     ],
   },
