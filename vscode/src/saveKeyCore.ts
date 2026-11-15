@@ -10,7 +10,7 @@ import {
 export const SAVE_COMMAND = 'editor.action.submitComment'
 export const SAVE_WHEN = 'commentEditorFocused && commentController == yreview'
 
-const OWN_ID = 'yeskiy.yreview'
+export const OWN_ID = 'yeskiy.yreview'
 const FOCUS_KEYS = new Set([
   'editorTextFocus',
   'editorFocus',
@@ -29,6 +29,7 @@ export interface Installed {
 }
 
 export interface Conflict {
+  readonly id: string
   readonly extension: string
   readonly command: string
 }
@@ -77,14 +78,19 @@ export const whenCanHold = (when: string | undefined): boolean =>
       when.split('||').some((part) => part.split('&&').every((term) => termHolds(term.trim())))
 
 /** The bindings of other extensions that take the save key in a comment box. */
+// VS Code ranks an extension entry by its list index, so an entry below `ownIndex` loses.
 export const findSaveKeyConflicts = (
   installed: readonly Installed[],
   platform: string,
+  ownIndex = -1,
 ): readonly Conflict[] =>
   installed
     .filter((extension) => extension.id.toLowerCase() !== OWN_ID)
     .flatMap((extension) =>
       (Array.isArray(extension.bindings) ? (extension.bindings as unknown[]) : [extension.bindings])
+        .map((binding, index) => ({ binding, index }))
+        .filter(({ index }) => index >= ownIndex)
+        .map(({ binding }) => binding)
         .filter(isRecord)
         .filter((binding) => {
           const command = text(binding.command)
@@ -96,8 +102,24 @@ export const findSaveKeyConflicts = (
             whenCanHold(text(binding.when))
           )
         })
-        .map((binding) => ({ extension: extension.name, command: String(binding.command) })),
+        .map((binding) => ({
+          id: extension.id,
+          extension: extension.name,
+          command: String(binding.command),
+        })),
     )
+
+/** The index of the own scoped save entry in the own `contributes.keybindings`, or -1. */
+export const ownSaveIndex = (bindings: unknown, platform: string): number =>
+  Array.isArray(bindings)
+    ? bindings.findLastIndex(
+        (binding) =>
+          isRecord(binding) &&
+          binding.command === SAVE_COMMAND &&
+          binding.when === SAVE_WHEN &&
+          isSaveKey(platformKey(binding, platform), platform),
+      )
+    : -1
 
 const saveEntry = (platform: string) => ({
   key: saveKey(platform),
@@ -111,6 +133,17 @@ export const saveKeyLine = (platform: string): string =>
     .map(([name, value]) => `${JSON.stringify(name)}: ${JSON.stringify(value)}`)
     .join(', ')} }`
 
+const hasEntry = (entries: unknown[], platform: string): boolean =>
+  entries
+    .filter(isRecord)
+    .some((entry) => isSaveKey(text(entry.key), platform) && entry.command === SAVE_COMMAND)
+
+/** True when the text of keybindings.json has a user entry that saves comments. */
+export const hasUserEntry = (source: string, platform: string): boolean => {
+  const entries: unknown = parse(source, [], { allowTrailingComma: true })
+  return Array.isArray(entries) && hasEntry(entries, platform)
+}
+
 /** The edits that append the entry to keybindings.json. No edits when the entry is present. */
 export const saveKeyEdits = (
   source: string,
@@ -122,10 +155,7 @@ export const saveKeyEdits = (
   const entries: unknown = parse(base, errors, { allowTrailingComma: true })
   if (errors.length > 0 || !Array.isArray(entries))
     throw new Error('The keybindings file is not a JSON array.')
-  const present = entries
-    .filter(isRecord)
-    .some((entry) => isSaveKey(text(entry.key), platform) && entry.command === SAVE_COMMAND)
-  if (present) return []
+  if (hasEntry(entries, platform)) return []
   const edits = modify(base, [entries.length], saveEntry(platform), {
     formattingOptions: format,
     isArrayInsertion: true,
@@ -140,32 +170,58 @@ const keyName = (platform: string): string => (platform === 'darwin' ? 'Cmd+Ente
 export const saveKeyText = (extension: string, platform: string): string =>
   `The extension ${extension} binds ${keyName(platform)} in each text editor. For this reason, ${keyName(platform)} does not save a review comment. Add a user key binding so that ${keyName(platform)} saves comments?`
 
+/** The placeholder of an empty comment box. It names the fix while a conflict exists. */
+export const placeholderText = (conflict: Conflict | undefined, platform: string): string =>
+  conflict === undefined
+    ? 'Write a review comment. Markdown works.'
+    : `Write a review comment. Markdown works. ${keyName(platform)} is taken by ${conflict.extension}: run Yreview: Use Ctrl+Enter to Save Comments.`
+
 export interface SaveKeyHost {
   readonly platform: string
   answer(): string | undefined
   saveAnswer(value: 'added' | 'never'): Promise<void>
   conflicts(): readonly Conflict[]
   ask(message: string, ...items: string[]): Promise<string | undefined>
-  addEntry(): Promise<void>
+  addEntry(): Promise<boolean>
   showManual(line: string, failure: unknown): Promise<void>
+  note(message: string): void
 }
 
-/** Asks once while a conflict exists. Not now and a closed message keep no answer. */
-export const runSaveKeyOffer = async (host: SaveKeyHost): Promise<void> => {
-  if (host.answer() !== undefined) return
+/** Asks while a conflict exists. Not now and a closed message keep no answer. */
+// A stored answer stops the offer, but `forced` (the command) asks again.
+export const runSaveKeyOffer = async (host: SaveKeyHost, forced = false): Promise<void> => {
   const conflict = host.conflicts()[0]
-  if (conflict === undefined) return
+  host.note(
+    conflict === undefined
+      ? 'Save key: no extension takes the save key in the comment box.'
+      : `Save key: the extension ${conflict.id} takes the save key with ${conflict.command}.`,
+  )
+  const answer = host.answer()
+  host.note(`Save key: the stored answer is ${answer ?? 'none'}.`)
+  if (conflict === undefined || (answer !== undefined && !forced)) return
+  host.note('Save key: the offer message is shown.')
   const choice = await host.ask(
     saveKeyText(conflict.extension, host.platform),
     'Add',
     'Not now',
     'Never',
   )
+  host.note(`Save key: the choice is ${choice ?? 'none, the message closed'}.`)
   if (choice === 'Never') await host.saveAnswer('never')
   if (choice !== 'Add') return
-  const added = await host.addEntry().then(
-    () => true,
-    (failure: unknown) => host.showManual(saveKeyLine(host.platform), failure).then(() => false),
+  const written = await host.addEntry().then(
+    (changed) => {
+      host.note(
+        changed
+          ? 'Save key: the entry is added to keybindings.json.'
+          : 'Save key: keybindings.json has the entry already.',
+      )
+      return true
+    },
+    (failure: unknown) => {
+      host.note('Save key: the entry could not be added.')
+      return host.showManual(saveKeyLine(host.platform), failure).then(() => false)
+    },
   )
-  if (added) await host.saveAnswer('added')
+  if (written) await host.saveAnswer('added')
 }

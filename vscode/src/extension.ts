@@ -16,7 +16,7 @@ import { type Places, redactingLog } from './log'
 import { withLongForms } from './places'
 import { previewPlugin } from './preview/markdownPlugin'
 import { PreviewHost } from './preview/previewHost'
-import { offerSaveKey } from './saveKey'
+import { registerSaveKey } from './saveKey'
 import { registerSessions } from './session/register'
 import { registerSettingsPage } from './settingsPage'
 import type { ReviewSessions } from './session/terminals'
@@ -172,9 +172,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   offerIntellijKey(context.globalState).catch((error: unknown) =>
     log.error('The key offer failed.', error),
   )
-  offerSaveKey(context.globalState, log).catch((error: unknown) =>
-    log.error('The save key offer failed.', error),
-  )
+  context.subscriptions.push(...registerSaveKey(context, log, (text) => comments.placeholder(text)))
   registerChatTools(context, bridge, log)
   log.info('Yreview started.')
   return {

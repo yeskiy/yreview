@@ -11,6 +11,7 @@ import { gitCalls } from '../git/runner'
 import { guard } from '../guard'
 import type { Log } from '../log'
 import { watchNotes } from '../noteWatch'
+import { placeholderText } from '../saveKeyCore'
 import { readSettings } from '../settings'
 import type { StoredComment } from '../store/commentBook'
 import { FOLDER, NOTES } from '../store/folderNotes'
@@ -267,6 +268,11 @@ export class ReviewComments implements vscode.Disposable {
 
   private readonly disposables: vscode.Disposable[] = []
 
+  /** Sets the placeholder text of an empty comment box. */
+  placeholder(text: string): void {
+    this.controller.options = { ...this.controller.options, placeHolder: text }
+  }
+
   constructor(
     private readonly service: ReviewService,
     private readonly log: Log,
@@ -279,7 +285,7 @@ export class ReviewComments implements vscode.Disposable {
     }
     this.controller.options = {
       prompt: 'Add a review comment',
-      placeHolder: 'Write a review comment. Markdown works.',
+      placeHolder: placeholderText(undefined, process.platform),
     }
     this.disposables.push(
       this.controller,

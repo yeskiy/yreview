@@ -74,10 +74,13 @@ export default defineConfig([
     label: 'keymap',
     files: 'out/test/integration/keymap/*.test.js',
     workspaceFolder: plainFolder(),
+    // A DevTools port lets the test press real keys. Port 0 picks a free port.
+    env: { ...common.env, YREVIEW_USER_DATA: path.dirname(keymapUser) },
     launchArgs: [
       ...common.launchArgs,
       `--extensions-dir=${keymapExtensions}`,
       `--user-data-dir=${path.dirname(keymapUser)}`,
+      '--remote-debugging-port=0',
     ],
   },
 ])

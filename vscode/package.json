@@ -50,6 +50,11 @@
         "category": "Yreview"
       },
       {
+        "command": "yreview.useSaveKey",
+        "title": "Use Ctrl+Enter to Save Comments",
+        "category": "Yreview"
+      },
+      {
         "command": "yreview.addComment",
         "title": "Add Review Comment",
         "category": "Yreview"
@@ -845,6 +850,612 @@
         "command": "yreview.closeBox",
         "key": "escape",
         "when": "commentEditorFocused && commentController == yreview && !suggestWidgetVisible && !inlineSuggestionVisible && !parameterHintsVisible && !inSnippetMode"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment"
+      },
+      {
+        "command": "editor.action.submitComment",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "commentEditorFocused && commentController == yreview"
       }
     ],
     "colors": [
