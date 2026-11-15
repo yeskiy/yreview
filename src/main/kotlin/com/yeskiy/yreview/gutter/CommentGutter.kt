@@ -96,8 +96,7 @@ class CommentGutter(private val project: Project) : Disposable {
                     val written = events.filterIsInstance<VFileContentChangeEvent>().map { it.file.path }.toSet()
                     if (written.isEmpty()) return
                     painted.keys.filter { editor ->
-                        val path = FileDocumentManager.getInstance().getFile(editor.document)?.path
-                        path != null && path in written && carried[path] == true
+                        pathOf(editor)?.let { it in written && carried[it] == true } == true
                     }.forEach { repaint(it) }
                 }
             },
@@ -126,10 +125,15 @@ class CommentGutter(private val project: Project) : Disposable {
         }
     }
 
+    /** The last editor of a file takes the carried entry of that file with it. */
     fun detach(editor: Editor) {
         painted.remove(editor)
         boxes.remove(editor)?.closeAll()
+        val path = pathOf(editor) ?: return
+        if (EditorFactory.getInstance().allEditors.none { it != editor && pathOf(it) == path }) carried.remove(path)
     }
+
+    private fun pathOf(editor: Editor): String? = FileDocumentManager.getInstance().getFile(editor.document)?.path
 
     /**
      * Shows the card of these comments under their last line, or closes the card that the same
@@ -225,8 +229,11 @@ class CommentGutter(private val project: Project) : Disposable {
         if (side == null && file == null) return
         ApplicationManager.getApplication().executeOnPooledThread {
             val anchor = anchorOf(side, sideRoot, if (side == null) fileAnchor(file) else null)
-            val marks = marksOf(anchor, side)
-            ApplicationManager.getApplication().invokeLater({ draw(editor, anchor?.root, marks) }, project.disposed)
+            val (marks, other) = marksOf(anchor, side)
+            ApplicationManager.getApplication().invokeLater({
+                if (painted.containsKey(editor) && side == null && anchor != null) carried[anchor.root.path + "/" + anchor.path] = other
+                draw(editor, anchor?.root, marks)
+            }, project.disposed)
         }
     }
 
@@ -250,10 +257,10 @@ class CommentGutter(private val project: Project) : Disposable {
 
     /**
      * A file editor reads the shared function, so it shows what the task views list. A diff side
-     * shows the comments of its own revision at their stored lines.
+     * shows the comments of its own revision at their stored lines. The flag is true for a comment of another commit.
      */
-    private fun marksOf(anchor: ReviewAnchor?, side: DiffAnchor?): CommentMarks {
-        if (anchor == null) return CommentMarks.EMPTY
+    private fun marksOf(anchor: ReviewAnchor?, side: DiffAnchor?): Pair<CommentMarks, Boolean> {
+        if (anchor == null) return CommentMarks.EMPTY to false
         val service = ReviewService.getInstance(project)
         val git = ideGitRunner(project, anchor.root)
         val placed = when {
@@ -264,8 +271,7 @@ class CommentGutter(private val project: Project) : Disposable {
                 PlacedComments.of(git, anchor.root.path, FolderStore.WORKTREE, anchor.path, service.folderNotesOf(anchor.root))
             else -> PlacedComments.of(git, anchor.root.path, anchor.key, anchor.path)
         }
-        if (side == null) carried[anchor.root.path + "/" + anchor.path] = placed.any { it.stored.commit != anchor.key }
-        return CommentMarks.of(placed)
+        return CommentMarks.of(placed) to placed.any { it.stored.commit != anchor.key }
     }
 
     /**

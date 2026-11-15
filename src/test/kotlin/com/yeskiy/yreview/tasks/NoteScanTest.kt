@@ -37,20 +37,27 @@ class NoteScanTest {
         return book
     }
 
-    private fun slow(book: CommentBook, showResolved: Boolean): List<ScanRecord> = TaskScan.records(book, showResolved)
+    /** The rows through [NoteScan]. HEAD is null, so the line map starts no diff. */
+    private fun rows(git: GitRunner, root: String, showResolved: Boolean, checkCanceled: () -> Unit = {}): List<ReviewTask> =
+        TaskScan.placedTasks(git, root, null, null, showResolved, { false }, checkCanceled = checkCanceled)
+
+    /** The same rows read note by note through the gateway. */
+    private fun slow(repo: TempRepo, root: String, showResolved: Boolean): List<ReviewTask> =
+        TaskScan.placedTasks(repo.git, root, null, null, showResolved, { false }, notes = NotesGateway(repo.git))
 
     @Test
     fun `reads every note of a repository in two git processes`() {
         TempRepo().use { repo ->
-            val book = reviewed(repo, commits = 12)
+            reviewed(repo, commits = 12)
             listOf(false, true).forEach { showResolved ->
                 val git = Counting(repo.git)
                 val root = File(repo.dir, if (showResolved) "a" else "b").path
 
-                val found = TaskScan.gitRecords(git, root, showResolved) {}
+                val found = rows(git, root, showResolved)
 
                 assertEquals(2, git.runs.get(), "the scan with the resolved switch at $showResolved")
-                assertEquals(slow(book, showResolved), found)
+                assertEquals(slow(repo, root, showResolved), found)
+                assertTrue(found.isNotEmpty())
             }
         }
     }
@@ -60,19 +67,19 @@ class NoteScanTest {
         TempRepo().use { repo ->
             val book = reviewed(repo, commits = 4)
             val root = repo.dir.path + "#moved"
-            TaskScan.gitRecords(repo.git, root, true) {}
+            rows(repo.git, root, true)
 
             val unchanged = Counting(repo.git)
-            assertEquals(slow(book, true), TaskScan.gitRecords(unchanged, root, true) {})
+            assertEquals(slow(repo, root, true), rows(unchanged, root, true))
             assertEquals(1, unchanged.runs.get())
 
             val commit = repo.git.run("rev-parse", "HEAD").stdout.trim()
             book.add(NoteRefs.LOCAL, commit, "new.txt", Range(startLine = 2, endLine = 2), "a new note")
             val moved = Counting(repo.git)
-            val found = TaskScan.gitRecords(moved, root, true) {}
+            val found = rows(moved, root, true)
             assertEquals(2, moved.runs.get())
-            assertEquals(slow(book, true), found)
-            assertTrue(found.orEmpty().any { it.stored.comment.description == "a new note" })
+            assertEquals(slow(repo, root, true), found)
+            assertTrue(found.any { it.text == "a new note" })
         }
     }
 
@@ -82,7 +89,7 @@ class NoteScanTest {
             reviewed(repo, commits = 2)
             val git = Counting(repo.git)
 
-            assertFailsWith<Canceled> { TaskScan.gitRecords(git, repo.dir.path + "#canceled", false) { throw Canceled() } }
+            assertFailsWith<Canceled> { rows(git, repo.dir.path + "#canceled", false) { throw Canceled() } }
             assertEquals(1, git.runs.get())
         }
     }
@@ -93,16 +100,19 @@ class NoteScanTest {
             repo.commit("a.txt", "one")
             val git = Counting(repo.git)
 
-            assertEquals(emptyList(), TaskScan.gitRecords(git, repo.dir.path + "#empty", true) {})
+            assertEquals(emptyList(), rows(git, repo.dir.path + "#empty", true))
             assertEquals(1, git.runs.get())
         }
     }
 
     @Test
-    fun `gives no answer when git does not start, so the caller reads the slow way`() {
+    fun `reads the slow way when git does not start`() {
         val git = Counting(NO_GIT, GitResult(GitResult.DID_NOT_START, "", "no git"))
 
-        assertNull(TaskScan.gitRecords(git, "nowhere", false) {})
+        assertNull(NoteScan.read(git, "nowhere"))
+        val before = git.runs.get()
+        assertEquals(emptyList(), rows(git, "nowhere", false))
+        assertTrue(git.runs.get() > before + 1)
     }
 
     private companion object {

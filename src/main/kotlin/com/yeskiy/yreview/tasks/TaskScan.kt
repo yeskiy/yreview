@@ -152,20 +152,6 @@ object TaskScan {
             .mapNotNull { CommentTask.of(ScanRecord(it, true), root, unshared(it.id)) }
     }
 
-    /** The records of one git repository through [NoteScan], or null when git gave no full answer. */
-    internal fun gitRecords(git: GitRunner, root: String, showResolved: Boolean, checkCanceled: () -> Unit): List<ScanRecord>? =
-        NoteScan.read(git, root, NoteRefs.ALL, checkCanceled)?.let { records(CommentBook(it, author = ""), showResolved) }
-
-    /** The records of one store, as the switch of the tab asks for them. */
-    internal fun records(book: CommentBook, showResolved: Boolean): List<ScanRecord> =
-        book.commits(NoteRefs.ALL).flatMap { commit ->
-            CommentPick.of(
-                book.open(commit, NoteRefs.ALL),
-                if (showResolved) book.closed(commit, NoteRefs.ALL) else emptyList(),
-                showResolved,
-            )
-        }
-
     /** The module of every task, so the tree can put a module row above the files. */
     private fun withModules(project: Project, tasks: List<ReviewTask>): List<ReviewTask> {
         if (tasks.isEmpty()) return tasks
