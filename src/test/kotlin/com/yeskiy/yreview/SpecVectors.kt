@@ -6,10 +6,14 @@ import com.yeskiy.yreview.handoff.HandoffPlace
 import com.yeskiy.yreview.session.AgentCatalog
 import com.yeskiy.yreview.session.McpRoute
 import com.yeskiy.yreview.session.Naming
+import com.yeskiy.yreview.store.Carry
 import com.yeskiy.yreview.store.CommentJson
+import com.yeskiy.yreview.store.FileDiff
 import com.yeskiy.yreview.store.GitResult
 import com.yeskiy.yreview.store.GitRunner
+import com.yeskiy.yreview.store.LineMap
 import com.yeskiy.yreview.store.NotesGateway
+import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.id
 import com.yeskiy.yreview.tasks.HandleKey
@@ -197,5 +201,65 @@ internal object SpecVectors {
     private fun namingJson(naming: Naming): JsonElement = when (naming) {
         is Naming.Agent -> buildJsonObject { put("kind", "agent"); put("command", naming.command) }
         Naming.User -> buildJsonObject { put("kind", "user") }
+    }
+
+    // --- carry.json ---
+
+    fun rangeJson(range: Range?): JsonElement = if (range == null) JsonNull else buildJsonObject {
+        put("startLine", range.startLine)
+        if (range.startColumn != 0) put("startColumn", range.startColumn)
+        put("endLine", range.endLine)
+        if (range.endColumn != 0) put("endColumn", range.endColumn)
+    }
+
+    private fun fileJson(file: FileDiff) = buildJsonObject {
+        put("path", file.path)
+        put("deleted", file.deleted)
+        put("binary", file.binary)
+        put("hunks", JsonArray(file.hunks.map { hunk ->
+            buildJsonObject {
+                put("oldStart", hunk.oldStart)
+                put("oldCount", hunk.oldCount)
+                put("newStart", hunk.newStart)
+                put("newCount", hunk.newCount)
+                put("removed", strings(hunk.removed))
+            }
+        }))
+    }
+
+    fun parse(name: String, diff: String) = buildJsonObject {
+        put("name", name)
+        put("diff", diff)
+        put("files", JsonArray(LineMap.parse(diff).values.map { fileJson(it) }))
+    }
+
+    fun lines(text: String) = buildJsonObject {
+        put("text", text)
+        put("lines", strings(LineMap.lines(text)))
+    }
+
+    /** The keys `text`, `head` and `refused` appear only when the case sets them, as in the vector file. */
+    fun carry(name: String, diff: String, path: String, range: Range?, current: List<String>, text: String?, head: Boolean, refused: Boolean) =
+        buildJsonObject {
+            put("name", name)
+            put("diff", diff)
+            put("path", path)
+            put("range", rangeJson(range))
+            if (text != null) put("text", text)
+            if (head) put("head", true)
+            if (refused) put("refused", true)
+            put("current", strings(current))
+            put("carry", carryJson(LineMap.carry(LineMap.parse(diff)[path], range, current, text, head, refused)))
+        }
+
+    private fun carryJson(carry: Carry): JsonElement = when (carry) {
+        is Carry.Same -> buildJsonObject { put("kind", "same"); put("range", rangeJson(carry.range)) }
+        is Carry.Outdated -> buildJsonObject {
+            put("kind", "outdated")
+            put("range", rangeJson(carry.range))
+            put("original", strings(carry.original))
+        }
+        Carry.Gone -> buildJsonObject { put("kind", "gone") }
+        Carry.Missing -> buildJsonObject { put("kind", "missing") }
     }
 }

@@ -1,8 +1,11 @@
 package com.yeskiy.yreview
 
+import com.yeskiy.yreview.store.Range
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.boolean
 import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -89,4 +92,34 @@ class SpecVectorsTest {
 
     @Test
     fun `the agent table matches the catalog`() = assertEquals(read("agents.json"), SpecVectors.agents())
+
+    private fun JsonElement.range(key: String): Range? = (jsonObject.getValue(key) as? JsonObject)?.let {
+        Range(
+            startLine = it.getValue("startLine").jsonPrimitive.int,
+            startColumn = it["startColumn"]?.jsonPrimitive?.int ?: 0,
+            endLine = it.getValue("endLine").jsonPrimitive.int,
+            endColumn = it["endColumn"]?.jsonPrimitive?.int ?: 0,
+        )
+    }
+
+    @Test
+    fun `every diff parse matches`() =
+        cases("carry.json", "parse").forEach { assertEquals(it, SpecVectors.parse(it.text("name"), it.text("diff"))) }
+
+    @Test
+    fun `every line split matches`() =
+        cases("carry.json", "lines").forEach { assertEquals(it, SpecVectors.lines(it.text("text"))) }
+
+    private fun JsonElement.flag(key: String): Boolean = jsonObject[key]?.jsonPrimitive?.boolean ?: false
+
+    @Test
+    fun `every carry matches`() = cases("carry.json", "carry").forEach {
+        assertEquals(
+            it,
+            SpecVectors.carry(
+                it.text("name"), it.text("diff"), it.text("path"), it.range("range"), it.texts("current"),
+                it.textOrNull("text"), it.flag("head"), it.flag("refused"),
+            ),
+        )
+    }
 }
