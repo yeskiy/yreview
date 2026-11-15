@@ -25,7 +25,7 @@ object LineText {
     /** The text of the file on disk, for a write of an agent. A path outside [root] gives null. */
     fun onDisk(root: String, path: String, range: Range): String? = runCatching {
         if (!TaskPath.isRelativeUnder(root, path)) return null
-        val lines = String(Files.readAllBytes(Path.of(root, path)), Charsets.UTF_8).split('\n').let { if (it.last().isEmpty()) it.dropLast(1) else it }
+        val lines = LineMap.lines(String(Files.readAllBytes(Path.of(root, path)), Charsets.UTF_8))
         of({ lines[it - 1] }, lines.size, range)
     }.getOrNull()
 }
