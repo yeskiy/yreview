@@ -241,3 +241,84 @@ describe('the Markdown preview', () => {
       )
   })
 })
+
+describe('the review preview', () => {
+  const declared = manifest.contributes as {
+    readonly commands: readonly { command: string; title: string; category?: string }[]
+  }
+  const focus =
+    "!editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && activeWebviewPanelId == 'yreview.preview'"
+  const inPreview = "activeWebviewPanelId == 'yreview.preview'"
+  const source = 'resourceLangId == markdown && resourceScheme == file'
+  const ids = [
+    'yreview.openReviewPreview',
+    'yreview.addCommentFromReviewPreview',
+    'yreview.showReviewPreviewSource',
+  ]
+  const of = (place: string, command: string): readonly Contributed[] =>
+    (place === 'keybindings' ? contributes.keybindings : (contributes.menus[place] ?? [])).filter(
+      (entry) => entry.command === command,
+    )
+
+  it('contributes the three commands with their titles', () =>
+    assert.deepEqual(
+      declared.commands
+        .filter((entry) => ids.includes(entry.command))
+        .map((entry) => [entry.command, entry.title, entry.category]),
+      [
+        ['yreview.openReviewPreview', 'Open Review Preview to the Side', 'Yreview'],
+        ['yreview.addCommentFromReviewPreview', 'Add Review Comment', 'Yreview'],
+        ['yreview.showReviewPreviewSource', 'Show Source', 'Yreview'],
+      ],
+    ))
+
+  it('activates on a restore of the panel', () =>
+    assert.ok(
+      (manifest.activationEvents as readonly string[]).includes('onWebviewPanel:yreview.preview'),
+    ))
+
+  it('shows the commands in the palette only where they work', () =>
+    assert.deepEqual(
+      ids.flatMap((command) => of('commandPalette', command).map((entry) => entry.when)),
+      [source, inPreview, inPreview],
+    ))
+
+  it('puts the buttons on the title of the source and of the preview', () =>
+    assert.deepEqual(
+      ids.flatMap((command) =>
+        of('editor/title', command).map((entry) => [entry.when, entry.group]),
+      ),
+      [
+        [`${source} && activeWebviewPanelId != 'yreview.preview'`, 'navigation@8'],
+        [inPreview, 'navigation@9'],
+        [inPreview, 'navigation@10'],
+      ],
+    ))
+
+  it('adds the command to the context menu of the review preview', () =>
+    assert.deepEqual(
+      of('webview/context', 'yreview.addCommentFromReviewPreview').map((entry) => [
+        entry.when,
+        entry.group,
+      ]),
+      [["webviewId == 'yreview.preview'", 'z_yreview@1']],
+    ))
+
+  it('binds the keys of Add Review Comment while the review preview has the focus', () => {
+    const keys = of('keybindings', 'yreview.addCommentFromReviewPreview')
+    assert.deepEqual(
+      keys.map((entry) => [entry.key, entry.when]),
+      [
+        ['ctrl+alt+g', focus],
+        ['ctrl+shift+g', `config.yreview.intellijKey && ${focus}`],
+      ],
+    )
+    keys.forEach((entry) => assert.doesNotMatch(entry.when ?? '', /markdown\.preview/))
+  })
+
+  it('carries the page script and the page style in the package', () => {
+    const ignored = readFileSync(path.join(root, '.vscodeignore'), 'utf8')
+    assert.match(ignored, /^!dist\/reviewPreview\.js$/m)
+    assert.match(ignored, /^!media\/reviewPreview\.css$/m)
+  })
+})

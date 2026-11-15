@@ -18,6 +18,33 @@ writeFileSync(
   path.join(root, 'src', 'todo.ts'),
   '// TODO: first task\nexport const value = 1 // FIXME: second task\n',
 )
+const filler = Array.from({ length: 60 }, (_, at) => `Filler paragraph ${at}.\n`).join('\n')
+writeFileSync(
+  path.join(root, 'src', 'review.md'),
+  [
+    '# Review',
+    '',
+    'First line of a paragraph.',
+    'Second line of the paragraph.',
+    'Third line of the paragraph.',
+    '',
+    '- item one',
+    '- item two',
+    '',
+    '```ts',
+    'const a = 1',
+    'const b = 2',
+    '```',
+    '',
+    '[notes](notes.md) and [site](https://example.com/)',
+    '',
+    'Math: $x^2$',
+    '',
+    '<img src="missing.png" onerror="window.yreviewInjected = true">',
+    '',
+    filler,
+  ].join('\n'),
+)
 git('init', '-q', '-b', 'main')
 git('config', 'user.email', 'reviewer@example.com')
 git('config', 'user.name', 'Reviewer')

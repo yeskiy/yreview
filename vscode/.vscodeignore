@@ -2,6 +2,7 @@
 !dist/extension.js
 !dist/channel.js
 !dist/previewSelection.js
+!dist/reviewPreview.js
 !package.json
 !README.md
 !CHANGELOG.md
@@ -10,3 +11,4 @@
 !images/icon.png
 !images/activity.svg
 !media/preview.css
+!media/reviewPreview.css

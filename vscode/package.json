@@ -40,7 +40,8 @@
   },
   "main": "./dist/extension.js",
   "activationEvents": [
-    "onStartupFinished"
+    "onStartupFinished",
+    "onWebviewPanel:yreview.preview"
   ],
   "contributes": {
     "commands": [
@@ -323,6 +324,24 @@
         "icon": "$(comment)"
       },
       {
+        "command": "yreview.openReviewPreview",
+        "title": "Open Review Preview to the Side",
+        "category": "Yreview",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "yreview.addCommentFromReviewPreview",
+        "title": "Add Review Comment",
+        "category": "Yreview",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "yreview.showReviewPreviewSource",
+        "title": "Show Source",
+        "category": "Yreview",
+        "icon": "$(go-to-file)"
+      },
+      {
         "command": "yreview.openSettings",
         "title": "Open Settings",
         "category": "Yreview"
@@ -556,6 +575,18 @@
         {
           "command": "yreview.addCommentFromPreview",
           "when": "activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor'"
+        },
+        {
+          "command": "yreview.openReviewPreview",
+          "when": "resourceLangId == markdown && resourceScheme == file"
+        },
+        {
+          "command": "yreview.addCommentFromReviewPreview",
+          "when": "activeWebviewPanelId == 'yreview.preview'"
+        },
+        {
+          "command": "yreview.showReviewPreviewSource",
+          "when": "activeWebviewPanelId == 'yreview.preview'"
         }
       ],
       "editor/title": [
@@ -563,12 +594,32 @@
           "command": "yreview.addCommentFromPreview",
           "when": "activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor'",
           "group": "navigation@9"
+        },
+        {
+          "command": "yreview.openReviewPreview",
+          "when": "resourceLangId == markdown && resourceScheme == file && activeWebviewPanelId != 'yreview.preview'",
+          "group": "navigation@8"
+        },
+        {
+          "command": "yreview.addCommentFromReviewPreview",
+          "when": "activeWebviewPanelId == 'yreview.preview'",
+          "group": "navigation@9"
+        },
+        {
+          "command": "yreview.showReviewPreviewSource",
+          "when": "activeWebviewPanelId == 'yreview.preview'",
+          "group": "navigation@10"
         }
       ],
       "webview/context": [
         {
           "command": "yreview.addCommentFromPreview",
           "when": "webviewId == 'markdown.preview' || webviewId == 'vscode.markdown.preview.editor'",
+          "group": "z_yreview@1"
+        },
+        {
+          "command": "yreview.addCommentFromReviewPreview",
+          "when": "webviewId == 'yreview.preview'",
           "group": "z_yreview@1"
         }
       ],
@@ -864,6 +915,18 @@
         "key": "ctrl+shift+g",
         "mac": "ctrl+shift+g",
         "when": "config.yreview.intellijKey && !editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && (activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor')"
+      },
+      {
+        "command": "yreview.addCommentFromReviewPreview",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "!editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && activeWebviewPanelId == 'yreview.preview'"
+      },
+      {
+        "command": "yreview.addCommentFromReviewPreview",
+        "key": "ctrl+shift+g",
+        "mac": "ctrl+shift+g",
+        "when": "config.yreview.intellijKey && !editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && activeWebviewPanelId == 'yreview.preview'"
       },
       {
         "command": "yreview.closeBox",

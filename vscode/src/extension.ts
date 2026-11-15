@@ -16,6 +16,7 @@ import { type Places, redactingLog } from './log'
 import { withLongForms } from './places'
 import { previewPlugin } from './preview/markdownPlugin'
 import { PreviewHost } from './preview/previewHost'
+import { ReviewPreviews } from './reviewPreview/reviewPreviews'
 import { registerSaveKey } from './saveKey'
 import { registerSessions } from './session/register'
 import { registerSettingsPage } from './settingsPage'
@@ -46,6 +47,8 @@ export interface YreviewApi {
   readonly bridge: BridgeHost | undefined
   /** Undefined when git is missing. Tests call its link handler. */
   readonly preview: PreviewHost | undefined
+  /** Undefined when git is missing. */
+  readonly reviewPreviews: ReviewPreviews | undefined
   /** The Markdown preview calls it, because the manifest sets markdown.markdownItPlugins. */
   extendMarkdownIt(md: MarkdownIt): MarkdownIt
 }
@@ -119,6 +122,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       handoff: undefined,
       bridge: undefined,
       preview: undefined,
+      reviewPreviews: undefined,
       extendMarkdownIt: (md: MarkdownIt) => md,
     }
   }
@@ -128,7 +132,8 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   )
   const comments = new ReviewComments(held.service, log)
   const preview = new PreviewHost(held.service, log, comments.onDidAskRanges)
-  context.subscriptions.push(comments, preview)
+  const reviewPreviews = new ReviewPreviews(context.extensionUri, log)
+  context.subscriptions.push(comments, preview, reviewPreviews)
   held.tasks = createTaskViews(held.service, comments, git, log, context.workspaceState)
   context.subscriptions.push(held.tasks)
   context.subscriptions.push(...registerViewCommands(held.tasks, log))
@@ -185,6 +190,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     handoff,
     bridge: bridge.host,
     preview,
+    reviewPreviews,
     extendMarkdownIt: previewPlugin(preview.source),
   }
 }

@@ -31,6 +31,14 @@ await Promise.all([
     entryPoints: ['src/preview/previewSelection.ts'],
     outfile: 'dist/previewSelection.js',
   }),
+  build({
+    ...common,
+    platform: 'browser',
+    target: 'es2022',
+    format: 'iife',
+    entryPoints: ['src/reviewPreview/webview/index.ts'],
+    outfile: 'dist/reviewPreview.js',
+  }),
   ...(process.argv.includes('--tests')
     ? [
         build({
