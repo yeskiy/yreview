@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { setTimeout as wait } from 'node:timers/promises'
 
@@ -12,6 +14,8 @@ import { focusWindow, until } from './window'
 
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
+const git = (...args: string[]): string =>
+  execFileSync('git', args, { cwd: workspace(), encoding: 'utf8' })
 const api = async (): Promise<YreviewApi> =>
   (
     vscode.extensions.getExtension<YreviewApi>('yeskiy.yreview') ?? assert.fail('no extension')
@@ -138,6 +142,8 @@ describe('comments from the Markdown preview', () => {
     await showNotes(new vscode.Selection(0, 0, 0, 0))
     await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
     await focused('panel')
+    // A new webview takes the keyboard focus late, and no event tells when. A real menu comes after it.
+    await wait(1000)
     const external = spyExternal()
     try {
       // The webview context menu gives the JSON of data-vscode-context, here the lines 4 and 5.
@@ -146,7 +152,10 @@ describe('comments from the Markdown preview', () => {
         yreviewStart: 4,
         yreviewEnd: 5,
       })
-      await wait(1500)
+      assert.ok(
+        await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment'),
+        'the comment box did not get the focus',
+      )
       const editor = sourceBeside('panel')
       assert.ok(editor?.selection.isEqual(new vscode.Selection(4, 0, 4, 17)), 'the selection')
       assert.ok(stillShown('panel'), 'the preview left the view')
@@ -239,5 +248,44 @@ describe('comments from the Markdown preview', () => {
     await render()
     await (await preview()).settled()
     assert.match(await render(), /yreview-commented/)
+  })
+
+  it('moves the mark of a drawn preview to the mapped lines when HEAD moves', async () => {
+    const start = git('rev-parse', 'HEAD').trim()
+    const controller = vscode.comments.createCommentController('yreview-preview-test', 'Test')
+    await vscode.commands.executeCommand('yreview.saveLocal', {
+      thread: controller.createCommentThread(notes(), new vscode.Range(4, 0, 4, 0), []),
+      text: 'Check the second paragraph.',
+    })
+    controller.dispose()
+    const marks = async (): Promise<readonly number[]> => {
+      await render()
+      await (await preview()).settled()
+      return [...(await render()).matchAll(/<p[^>]*>/gu)]
+        .filter(([tag]) => tag.includes('yreview-commented'))
+        .map(([tag]) => Number(/data-line="(\d+)"/u.exec(tag)?.[1]))
+    }
+    const marksAt = async (lines: readonly number[], tries: number): Promise<boolean> =>
+      JSON.stringify(await marks()) === JSON.stringify(lines) ||
+      (tries > 0 && wait(250).then(() => marksAt(lines, tries - 1)))
+    const shifted = '# Notes\n\nTop paragraph.\n\nFirst paragraph.\n\nSecond paragraph.\n'
+    try {
+      assert.deepEqual(await marks(), [4], 'the preview did not mark the comment before the commit')
+      writeFileSync(notes().fsPath, shifted)
+      git('commit', '-q', '-am', 'add a paragraph above the comment')
+      const document = await vscode.workspace.openTextDocument(notes())
+      assert.ok(
+        await until(() => document.getText().replaceAll('\r', '') === shifted),
+        'the document did not reload',
+      )
+      assert.ok(await marksAt([6], 40), 'the mark did not move to the new line of the comment')
+    } finally {
+      const commits = git('rev-list', `${start}..HEAD`)
+        .split('\n')
+        .filter((line) => line !== '')
+      git('reset', '-q', '--hard', start)
+      git('notes', '--ref', 'refs/notes/y-review/local', 'remove', '--ignore-missing', ...commits)
+      await (await reviewComments()).reload(notes())
+    }
   })
 })

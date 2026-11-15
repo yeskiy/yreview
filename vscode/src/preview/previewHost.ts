@@ -1,9 +1,11 @@
 import * as vscode from 'vscode'
 
 import { firstAsk, type RangeAsk } from '../comments/controller'
+import { shownRange } from '../core/lineMap'
 import { guard } from '../guard'
 import type { Log } from '../log'
 import type { ReviewService } from '../store/reviewService'
+import { gitApi, watchHeads } from '../views/repositories'
 import type { LineSpan, PreviewSource } from './markdownPlugin'
 import { fitted, rangeOfContext } from './previewLines'
 
@@ -91,7 +93,13 @@ export class PreviewHost implements vscode.Disposable {
 
   private readonly loads = new Map<string, Promise<void>>()
 
+  /** Grows on each forget, so a load that started before it writes no spans. */
+  private generation = 0
+
   private readonly disposables: vscode.Disposable[] = []
+
+  /** A commit, a checkout, or a reset maps the comments to other lines. */
+  private readonly heads = gitApi().then((api) => watchHeads(api, () => this.forget()))
 
   readonly source: PreviewSource = {
     commented: (file) => this.commented(file),
@@ -103,10 +111,7 @@ export class PreviewHost implements vscode.Disposable {
     private readonly log: Log,
     asked: RangeAsk,
   ) {
-    const stopListening = service.onDidChange(() => {
-      this.lines.clear()
-      refresh()
-    })
+    const stopListening = service.onDidChange(() => this.forget())
     this.disposables.push(
       { dispose: stopListening },
       vscode.commands.registerCommand(
@@ -123,30 +128,42 @@ export class PreviewHost implements vscode.Disposable {
 
   dispose(): void {
     this.disposables.forEach((disposable) => disposable.dispose())
+    this.heads.then(
+      (watch) => watch.dispose(),
+      () => undefined,
+    )
+  }
+
+  private forget(): void {
+    this.generation += 1
+    this.lines.clear()
+    this.loads.clear()
+    refresh()
   }
 
   private commented(file: string): readonly LineSpan[] | undefined {
     const known = this.lines.get(file)
     if (known === undefined && !this.loads.has(file)) {
-      this.loads.set(
-        file,
-        this.load(file).finally(() => this.loads.delete(file)),
-      )
+      const load: Promise<void> = this.load(file, this.generation).finally(() => {
+        if (this.loads.get(file) === load) this.loads.delete(file)
+      })
+      this.loads.set(file, load)
     }
     return known
   }
 
-  private async load(file: string): Promise<void> {
+  private async load(file: string, generation: number): Promise<void> {
     try {
       const found = await this.service.anchorOf(file)
       const spans =
         found.kind === 'found'
-          ? (await this.service.openAt(found.anchor)).flatMap(({ record }) =>
-              record.location?.range === undefined
-                ? []
-                : [{ start: record.location.range.startLine, end: record.location.range.endLine }],
-            )
+          ? (await this.service.placedAt(found.anchor))
+              .map(({ carry }) => shownRange(carry))
+              .flatMap((range) =>
+                range === undefined ? [] : [{ start: range.startLine, end: range.endLine }],
+              )
           : []
+      if (generation !== this.generation) return
       this.lines.set(file, spans)
       if (spans.length > 0) refresh()
     } catch (error) {
