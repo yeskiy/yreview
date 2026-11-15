@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as wait } from 'node:timers/promises'
@@ -66,7 +66,13 @@ describe('comments in the editor', () => {
     return draft
   }
   const head = (): string => git('rev-parse', 'HEAD').trim()
-  const restore = (commit: string): string => git('reset', '-q', '--hard', commit)
+  /** Resets to the commit and waits until the open document shows the text of the file. */
+  const restore = async (commit: string): Promise<void> => {
+    git('reset', '-q', '--hard', commit)
+    const document = await vscode.workspace.openTextDocument(file())
+    const text = readFileSync(file().fsPath, 'utf8')
+    assert.ok(await until(() => document.getText() === text), 'the document did not reload')
+  }
   const described = (comments: ReviewComments, text: string): Shown | undefined =>
     comments.snapshot(file()).find((shown) => shown.stored.record.description === text)
   /** Writes the file and waits until the open document shows the new text. */
@@ -298,7 +304,7 @@ describe('comments in the editor', () => {
       assert.ok(await until(() => described(comments, 'Moves down.')?.range.start.line === 3))
       assert.equal(described(comments, 'Moves down.')?.carry.kind, 'same')
     } finally {
-      restore(start)
+      await restore(start)
     }
   })
 
@@ -314,7 +320,7 @@ describe('comments in the editor', () => {
       assert.match(textOf(shown), /\ntwo\n/u)
       assert.equal(shown.range.start.line, 1)
     } finally {
-      restore(start)
+      await restore(start)
     }
   })
 
@@ -328,7 +334,7 @@ describe('comments in the editor', () => {
       await saveDraft(new vscode.Range(2, 0, 2, 0), 'On the new HEAD.')
       assert.ok(comments.segmentsOf(file()).some((segment) => segment.count === 2))
     } finally {
-      restore(start)
+      await restore(start)
     }
   })
 
@@ -343,7 +349,7 @@ describe('comments in the editor', () => {
       assert.ok(await until(() => described(comments, 'On new text.')?.range.start.line === 2))
       assert.equal(described(comments, 'On new text.')?.carry.kind, 'same')
     } finally {
-      restore(start)
+      await restore(start)
     }
   })
 
@@ -364,7 +370,7 @@ describe('comments in the editor', () => {
       assert.doesNotMatch(note, /Delete me\./u)
       assert.throws(() => localNotes())
     } finally {
-      restore(start)
+      await restore(start)
     }
   })
 
