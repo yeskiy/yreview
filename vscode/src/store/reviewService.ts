@@ -12,6 +12,8 @@ import { NotesGateway } from '../git/notes'
 import { diffAnchorOf } from '../git/revision'
 import { type GitResult, ProcessGitRunner, isOk, ran } from '../git/runner'
 import { NotesSharing } from '../git/sharing'
+import { readNotes } from '../tasks/noteScan'
+import { type Placed, placedComments } from '../tasks/placedComments'
 import { CommentBook, type StoredComment } from './commentBook'
 import { FOLDER, FolderNotes } from './folderNotes'
 import { mayMigrate } from './folderOwnership'
@@ -207,6 +209,16 @@ export class ReviewService {
         notePath !== undefined && isRelativeUnder(anchor.root, notePath) && notePath === anchor.path
       )
     })
+  }
+
+  /** The open comments of the anchored file, at their place in the working tree. */
+  async placedAt(anchor: Anchor): Promise<readonly Placed[]> {
+    const runner = this.runner(anchor.root)
+    const notes =
+      anchor.store === 'git'
+        ? ((await readNotes(runner, anchor.root)) ?? new NotesGateway(runner))
+        : new FolderNotes(anchor.root)
+    return placedComments(runner, anchor.root, anchor.head, notes, anchor.path)
   }
 
   /** A folder store has no remote, so it takes no share step. */

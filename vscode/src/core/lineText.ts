@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises'
 import path from 'node:path'
 
+import { splitLines } from './lineMap'
 import type { RecordRange } from './record'
 
 export const MAX_LINES = 100
@@ -30,8 +31,6 @@ export const lineTextOnDisk = async (
   file: string,
   range: RecordRange,
 ): Promise<string | undefined> => {
-  const lines = (await readFile(path.join(root, file), 'utf8').catch(() => ''))
-    .split('\n')
-    .filter((line, index, all) => index < all.length - 1 || line !== '')
+  const lines = splitLines(await readFile(path.join(root, file), 'utf8').catch(() => ''))
   return lineTextOf((line) => lines[line - 1] ?? '', lines.length, range)
 }

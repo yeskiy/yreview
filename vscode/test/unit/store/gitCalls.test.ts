@@ -86,4 +86,15 @@ describe('git calls of the comment actions', function calls() {
     assert.equal(removed.calls, 6)
     assert.deepEqual(await service.openAt(anchor), [])
   })
+
+  it('places the comments of a file of HEAD notes with 2 git calls or fewer', async () => {
+    const dir = makeRepo()
+    dirs.push(dir)
+    const service = new ReviewService(host)
+    const anchor = await anchored(service, dir)
+    await service.addComment(anchor, range, 'Placed.', false)
+    const placed = await counted(() => service.placedAt(anchor))
+    assert.equal(placed.value.length, 1)
+    assert.ok(placed.calls <= 2, `${placed.calls} git calls`)
+  })
 })
