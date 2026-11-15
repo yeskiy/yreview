@@ -28,11 +28,19 @@ const inPreview = async (body: string): Promise<unknown> => {
   return values.find((value) => (value as { missing?: boolean } | null)?.missing !== true)
 }
 
+/** The point of the preview heading, once the page shows the rendered text. */
+const headingPoint = async (tries = 40): Promise<{ x: number; y: number }> =>
+  ((await inPreview(`
+    const rect = doc.querySelector('[data-line="0"]').getBoundingClientRect()
+    return { x: rect.left + 5, y: rect.top + rect.height / 2 }`)) as
+    { x: number; y: number } | undefined) ??
+  (tries > 0
+    ? wait(250).then(() => headingPoint(tries - 1))
+    : assert.fail('the preview shows no text'))
+
 /** Gives the preview page the focus with a real click, as a user does, so no late focus comes after. */
 const focusPreview = async (): Promise<void> => {
-  const point = (await inPreview(`
-    const rect = doc.querySelector('[data-line="0"]').getBoundingClientRect()
-    return { x: rect.left + 5, y: rect.top + rect.height / 2 }`)) as { x: number; y: number }
+  const point = await headingPoint()
   const { x, y } = await webviewOrigin()
   await clickAt(x + point.x, y + point.y)
   assert.ok(await untilKeyboardIn('[data-line]'), 'the preview page did not get the focus')
