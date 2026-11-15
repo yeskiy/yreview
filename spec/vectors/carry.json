@@ -1,0 +1,286 @@
+{
+  "parse": [
+    {
+      "name": "a change and a deleted file",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -0,0 +1,2 @@\n+top one\n+top two\n@@ -5 +7 @@\n-old five\n+new five\ndiff --git a/src/b.txt b/src/b.txt\ndeleted file mode 100644\nindex 3333333..0000000\n--- a/src/b.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-one\n-two\n",
+      "files": [
+        { "path": "src/a.txt", "deleted": false, "binary": false, "hunks": [
+          { "oldStart": 0, "oldCount": 0, "newStart": 1, "newCount": 2, "removed": [] },
+          { "oldStart": 5, "oldCount": 1, "newStart": 7, "newCount": 1, "removed": ["old five"] }
+        ] },
+        { "path": "src/b.txt", "deleted": true, "binary": false, "hunks": [
+          { "oldStart": 1, "oldCount": 2, "newStart": 0, "newCount": 0, "removed": ["one", "two"] }
+        ] }
+      ]
+    },
+    {
+      "name": "a quoted path with a tab and a quote",
+      "diff": "diff --git \"a/x\\ty\\\".txt\" \"b/x\\ty\\\".txt\"\nindex 1111111..2222222 100644\n--- \"a/x\\ty\\\".txt\"\n+++ \"b/x\\ty\\\".txt\"\n@@ -1 +1 @@\n-a\n+b\n",
+      "files": [
+        { "path": "x\ty\".txt", "deleted": false, "binary": false, "hunks": [
+          { "oldStart": 1, "oldCount": 1, "newStart": 1, "newCount": 1, "removed": ["a"] }
+        ] }
+      ]
+    },
+    {
+      "name": "octal escapes in a quoted path",
+      "diff": "diff --git \"a/caf\\303\\251.txt\" \"b/caf\\303\\251.txt\"\nindex 1111111..2222222 100644\n--- \"a/caf\\303\\251.txt\"\n+++ \"b/caf\\303\\251.txt\"\n@@ -2,0 +3 @@\n+new\n",
+      "files": [
+        { "path": "caf\u00e9.txt", "deleted": false, "binary": false, "hunks": [
+          { "oldStart": 2, "oldCount": 0, "newStart": 3, "newCount": 1, "removed": [] }
+        ] }
+      ]
+    },
+    {
+      "name": "a path with a space and the tab after it",
+      "diff": "diff --git a/my file.txt b/my file.txt\nindex 1111111..2222222 100644\n--- a/my file.txt\t\n+++ b/my file.txt\t\n@@ -4 +4,2 @@\n-x\n+y\n+z\n",
+      "files": [
+        { "path": "my file.txt", "deleted": false, "binary": false, "hunks": [
+          { "oldStart": 4, "oldCount": 1, "newStart": 4, "newCount": 2, "removed": ["x"] }
+        ] }
+      ]
+    },
+    {
+      "name": "a binary file",
+      "diff": "diff --git a/img.png b/img.png\nindex 1111111..2222222 100644\nBinary files a/img.png and b/img.png differ\n",
+      "files": [ { "path": "img.png", "deleted": false, "binary": true, "hunks": [] } ]
+    },
+    {
+      "name": "CRLF lines and the no newline marker",
+      "diff": "diff --git a/c.txt b/c.txt\nindex 1111111..2222222 100644\n--- a/c.txt\n+++ b/c.txt\n@@ -3 +3 @@\n-old\r\n\\ No newline at end of file\n+new\n\\ No newline at end of file\n",
+      "files": [
+        { "path": "c.txt", "deleted": false, "binary": false, "hunks": [
+          { "oldStart": 3, "oldCount": 1, "newStart": 3, "newCount": 1, "removed": ["old"] }
+        ] }
+      ]
+    },
+    {
+      "name": "a mode change only",
+      "diff": "diff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\n",
+      "files": [ { "path": "run.sh", "deleted": false, "binary": false, "hunks": [] } ]
+    },
+    {
+      "name": "a deleted empty file",
+      "diff": "diff --git a/e.txt b/e.txt\ndeleted file mode 100644\nindex e69de29..0000000\n",
+      "files": [ { "path": "e.txt", "deleted": true, "binary": false, "hunks": [] } ]
+    },
+    { "name": "an empty diff", "diff": "", "files": [] }
+  ],
+  "lines": [
+    { "text": "", "lines": [] },
+    { "text": "a\nb\n", "lines": ["a", "b"] },
+    { "text": "a\r\nb", "lines": ["a", "b"] },
+    { "text": "a\n\n", "lines": ["a", ""] },
+    { "text": "\n", "lines": [""] },
+    { "text": "a\rb\n", "lines": ["a\rb"] }
+  ],
+  "carry": [
+    {
+      "name": "the file is not in the diff",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 }, "current": [],
+      "carry": { "kind": "same", "range": { "startLine": 5, "endLine": 6 } }
+    },
+    {
+      "name": "two lines added above",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -0,0 +1,2 @@\n+n1\n+n2\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["n1", "n2", "l1", "l2", "l3", "l4", "l5", "l6"],
+      "carry": { "kind": "same", "range": { "startLine": 7, "endLine": 8 } }
+    },
+    {
+      "name": "two lines removed above",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -1,2 +0,0 @@\n-l1\n-l2\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["l3", "l4", "l5", "l6"],
+      "carry": { "kind": "same", "range": { "startLine": 3, "endLine": 4 } }
+    },
+    {
+      "name": "the columns stay on a moved part of a line",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -0,0 +1 @@\n+n1\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "startColumn": 2, "endLine": 5, "endColumn": 4 },
+      "current": ["n1", "l1", "l2", "l3", "l4", "l5", "l6"],
+      "carry": { "kind": "same", "range": { "startLine": 6, "startColumn": 2, "endLine": 6, "endColumn": 4 } }
+    },
+    {
+      "name": "an insertion right after the range",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -6,0 +7 @@\n+n1\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["l1", "l2", "l3", "l4", "l5", "l6", "n1"],
+      "carry": { "kind": "same", "range": { "startLine": 5, "endLine": 6 } }
+    },
+    {
+      "name": "an insertion right before the range",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -4,0 +5 @@\n+n1\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["l1", "l2", "l3", "l4", "n1", "l5", "l6"],
+      "carry": { "kind": "same", "range": { "startLine": 6, "endLine": 7 } }
+    },
+    {
+      "name": "a change below the range",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -9 +9 @@\n-l9\n+x9\n",
+      "path": "src/a.txt", "range": { "startLine": 2, "endLine": 3 },
+      "current": ["l1", "l2", "l3", "l4", "l5", "l6", "l7", "l8", "x9"],
+      "carry": { "kind": "same", "range": { "startLine": 2, "endLine": 3 } }
+    },
+    {
+      "name": "a changed first line",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -5 +5 @@\n-l5\n+x5\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["l1", "l2", "l3", "l4", "x5", "l6"],
+      "carry": { "kind": "outdated", "range": { "startLine": 5, "endLine": 6 }, "original": ["l5", "l6"] }
+    },
+    {
+      "name": "a change and an insertion above",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -0,0 +1 @@\n+n1\n@@ -5 +6 @@\n-l5\n+x5\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["n1", "l1", "l2", "l3", "l4", "x5", "l6"],
+      "carry": { "kind": "outdated", "range": { "startLine": 6, "endLine": 7 }, "original": ["l5", "l6"] }
+    },
+    {
+      "name": "the commented lines are deleted",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -5,2 +4,0 @@\n-l5\n-l6\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["l1", "l2", "l3", "l4", "l7"],
+      "carry": { "kind": "outdated", "range": { "startLine": 5, "endLine": 5 }, "original": ["l5", "l6"] }
+    },
+    {
+      "name": "an insertion inside the range",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -5,0 +6 @@\n+n1\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["l1", "l2", "l3", "l4", "l5", "n1", "l6"],
+      "carry": { "kind": "outdated", "range": { "startLine": 5, "endLine": 7 }, "original": ["l5", "l6"] }
+    },
+    {
+      "name": "the last lines of the file are deleted",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -9,2 +8,0 @@\n-l9\n-l10\n",
+      "path": "src/a.txt", "range": { "startLine": 9, "endLine": 10 },
+      "current": ["l1", "l2", "l3", "l4", "l5", "l6", "l7", "l8"],
+      "carry": { "kind": "outdated", "range": { "startLine": 8, "endLine": 8 }, "original": ["l9", "l10"] }
+    },
+    {
+      "name": "a change over the end of the range",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -6,2 +6,3 @@\n-l6\n-l7\n+x6\n+x7\n+x8\n",
+      "path": "src/a.txt", "range": { "startLine": 5, "endLine": 6 },
+      "current": ["l1", "l2", "l3", "l4", "l5", "x6", "x7", "x8", "l8"],
+      "carry": { "kind": "outdated", "range": { "startLine": 5, "endLine": 8 }, "original": ["l5", "l6"] }
+    },
+    {
+      "name": "a binary file",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\nBinary files a/src/a.txt and b/src/a.txt differ\n",
+      "path": "src/a.txt", "range": { "startLine": 3, "endLine": 4 },
+      "current": ["a", "b"],
+      "carry": { "kind": "outdated", "range": { "startLine": 2, "endLine": 2 }, "original": [] }
+    },
+    {
+      "name": "a mode change only",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nold mode 100644\nnew mode 100755\n",
+      "path": "src/a.txt", "range": { "startLine": 2, "endLine": 3 },
+      "current": ["l1", "l2", "l3"],
+      "carry": { "kind": "same", "range": { "startLine": 2, "endLine": 3 } }
+    },
+    {
+      "name": "a comment on the whole file of a changed file",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -1 +1 @@\n-l1\n+x1\n",
+      "path": "src/a.txt", "range": null, "current": ["x1"],
+      "carry": { "kind": "same", "range": null }
+    },
+    {
+      "name": "the file is deleted",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\ndeleted file mode 100644\nindex 1111111..0000000\n--- a/src/a.txt\n+++ /dev/null\n@@ -1,2 +0,0 @@\n-l1\n-l2\n",
+      "path": "src/a.txt", "range": { "startLine": 1, "endLine": 1 }, "current": [],
+      "carry": { "kind": "gone" }
+    },
+    {
+      "name": "the file is empty",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -1,2 +0,0 @@\n-l1\n-l2\n",
+      "path": "src/a.txt", "range": { "startLine": 1, "endLine": 2 }, "current": [],
+      "carry": { "kind": "gone" }
+    },
+    {
+      "name": "text: a comment on uncommitted lines stays on its text after the commit",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -2,0 +3 @@\n+new line\n",
+      "path": "src/a.txt", "range": { "startLine": 3, "endLine": 3 }, "text": "new line",
+      "current": ["a", "b", "new line", "d"],
+      "carry": { "kind": "same", "range": { "startLine": 3, "endLine": 3 } }
+    },
+    {
+      "name": "text: of two matches, the one closest to the mapped line wins",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -0,0 +1,2 @@\n+x\n+y\n",
+      "path": "src/a.txt", "range": { "startLine": 2, "endLine": 2 }, "text": "x",
+      "current": ["x", "y", "q", "x", "r"],
+      "carry": { "kind": "same", "range": { "startLine": 4, "endLine": 4 } }
+    },
+    {
+      "name": "text: a tie goes to the earlier line",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 2, "endLine": 2 }, "text": "x",
+      "current": ["x", "p", "x"],
+      "carry": { "kind": "same", "range": { "startLine": 1, "endLine": 1 } }
+    },
+    {
+      "name": "text: changed lines give outdated with the stored text",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\nindex 1111111..2222222 100644\n--- a/src/a.txt\n+++ b/src/a.txt\n@@ -2 +2 @@\n-b\n+B\n",
+      "path": "src/a.txt", "range": { "startLine": 2, "endLine": 2 }, "text": "b seen",
+      "current": ["a", "B", "c"],
+      "carry": { "kind": "outdated", "range": { "startLine": 2, "endLine": 2 }, "original": ["b seen"] }
+    },
+    {
+      "name": "text: no match on an unchanged file gives outdated",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 2, "endLine": 2 }, "text": "zz",
+      "current": ["a", "b", "c"],
+      "carry": { "kind": "outdated", "range": { "startLine": 2, "endLine": 2 }, "original": ["zz"] }
+    },
+    {
+      "name": "text: the columns move with the match",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 2, "startColumn": 1, "endLine": 2, "endColumn": 3 }, "text": "abcd",
+      "current": ["n", "x", "abcd"],
+      "carry": { "kind": "same", "range": { "startLine": 3, "startColumn": 1, "endLine": 3, "endColumn": 3 } }
+    },
+    {
+      "name": "text: a comment of HEAD follows its text",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 2, "endLine": 3 }, "text": "b\nc", "head": true,
+      "current": ["n", "a", "b", "c"],
+      "carry": { "kind": "same", "range": { "startLine": 3, "endLine": 4 } }
+    },
+    {
+      "name": "text: a comment of HEAD without a match keeps its lines",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 1, "endLine": 1 }, "text": "zz", "head": true,
+      "current": ["a", "b"],
+      "carry": { "kind": "same", "range": { "startLine": 1, "endLine": 1 } }
+    },
+    {
+      "name": "text: a refused commit with a match places the comment",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 1, "endLine": 1 }, "text": "b", "refused": true,
+      "current": ["a", "b"],
+      "carry": { "kind": "same", "range": { "startLine": 2, "endLine": 2 } }
+    },
+    {
+      "name": "text: a refused commit without a match stays missing",
+      "diff": "", "path": "src/a.txt", "range": { "startLine": 1, "endLine": 1 }, "text": "zz", "refused": true,
+      "current": ["a", "b"],
+      "carry": { "kind": "missing" }
+    },
+    {
+      "name": "text: a deleted file stays gone",
+      "diff": "diff --git a/src/a.txt b/src/a.txt\ndeleted file mode 100644\nindex 1111111..0000000\n--- a/src/a.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-a\n",
+      "path": "src/a.txt", "range": { "startLine": 1, "endLine": 1 }, "text": "a", "current": [],
+      "carry": { "kind": "gone" }
+    }
+  ],
+  "snippet": [
+    { "name": "two whole lines", "lines": ["a", "b", "c"], "range": { "startLine": 2, "endLine": 3 }, "text": "b\nc" },
+    { "name": "columns do not change the text", "lines": ["abcd", "x"], "range": { "startLine": 1, "startColumn": 1, "endLine": 1, "endColumn": 3 }, "text": "abcd" },
+    { "name": "a reversed range", "lines": ["a", "b", "c"], "range": { "startLine": 3, "endLine": 2 }, "text": "b\nc" },
+    { "name": "a line past the end is left out", "lines": ["a"], "range": { "startLine": 1, "endLine": 3 }, "text": "a" },
+    { "name": "an empty line inside", "lines": ["a", "", "b"], "range": { "startLine": 1, "endLine": 3 }, "text": "a\n\nb" },
+    { "name": "a line loses its carriage return", "lines": ["a\r", "b"], "range": { "startLine": 1, "endLine": 2 }, "text": "a\nb" },
+    { "name": "a lone surrogate leaves the field out", "lines": ["\ud800"], "range": { "startLine": 1, "endLine": 1 }, "text": null },
+    { "name": "a range wholly past the end leaves the field out", "lines": ["a"], "range": { "startLine": 4, "endLine": 5 }, "text": null }
+  ],
+  "compat": [
+    {
+      "name": "a record with location.text",
+      "line": "{\"timestamp\":\"1787194427\",\"author\":\"a@b.c\",\"description\":\"Check this.\",\"location\":{\"commit\":\"0123456789abcdef0123456789abcdef01234567\",\"path\":\"src/a.txt\",\"range\":{\"startLine\":2,\"endLine\":3},\"text\":\"b\\nc\"}}",
+      "id": "3952ca369dbc5cc4dd4cfdebaec1cd6e0d36b958"
+    }
+  ]
+}

@@ -60,6 +60,7 @@ Source: `store/Comment.kt`.
 | `location.range.startColumn` | integer | No, default 0 | The column of the start |
 | `location.range.endLine` | integer | Yes, in `range` | The last line |
 | `location.range.endColumn` | integer | No, default 0 | The column of the end |
+| `location.text` | string | No | The commented lines as the writer saw them when it saved the comment (section 17.4). It is not part of the identifier (section 4). |
 | `v` | integer | No, default 0 | The format version. The value is 0 today. |
 
 The Kotlin decoder (`CommentJson.decode`) applies these type rules. A reader in another
@@ -105,14 +106,18 @@ Source: `store/Comment.kt` (`CommentJson.encode`, `Comment.id`).
 The Kotlin encoder decodes a line, drops unknown fields, and encodes again. Another encoder
 must give the same bytes. The rules:
 
-1. Write the keys in this order: `timestamp`, `author`, `description`, `parent`, `original`, `resolved`, `location`, `v`. Inside `location`: `commit`, `path`, `range`. Inside `range`: `startLine`, `startColumn`, `endLine`, `endColumn`.
+1. Write the keys in this order: `timestamp`, `author`, `description`, `parent`, `original`, `resolved`, `location`, `v`. Inside `location`: `commit`, `path`, `range`, `text`. Inside `range`: `startLine`, `startColumn`, `endLine`, `endColumn`.
 2. Leave out a key whose value is absent. Leave out `startColumn` and `endColumn` when the value is 0. Leave out `v` when the value is 0. Keep `resolved: false` when a record holds it.
 3. Drop every unknown key. For this reason a future field never changes an identifier, and the spec must say so.
 4. Write no white space.
 5. Escape `"` and `\`. Escape U+0008, U+0009, U+000A, U+000C, U+000D as `\b \t \n \f \r`. Escape the other characters below U+0020 as `\u00xx` with lowercase hex. Write every other character as itself, `/` and U+007F and U+2028 included.
 6. Refuse a lone surrogate on write. Java encodes it to `?` and JavaScript escapes it, so the two identifiers differ. A reader that meets one keeps the record and takes the identifier that the Kotlin rule gives (the vector file holds that value).
+7. The identifier leaves out `location.text`. The hash input is the canonical encoding of the
+   record without that key. A reader of version 1.0 drops `location.text` as an unknown key,
+   so it gives the same identifier.
 
 A future field never changes an identifier, because rule 3 drops it before the hash.
+`location.text` is the one known field that rule 7 leaves out of the hash.
 
 The identifier is the lowercase hex SHA-1 of the UTF-8 bytes of the canonical encoding.
 A lone surrogate becomes `?` before the bytes are made, because Java does that. A reader
@@ -133,8 +138,8 @@ the same note holds `original` equal to its identifier and `resolved: true`. A r
 comment and without each record whose `original` names it.
 
 The resolve record has a new `timestamp` and the `author` of the person who resolves. It
-has no `description` and no `parent`. The resolve record goes to the same ref and the same
-commit as the comment. A delete keeps no copy of the removed lines.
+has no `description` and no `parent`. Its `location` has no `text`. The resolve record goes
+to the same ref and the same commit as the comment. A delete keeps no copy of the removed lines.
 
 ## 6. Write protocol
 
@@ -617,6 +622,116 @@ handle closes it in either editor. These differences stay:
 | `spec/vectors/names.json` | Discovery file names and window folder names for given paths, Windows and POSIX (section 12). |
 | `spec/vectors/redact.json` | `{ name, input, homes, projects, repositories, output }` for `Redact.text(value, homes, projects, repositories)`. The rule removes every project path, every repository root and every home folder (longest first, case-insensitive, both slash forms, WSL spelling), then remotes, mail addresses and secrets. A caller with a length cap cuts after the redaction. |
 | `spec/vectors/agents.json` | The agent table of `AgentCatalog.ALL`: id, label, commands, push kind, MCP route, naming. |
+| `spec/vectors/carry.json` | `parse` cases `{ name, diff, files }` with the files of a raw `git diff -U0` text. `lines` cases `{ text, lines }` for the line split. `carry` cases `{ name, diff, path, range, current, text?, head?, refused?, carry }` with the place of one comment in the working tree (a missing `text` is null, a missing `head` or `refused` is false). `snippet` cases `{ name, lines, range, text }` for the writer of `location.text`. `compat` cases `{ name, line, id }`: a record with `location.text` and the identifier that a 1.0 reader and a 1.1 reader both give (section 17). |
 
 The Gradle test `SpecVectorsTest` and the npm test `vscode/test/unit/vectors.test.ts` read
 the same files. A change to a vector file changes both test runs in the same pull request.
+
+## 17. Comments of other commits
+
+Source: `store/LineMap.kt`, `store/DiffCache.kt`, `tasks/PlacedComments.kt`.
+
+A comment stays in the note of the commit that was HEAD when the comment was saved. The
+editor and the task views show the open comments of every commit, at the place where their
+lines are now. Both read the comments of a file from one function, so they never disagree.
+The commit of a comment is the key of its note. A record that a folder migration moved
+names `worktree` in `location.commit`, and its note key is a commit.
+
+The function keeps a comment that has a `location`, text that is not blank, and a path under
+the repository root. Then it gives each comment one result:
+
+| Result | When | Editor | Task view row |
+|---|---|---|---|
+| `same` | The commented lines did not change | The normal thread, highlight and icon at the mapped range | The normal row at the mapped lines |
+| `outdated` | A commented line changed, or a line was inserted between two commented lines | The thread at the mapped lines, marked Outdated, a dim highlight, and the original text | The word `outdated`, at the mapped lines |
+| `gone` | The diff deletes the file, or the file on disk is empty | No mark | The words `file removed`. A click opens the file as it was at the comment commit |
+| `missing` | Git refused the comment commit | No mark | The words `commit missing`. A click opens the working file at the stored lines |
+
+A comment on a diff side is `same` at its stored lines. A comment of the current HEAD and a
+comment of a folder store start no diff. They are `same` at their stored lines, unless their
+`location.text` moves them (section 17.3). The editor wrote their lines from the text on
+screen, and that text can hold changes that HEAD does not hold.
+
+For every other comment, the reader runs one command for each comment commit, with at most
+100 paths:
+
+`git --literal-pathspecs -c core.quotePath=false diff -U0 --no-color --no-ext-diff --no-renames --no-textconv --src-prefix=a/ --dst-prefix=b/ <commit> -- <paths>`
+
+The diff compares the commit with the working tree on disk. Text in an unsaved editor is not
+part of it. A failed command gives `missing` for each comment of that commit.
+
+### 17.1 Parse
+
+1. Split the text into lines at `\n`. Drop one `\r` at the end of each line. Drop the last
+   line when it is empty. The empty text gives no line. Vectors: `lines`.
+2. Each line that starts with `diff --git ` starts a file. The lines before the first line
+   that starts with `@@` are the headers of that file.
+3. The path comes from the `--- ` header without `a/`, else from the `+++ ` header without
+   `b/`, else from the `diff --git` line. A header value of `/dev/null` names no path.
+4. A name in double quotes is a C string: `\\`, `\"`, `\t`, `\n`, `\r`, `\a`, `\b`, `\f`,
+   `\v`, and three octal digits for one byte. The bytes are UTF-8. A name without quotes
+   loses one tab at its end. Git writes that tab after a name that holds a space.
+5. A `diff --git a/P b/P` line without quotes gives `P` when the line is exactly that form.
+6. The file is deleted when a header is `+++ /dev/null` or starts with `deleted file mode`.
+   It is binary when a header starts with `Binary files `.
+7. A line `@@ -a[,b] +c[,d] @@` starts a hunk. A missing count is 1. The removed lines of a
+   hunk are its lines that start with `-`, without the `-`.
+
+### 17.2 Map
+
+Input: the diff of the path (or none), the stored range, and the lines of the file on disk.
+Let `s` and `e` be the smaller and the larger stored line.
+
+1. No diff for the path: `same` with the stored range.
+2. A deleted file, or no line on disk: `gone`.
+3. No stored range: `same` with no range.
+4. A binary file: `outdated` at line `s`, one line, no original text.
+5. A hunk with `b > 0` is before line `L` when `a + b - 1 < L`. A hunk with `b = 0` is
+   before `L` when `a < L`. The mapped line of `L` is `L` plus `d - b` of each hunk before it.
+6. A hunk with `b > 0` touches the comment when its old lines `a` to `a + b - 1` meet `s` to
+   `e`. A hunk with `b = 0` touches it when `s <= a < e`.
+7. No hunk touches: `same`. Both lines are mapped, and the columns stay.
+8. Else `outdated`. The top is `c` (or `c + 1` when `d = 0`) when the first touching hunk has
+   `b > 0` and `a <= s`, else the mapped line of `s`. The bottom is `c + d - 1` (or `c` when
+   `d = 0`) when the last touching hunk has `b > 0` and `a + b - 1 >= e`, else the mapped
+   line of `e`. The bottom is at least the top. Both are then clamped to 1 and the line count.
+   The range has no columns.
+9. The original text of an outdated comment has one line for each line `s` to `e`: the
+   removed line of the hunk that holds it, else the line on disk at its mapped line.
+
+A record without `location.text` that was written on lines that are not committed yet holds
+working tree lines but names HEAD. After the commit that holds those lines, the map moves it
+by the size of that change, or marks it outdated. Section 17.3 corrects this for a record
+with `location.text`.
+
+### 17.3 Text match
+
+A record with `location.text` and a range goes through these steps after section 17.2. A
+record without one of the two keeps the result of section 17.2.
+
+1. The base result is `missing` when git refused the commit. It is `same` at the stored lines
+   for a comment of the current HEAD or of a folder store. Else it is the result of 17.2.
+2. A base of `gone`, and a binary file, stay as they are.
+3. The wanted lines are `location.text` split at `\n`. A match is a line `m` where the lines
+   `m` to `m + k - 1` on disk are equal to the `k` wanted lines.
+4. The diff-mapped line `p` is the first line of the base range, else the smaller stored line.
+5. One match or more: the match with the smallest distance to `p` wins, and the earlier line
+   wins a tie. This also finds a match near `p` first. The result is `same`. Both stored lines
+   move by `m` minus the smaller stored line, and the columns stay.
+6. No match: a comment of HEAD or of a folder store keeps the base. A refused commit keeps
+   `missing`. Any other comment is `outdated` at the base range as whole lines, clamped to the
+   line count. Its original text is the wanted lines.
+
+### 17.4 Write
+
+A writer of version 1.1 sets `location.text` on each new comment that has a range. The text is
+the lines from the smaller to the larger stored line, from the text that the writer saw: the
+editor document for a comment of the user, the file on disk for a write of an agent. A line
+past the end of the text is left out, and a range with no line in the text gets no field.
+Each line loses one `\r` at its end, and `\n` joins the lines, with no `\n` at the end. The writer leaves the field out when the range covers more
+than 100 lines, when the text is longer than 4,000 UTF-16 code units, or when the text holds
+a lone surrogate. Columns do not change the text. Vectors: `snippet`.
+
+A reader of version 1.0 reads a record with `location.text`. It drops the key, gives the same
+identifier (section 4, rule 7), keeps the line byte for byte in a rewrite (section 2), and its
+resolve record names that identifier. Vectors: `compat`.
