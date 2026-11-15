@@ -30,6 +30,7 @@ export const escapeAttribute = (value: string): string =>
 export const cspOf = (cspSource: string, nonce: string): string =>
   [
     "default-src 'none'",
+    "form-action 'none'",
     `img-src 'self' ${cspSource} https: data:`,
     `media-src 'self' ${cspSource} https: data:`,
     `script-src 'nonce-${nonce}'`,

@@ -1,3 +1,97 @@
 #yreview-content {
   position: relative;
 }
+
+.yreview-mark {
+  box-shadow: inset 3px 0 0 var(--vscode-textLink-foreground);
+  background: var(--vscode-yreview-commentRangeBackground, transparent);
+  padding-left: 0.5em;
+}
+
+.yreview-mark-outdated {
+  box-shadow: inset 3px 0 0 var(--vscode-disabledForeground);
+  background: var(--vscode-yreview-commentOutdatedBackground, transparent);
+  padding-left: 0.5em;
+}
+
+.yreview-badge {
+  float: right;
+  user-select: none;
+  min-width: 1.6em;
+  margin-left: 0.5em;
+  border: none;
+  border-radius: 2px;
+  padding: 0 0.4em;
+  color: var(--vscode-badge-foreground);
+  background: var(--vscode-badge-background);
+  font: inherit;
+  font-size: 0.85em;
+  cursor: pointer;
+}
+
+.yreview-box,
+.yreview-card {
+  margin: 0.5em 0 1em;
+  border: 1px solid var(--vscode-widget-border, var(--vscode-editorWidget-border));
+  border-radius: 2px;
+  padding: 0.5em;
+  background: var(--vscode-editorWidget-background);
+  color: var(--vscode-editorWidget-foreground);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+}
+
+.yreview-box textarea {
+  box-sizing: border-box;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--vscode-input-border, transparent);
+  padding: 0.3em;
+  color: var(--vscode-input-foreground);
+  background: var(--vscode-input-background);
+  font: inherit;
+}
+
+.yreview-box textarea:focus {
+  outline: 1px solid var(--vscode-focusBorder);
+}
+
+.yreview-box-lines,
+.yreview-card-head {
+  margin-bottom: 0.3em;
+  color: var(--vscode-descriptionForeground);
+}
+
+.yreview-card-body {
+  white-space: pre-wrap;
+  margin-bottom: 0.5em;
+}
+
+.yreview-box-error {
+  color: var(--vscode-errorForeground);
+}
+
+.yreview-box-actions {
+  display: flex;
+  gap: 0.5em;
+  margin-top: 0.4em;
+}
+
+.yreview-box-actions button {
+  border: none;
+  border-radius: 2px;
+  padding: 0.25em 0.8em;
+  color: var(--vscode-button-secondaryForeground);
+  background: var(--vscode-button-secondaryBackground);
+  font: inherit;
+  cursor: pointer;
+}
+
+.yreview-box-actions button:first-child {
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+}
+
+.yreview-saving {
+  opacity: 0.6;
+}

@@ -28,7 +28,7 @@ describe('the review preview page', () => {
   it('has the strict policy of the built-in preview', () =>
     assert.equal(
       cspOf('https://x', 'n'),
-      "default-src 'none'; img-src 'self' https://x https: data:; media-src 'self' https://x https: data:; script-src 'nonce-n'; style-src 'self' https://x 'unsafe-inline' https: data:; font-src 'self' https://x https: data:",
+      "default-src 'none'; form-action 'none'; img-src 'self' https://x https: data:; media-src 'self' https://x https: data:; script-src 'nonce-n'; style-src 'self' https://x 'unsafe-inline' https: data:; font-src 'self' https://x https: data:",
     ))
 
   it('gives each script the nonce, and the module type where it has one', () => {

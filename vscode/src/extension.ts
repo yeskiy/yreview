@@ -16,6 +16,7 @@ import { type Places, redactingLog } from './log'
 import { withLongForms } from './places'
 import { previewPlugin } from './preview/markdownPlugin'
 import { PreviewHost } from './preview/previewHost'
+import { commentHooks } from './reviewPreview/previewComments'
 import { ReviewPreviews } from './reviewPreview/reviewPreviews'
 import { registerSaveKey } from './saveKey'
 import { registerSessions } from './session/register'
@@ -134,6 +135,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   const preview = new PreviewHost(held.service, log, comments.onDidAskRanges)
   const reviewPreviews = new ReviewPreviews(context.extensionUri, log)
   context.subscriptions.push(comments, preview, reviewPreviews)
+  context.subscriptions.push(commentHooks(reviewPreviews, held.service, comments, log))
   held.tasks = createTaskViews(held.service, comments, git, log, context.workspaceState)
   context.subscriptions.push(held.tasks)
   context.subscriptions.push(...registerViewCommands(held.tasks, log))
