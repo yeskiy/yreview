@@ -13,7 +13,7 @@ import {
   sourceBeside,
   stillShown,
 } from '../previewKit'
-import { focusWorkbench } from '../webviewFrames'
+import { focusWorkbench, untilKeyboardIn, webviewOrigin } from '../webviewFrames'
 import { until } from '../window'
 
 /** Runs a script in the content document `doc` of the preview webview, and gives its value. */
@@ -26,6 +26,16 @@ const inPreview = async (body: string): Promise<unknown> => {
   const frames = (await targets()).filter((target) => target.type === 'iframe')
   const values = await Promise.all(frames.map((frame) => evaluate(frame, script)))
   return values.find((value) => (value as { missing?: boolean } | null)?.missing !== true)
+}
+
+/** Gives the preview page the focus with a real click, as a user does, so no late focus comes after. */
+const focusPreview = async (): Promise<void> => {
+  const point = (await inPreview(`
+    const rect = doc.querySelector('[data-line="0"]').getBoundingClientRect()
+    return { x: rect.left + 5, y: rect.top + rect.height / 2 }`)) as { x: number; y: number }
+  const { x, y } = await webviewOrigin()
+  await clickAt(x + point.x, y + point.y)
+  assert.ok(await untilKeyboardIn('[data-line]'), 'the preview page did not get the focus')
 }
 
 /** Selects the preview text from `from` in the paragraph of `first` to `offset` in `last`. */
@@ -111,7 +121,7 @@ describe('real input in the Markdown preview', () => {
     await showNotes(new vscode.Selection(0, 0, 0, 0))
     await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
     await focused('panel')
-    await wait(1000)
+    await focusPreview()
     assert.equal(await selectInPreview(2, 4, 6), 'First paragraph.\n\nSecond')
     await pressAddKey()
     assert.ok(
@@ -128,7 +138,7 @@ describe('real input in the Markdown preview', () => {
     await showNotes(new vscode.Selection(0, 0, 0, 0))
     await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
     await focused('panel')
-    await wait(1000)
+    await focusPreview()
     assert.equal(await selectInPreview(2, 4, 6), 'First paragraph.\n\nSecond')
     await rightClickInPreview(2)
     await chooseMenuItem('Add Review Comment')
@@ -159,7 +169,7 @@ describe('real input in the Markdown preview', () => {
       await showNotes(new vscode.Selection(0, 0, 0, 0))
       await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
       await focused('panel')
-      await wait(1000)
+      await focusPreview()
       // The paragraph text is "Second paragraph." and a newline, so "Third" starts at offset 18.
       assert.equal(await selectInPreview(4, 4, 23, 18), 'Third')
       // A right-click outside the selection moves the caret, so the click is on the selected text.
@@ -186,7 +196,7 @@ describe('real input in the Markdown preview', () => {
     await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
     const addOnSelection = async (text: string): Promise<readonly number[]> => {
       await focused('panel')
-      await wait(1000)
+      await focusPreview()
       await selectInPreview(2, 4, 6)
       await rightClickInPreview(2)
       await chooseMenuItem('Add Review Comment')
