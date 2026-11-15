@@ -61,6 +61,8 @@ export default defineConfig([
     label: 'repository',
     files: 'out/test/integration/*.test.js',
     workspaceFolder: '.vscode-test/workspace',
+    env: { ...common.env, YREVIEW_USER_DATA: path.join(scratch, 'user-data') },
+    launchArgs: [...common.launchArgs, '--remote-debugging-port=0'],
   },
   {
     ...common,

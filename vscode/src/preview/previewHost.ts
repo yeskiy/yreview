@@ -7,10 +7,13 @@ import type { Log } from '../log'
 import type { ReviewService } from '../store/reviewService'
 import { gitApi, watchHeads } from '../views/repositories'
 import type { LineSpan, PreviewSource } from './markdownPlugin'
-import { fitted, rangeOfContext } from './previewLines'
+import { fitted, type LineRange, rangeOfContext } from './previewLines'
+
+/** The rich Markdown editor. VS Code keeps its selection for the editor that replaces it. */
+const RICH_EDITOR = 'vscode.markdown.editor'
 
 /** The custom editors of the built-in Markdown extension that show one Markdown file. */
-const MARKDOWN_EDITORS = new Set(['vscode.markdown.preview.editor', 'vscode.markdown.editor'])
+const MARKDOWN_EDITORS = new Set(['vscode.markdown.preview.editor', RICH_EDITOR])
 
 const refresh = (): void => {
   // The command exists only while the Markdown extension runs. Without it, no preview is open.
@@ -63,26 +66,44 @@ const sourceEditor = async (asked: RangeAsk): Promise<vscode.TextEditor | undefi
   return openBeside(asked, editor.document, editor.selection)
 }
 
-/** Opens the comment box in the source, on the preview lines of the context menu or at the caret. */
+/** The selection of the active rich editor, read from a text editor that replaces it for a moment. */
+const richSelection = async (): Promise<vscode.Selection | undefined> => {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input
+  if (!(input instanceof vscode.TabInputCustom) || input.viewType !== RICH_EDITOR) return undefined
+  await vscode.commands.executeCommand('reopenActiveEditorWith', 'default')
+  const text = vscode.window.activeTextEditor
+  const selection =
+    text?.document.uri.toString() === input.uri.toString() ? text.selection : undefined
+  await vscode.commands.executeCommand('reopenActiveEditorWith', RICH_EDITOR)
+  return selection
+}
+
+/** The lines of the context menu as a selection of whole lines, without blank lines at the end. */
+const linesIn = (
+  document: vscode.TextDocument,
+  lines: LineRange | undefined,
+): vscode.Selection | undefined => {
+  const range =
+    lines === undefined
+      ? undefined
+      : fitted(lines, document.lineCount, (line) => document.lineAt(line).isEmptyOrWhitespace)
+  return range === undefined
+    ? undefined
+    : new vscode.Selection(range.start, 0, range.end, document.lineAt(range.end).text.length)
+}
+
+/** Opens the comment box in the source, on the lines of the menu, the rich editor selection, or the caret. */
 const fromPreview =
   (asked: RangeAsk) =>
   async (context?: unknown): Promise<void> => {
     const lines = rangeOfContext(context)
+    const rich = lines === undefined ? await richSelection() : undefined
     const editor = await sourceEditor(asked)
     if (editor === undefined) return
-    const { document } = editor
-    const range =
-      lines === undefined
-        ? undefined
-        : fitted(lines, document.lineCount, (line) => document.lineAt(line).isEmptyOrWhitespace)
-    if (range !== undefined) {
-      editor.selection = new vscode.Selection(
-        range.start,
-        0,
-        range.end,
-        document.lineAt(range.end).text.length,
-      )
-      editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
+    const selection = rich ?? linesIn(editor.document, lines)
+    if (selection !== undefined) {
+      editor.selection = selection
+      editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
     }
     await vscode.commands.executeCommand('yreview.addComment')
   }

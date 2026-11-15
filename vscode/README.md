@@ -64,7 +64,8 @@ VS Code gives a key and a title button no data from the preview. The preview mar
 that an open comment covers.
 
 VS Code 1.146 and later also has a rich Markdown editor. To open it, select Reopen Editor With,
-then Markdown Editor. Its title bar button and Ctrl+Alt+G open the box in the source at the caret.
+then Markdown Editor. Its title bar button and Ctrl+Alt+G open the box in the source on the
+selection of the rich editor. To read that selection, the tab shows the text editor for a moment.
 
 ## The task views
 

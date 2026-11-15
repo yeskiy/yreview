@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { request } from 'node:http'
 import type { Duplex } from 'node:stream'
 import path from 'node:path'
+import { setTimeout as wait } from 'node:timers/promises'
 
 /** The DevTools port of the test window. VS Code writes it when it starts with port 0. */
 const devtoolsPort = (): string =>
@@ -10,10 +11,28 @@ const devtoolsPort = (): string =>
     .split('\n')[0]
     ?.trim() ?? ''
 
-interface Target {
+export interface Target {
   readonly type: string
+  readonly url: string
   readonly webSocketDebuggerUrl: string
 }
+
+/** Runs a loopback call again after a failure. A loopback connect on Windows fails at times. */
+const retried = async <T>(call: () => Promise<T>, tries = 5): Promise<T> => {
+  try {
+    return await call()
+  } catch (error) {
+    if (tries <= 1) throw error
+    await wait(500)
+    return retried(call, tries - 1)
+  }
+}
+
+export const targets = (): Promise<readonly Target[]> =>
+  retried(
+    async () =>
+      (await (await fetch(`http://127.0.0.1:${devtoolsPort()}/json/list`)).json()) as Target[],
+  )
 
 /** Opens the WebSocket of one DevTools target with the handshake of RFC 6455. */
 const connect = (url: string): Promise<Duplex> =>
@@ -42,35 +61,111 @@ const frame = (text: string): Buffer => {
   return Buffer.concat([head, Buffer.alloc(4), body])
 }
 
+/** The offset and the length of the payload of the frame at the start of `data`. */
+const payloadOf = (data: Buffer): [number, number] => {
+  const short = (data[1] ?? 0) % 128
+  if (short < 126) return [2, short]
+  const start = short === 126 ? 4 : 10
+  if (data.length < start) return [start, Infinity]
+  return [start, short === 126 ? data.readUInt16BE(2) : Number(data.readBigUInt64BE(2))]
+}
+
+/** The complete unmasked frames at the start of `data`, and the bytes after them. */
+const unframe = (data: Buffer, found: readonly string[] = []): [readonly string[], Buffer] => {
+  if (data.length < 2) return [found, data]
+  const [start, size] = payloadOf(data)
+  return data.length < start + size
+    ? [found, data]
+    : unframe(data.subarray(start + size), [
+        ...found,
+        data.subarray(start, start + size).toString('utf8'),
+      ])
+}
+
+/** A DevTools session on one target. Each call resolves with the result of the protocol method. */
+export const attach = async (target: Target) => {
+  const socket = await retried(() => connect(target.webSocketDebuggerUrl))
+  const waiting = new Map<number, (reply: { result?: unknown; error?: unknown }) => void>()
+  const state: { rest: Buffer; next: number } = { rest: Buffer.alloc(0), next: 1 }
+  socket.on('data', (data: Buffer) => {
+    const [texts, rest] = unframe(Buffer.concat([state.rest, data]))
+    state.rest = rest
+    texts.forEach((text) => {
+      const reply = JSON.parse(text) as { id?: number; result?: unknown; error?: unknown }
+      if (reply.id !== undefined) waiting.get(reply.id)?.(reply)
+    })
+  })
+  return {
+    call: (method: string, params: object = {}): Promise<unknown> =>
+      new Promise((resolve, reject) => {
+        const id = state.next
+        state.next += 1
+        waiting.set(id, (reply) => {
+          waiting.delete(id)
+          if (reply.error === undefined) resolve(reply.result)
+          else reject(new Error(`${method}: ${JSON.stringify(reply.error)}`))
+        })
+        socket.write(frame(JSON.stringify({ id, method, params })))
+      }),
+    close: () => socket.destroy(),
+  }
+}
+
+/** Runs a script expression in a target, and gives its value. A promise resolves first. */
+export const evaluate = async (target: Target, expression: string): Promise<unknown> => {
+  const session = await attach(target)
+  try {
+    const reply = (await session.call('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+    })) as { result?: { value?: unknown }; exceptionDetails?: unknown }
+    if (reply.exceptionDetails !== undefined)
+      throw new Error(`The script failed: ${JSON.stringify(reply.exceptionDetails)}`)
+    return reply.result?.value
+  } finally {
+    session.close()
+  }
+}
+
+/** The workbench page of the test window. */
+export const workbench = async (): Promise<Target> =>
+  (await targets()).find((target) => target.type === 'page') ??
+  Promise.reject(new Error('The DevTools port shows no workbench page.'))
+
+/** Sends a real key press to the focused element of the workbench. Modifier bits: 2 Ctrl, 4 Meta. */
+export const pressKey = async (event: object): Promise<void> => {
+  const session = await attach(await workbench())
+  try {
+    await session.call('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...event })
+    await session.call('Input.dispatchKeyEvent', { type: 'keyUp', ...event })
+  } finally {
+    session.close()
+  }
+}
+
+/** Sends a real click to a point of the workbench page. */
+export const clickAt = async (x: number, y: number, button = 'left'): Promise<void> => {
+  const session = await attach(await workbench())
+  const mouse = (type: string) =>
+    session.call('Input.dispatchMouseEvent', { type, x, y, button, clickCount: 1 })
+  try {
+    // A menu item takes a click only after the pointer rests on it for a moment.
+    await session.call('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y })
+    await wait(300)
+    await mouse('mousePressed')
+    await mouse('mouseReleased')
+  } finally {
+    session.close()
+  }
+}
+
 /** Sends a real Ctrl+Enter, or Cmd+Enter on macOS, to the focused element of the workbench. */
-export const pressSaveKey = async (): Promise<void> => {
-  const targets = (await (
-    await fetch(`http://127.0.0.1:${devtoolsPort()}/json/list`)
-  ).json()) as Target[]
-  const page = targets.find((target) => target.type === 'page')
-  if (page === undefined) throw new Error('The DevTools port shows no workbench page.')
-  const socket = await connect(page.webSocketDebuggerUrl)
-  // The DevTools modifier bits are 2 for Ctrl and 4 for Meta.
-  const event = {
+export const pressSaveKey = (): Promise<void> =>
+  pressKey({
     key: 'Enter',
     code: 'Enter',
     windowsVirtualKeyCode: 13,
     nativeVirtualKeyCode: 13,
     modifiers: process.platform === 'darwin' ? 4 : 2,
-  }
-  const send = (id: number, type: string): Promise<void> =>
-    new Promise((resolve) => {
-      const reply = (data: Buffer): void => {
-        if (!data.toString('utf8').includes(`"id":${id}`)) return
-        socket.off('data', reply)
-        resolve()
-      }
-      socket.on('data', reply)
-      socket.write(
-        frame(JSON.stringify({ id, method: 'Input.dispatchKeyEvent', params: { type, ...event } })),
-      )
-    })
-  await send(1, 'rawKeyDown')
-  await send(2, 'keyUp')
-  socket.destroy()
-}
+  })
