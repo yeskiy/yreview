@@ -43,6 +43,10 @@ writeFileSync(
   '{ "extensions.allowed": { "*": true, "k--kato": true } }\n',
 )
 
+// On VS Code 1.101 a DevTools port leaves the window without focus for the repository tests.
+const webviewUser = path.join(scratch, 'webview-user-data')
+rmSync(webviewUser, { recursive: true, force: true })
+
 const common = {
   version: process.env.VSCODE_TEST_VERSION ?? 'stable',
   launchArgs: ['--disable-workspace-trust'],
@@ -61,8 +65,6 @@ export default defineConfig([
     label: 'repository',
     files: 'out/test/integration/*.test.js',
     workspaceFolder: '.vscode-test/workspace',
-    env: { ...common.env, YREVIEW_USER_DATA: path.join(scratch, 'user-data') },
-    launchArgs: [...common.launchArgs, '--remote-debugging-port=0'],
   },
   {
     ...common,
@@ -82,6 +84,19 @@ export default defineConfig([
       ...common.launchArgs,
       `--extensions-dir=${keymapExtensions}`,
       `--user-data-dir=${path.dirname(keymapUser)}`,
+      '--remote-debugging-port=0',
+    ],
+  },
+  {
+    // Real input in a webview needs a DevTools port, so these tests use a profile of their own.
+    ...common,
+    label: 'webview',
+    files: 'out/test/integration/webview/*.test.js',
+    workspaceFolder: '.vscode-test/workspace',
+    env: { ...common.env, YREVIEW_USER_DATA: webviewUser },
+    launchArgs: [
+      ...common.launchArgs,
+      `--user-data-dir=${webviewUser}`,
       '--remote-debugging-port=0',
     ],
   },
