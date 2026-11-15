@@ -3,8 +3,9 @@ import { readFileSync } from 'node:fs'
 import path from 'node:path'
 
 import { type HandleKey, handleOf, keyOf, matchKey } from '../../src/core/handles'
+import { type Carry, type FileDiff, carryOf, parseDiff, splitLines } from '../../src/core/lineMap'
 import { discoveryFileName, windowFolderName } from '../../src/core/paths'
-import { decodeRecord, encodeRecord, recordId } from '../../src/core/record'
+import { type RecordRange, decodeRecord, encodeRecord, recordId } from '../../src/core/record'
 import {
   assignTodoIds,
   legacyTodoId,
@@ -47,6 +48,28 @@ interface NoteCase {
 interface NameFile {
   discovery: { path: string; name: string }[]
   window: { path: string; name: string }[]
+}
+interface CarryFile {
+  parse: { name: string; diff: string; files: FileDiff[] }[]
+  lines: { text: string; lines: string[] }[]
+  carry: {
+    name: string
+    diff: string
+    path: string
+    range: RecordRange | null
+    current: string[]
+    text?: string
+    head?: boolean
+    refused?: boolean
+    carry: unknown
+  }[]
+}
+
+const carryJson = (carry: Carry): unknown => {
+  if (carry.kind === 'same') return { kind: 'same', range: carry.range ?? null }
+  return carry.kind === 'outdated'
+    ? { kind: 'outdated', range: carry.range, original: carry.original }
+    : { kind: carry.kind }
 }
 
 describe('spec vectors', () => {
@@ -121,5 +144,30 @@ describe('spec vectors', () => {
   names.window.forEach((c) =>
     it(`window folder name of ${JSON.stringify(c.path)}`, () =>
       assert.equal(windowFolderName(c.path), c.name)),
+  )
+
+  const carryFile = vectors('carry.json') as CarryFile
+  carryFile.parse.forEach((c) =>
+    it(`diff parse ${c.name}`, () => assert.deepEqual([...parseDiff(c.diff).values()], c.files)),
+  )
+  carryFile.lines.forEach((c) =>
+    it(`line split of ${JSON.stringify(c.text)}`, () =>
+      assert.deepEqual(splitLines(c.text), c.lines)),
+  )
+  carryFile.carry.forEach((c) =>
+    it(`carry ${c.name}`, () =>
+      assert.deepEqual(
+        carryJson(
+          carryOf(
+            parseDiff(c.diff).get(c.path),
+            c.range ?? undefined,
+            c.current,
+            c.text,
+            c.head,
+            c.refused,
+          ),
+        ),
+        c.carry,
+      )),
   )
 })
