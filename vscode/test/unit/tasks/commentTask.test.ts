@@ -4,24 +4,8 @@ import { WORKTREE } from '../../../src/core/anchor'
 import { type RecordRange, type ReviewRecord, recordId } from '../../../src/core/record'
 import type { StoredComment } from '../../../src/store/commentBook'
 import { DISCUSS, LOCAL } from '../../../src/store/noteRefs'
-import {
-  COMMENT_WORDS,
-  commentTask,
-  commentWord,
-  pickRecords,
-} from '../../../src/tasks/commentTask'
+import { COMMENT_WORDS, commentTask, commentWord } from '../../../src/tasks/commentTask'
 import { revisionOf } from '../../../src/tasks/reviewTask'
-
-const stored = (id: string, ref: string = DISCUSS): StoredComment => ({
-  id,
-  ref,
-  commit: 'c0ffee',
-  record: {
-    timestamp: '1787194427',
-    author: 'a@b.c',
-    location: { commit: 'c0ffee', path: 'a.kt' },
-  },
-})
 
 const COMMIT = '0123456789abcdef0123456789abcdef01234567'
 
@@ -36,30 +20,6 @@ const storedWith = (range: RecordRange, text = 'fix this'): StoredComment => {
 }
 
 describe('comment pick', () => {
-  it('a closed switch keeps the open records alone', () => {
-    const kept = pickRecords([stored('one')], [stored('two')], false)
-    assert.deepEqual(
-      kept.map((it) => it.stored.id),
-      ['one'],
-    )
-    assert.equal(kept[0]?.resolved, false)
-  })
-
-  it('an open switch adds the resolved records', () => {
-    const kept = pickRecords([stored('one')], [stored('two')], true)
-    assert.deepEqual(
-      kept.map((it) => it.stored.id),
-      ['one', 'two'],
-    )
-    assert.equal(kept[0]?.resolved, false)
-    assert.equal(kept[1]?.resolved, true)
-  })
-
-  it('an empty store gives no record whatever the switch says', () => {
-    assert.deepEqual(pickRecords([], [], true), [])
-    assert.deepEqual(pickRecords([], [], false), [])
-  })
-
   it('a resolved record wins over every share word', () => {
     assert.equal(commentWord(true, false, false, true), COMMENT_WORDS.resolved)
     assert.equal(commentWord(false, true, true, true), COMMENT_WORDS.resolved)

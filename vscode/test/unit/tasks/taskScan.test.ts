@@ -9,7 +9,7 @@ import { NotesGateway } from '../../../src/git/notes'
 import { type GitRunner, ProcessGitRunner } from '../../../src/git/runner'
 import { CommentBook } from '../../../src/store/commentBook'
 import { ALL_REFS, DISCUSS, LOCAL } from '../../../src/store/noteRefs'
-import { type ScanRecord, pickRecords } from '../../../src/tasks/commentTask'
+import type { ScanRecord } from '../../../src/tasks/commentTask'
 import { forgetNotes, noAuthor } from '../../../src/tasks/noteScan'
 import type { ReviewTask } from '../../../src/tasks/reviewTask'
 import {
@@ -58,9 +58,10 @@ const byId = (records: readonly ScanRecord[]): readonly ScanRecord[] =>
 const recordsOf = async (book: CommentBook): Promise<readonly ScanRecord[]> =>
   (
     await Promise.all(
-      (await book.commits()).map(async (each) =>
-        pickRecords(await book.open(each), await book.closed(each), true),
-      ),
+      (await book.commits()).map(async (each) => [
+        ...(await book.open(each)).map((stored) => ({ stored, resolved: false })),
+        ...(await book.closed(each)).map((stored) => ({ stored, resolved: true })),
+      ]),
     )
   ).flat()
 

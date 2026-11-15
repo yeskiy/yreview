@@ -13,15 +13,6 @@ export interface ScanRecord {
   readonly resolved: boolean
 }
 
-export const pickRecords = (
-  open: readonly StoredComment[],
-  closed: readonly StoredComment[],
-  showResolved: boolean,
-): readonly ScanRecord[] => [
-  ...open.map((stored) => ({ stored, resolved: false })),
-  ...(showResolved ? closed.map((stored) => ({ stored, resolved: true })) : []),
-]
-
 export const COMMENT_WORDS = {
   resolved: 'resolved',
   local: 'local',
