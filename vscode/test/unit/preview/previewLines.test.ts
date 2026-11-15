@@ -1,55 +1,20 @@
 import assert from 'node:assert/strict'
 
 import {
-  type Block,
   END_KEY,
   MAX_LINE,
   START_KEY,
   fitted,
   lineOf,
+  leavesOf,
+  lineInBlock,
   rangeOfContext,
-  spanOf,
+  selectionSpan,
+  type TextBlock,
 } from '../../../src/preview/previewLines'
 
-// A model of the rendered preview of the source below. Each name holds its parent names.
-// 0 # Title / 2-3 a paragraph / 5 list: 5 item, 6 item with 7 nested item / 9-11 fence / 12 end
+// The source lines of the fitted test: 0 # Title / 2-3 a paragraph / 5-7 a list / 9-11 a fence
 const source = ['# Title', '', 'one', 'two', '', '- a', '- b', '  - c', '', '```', 'x', '```']
-const tree: Record<string, readonly string[]> = {
-  h1: [],
-  p: [],
-  ul: [],
-  li5: ['ul'],
-  p5: ['ul', 'li5'],
-  li6: ['ul'],
-  p6: ['ul', 'li6'],
-  ul7: ['ul', 'li6'],
-  li7: ['ul', 'li6', 'ul7'],
-  p7: ['ul', 'li6', 'ul7', 'li7'],
-  pre: [],
-  end: [],
-}
-const lines: Record<string, number> = {
-  h1: 0,
-  p: 2,
-  ul: 5,
-  li5: 5,
-  p5: 5,
-  li6: 6,
-  p6: 6,
-  ul7: 7,
-  li7: 7,
-  p7: 7,
-  pre: 9,
-  end: source.length,
-}
-const blocks: readonly Block<string>[] = Object.keys(tree).map((node) => ({
-  node,
-  line: lines[node] ?? -1,
-}))
-const contains = (outer: string, inner: string): boolean => tree[inner]?.includes(outer) ?? false
-/** The span of a selection that touches the text of `names`, and so each ancestor of them. */
-const select = (...names: string[]) =>
-  spanOf(blocks, (node) => names.some((name) => name === node || contains(node, name)), contains)
 
 describe('the preview lines', () => {
   it('reads a data-line value and refuses every other text', () => {
@@ -57,29 +22,6 @@ describe('the preview lines', () => {
     assert.equal(lineOf('42'), 42)
     ;['', ' 1', '01', '-1', '1.5', '1e3', 'x', String(MAX_LINE + 1), null, undefined].forEach(
       (value) => assert.equal(lineOf(value), undefined, String(value)),
-    )
-  })
-
-  it('gives a paragraph its lines up to the line before the next block', () =>
-    assert.deepEqual(select('p'), { start: 2, end: 4 }))
-
-  it('spans every block from the first to the last selected one', () =>
-    assert.deepEqual(select('h1', 'p'), { start: 0, end: 4 }))
-
-  it('uses the inner list item, not the list that holds it', () => {
-    assert.deepEqual(select('p6'), { start: 6, end: 6 })
-    assert.deepEqual(select('p7'), { start: 7, end: 8 })
-    assert.deepEqual(select('p5', 'p7'), { start: 5, end: 8 })
-  })
-
-  it('ends the last block before the end marker of the preview', () =>
-    assert.deepEqual(select('pre'), { start: 9, end: 11 }))
-
-  it('gives no lines when nothing is hit', () => {
-    assert.equal(select(), undefined)
-    assert.equal(
-      spanOf([], () => true, contains),
-      undefined,
     )
   })
 
@@ -114,4 +56,62 @@ describe('the preview lines', () => {
       undefined,
     )
   })
+})
+
+describe('the lines of a selection', () => {
+  // 0 # Title / 2-4 a paragraph of three lines / 6-7 list: 6 item, 7 item / 9-12 fence with text on 10-11
+  const blocks: TextBlock<string>[] = [
+    { node: 'h1', start: 0, end: 0, text: 0 },
+    { node: 'p', start: 2, end: 4, text: 2 },
+    { node: 'ul', start: 6, end: 7, text: 6 },
+    { node: 'li6', start: 6, end: 6, text: 6 },
+    { node: 'li7', start: 7, end: 7, text: 7 },
+    { node: 'code', start: 9, end: 12, text: 10 },
+  ]
+  const parents: Record<string, string> = { li6: 'ul', li7: 'ul' }
+  const contains = (outer: string, inner: string): boolean => parents[inner] === outer
+  const span = (hits: readonly string[], edges: Record<string, string | undefined> = {}) =>
+    selectionSpan(
+      blocks,
+      (node) => hits.includes(node),
+      contains,
+      (node, edge) => edges[`${node}:${edge}`],
+    )
+
+  it('gives the line of a point from the newlines before it', () => {
+    assert.equal(lineInBlock({ start: 2, end: 4, text: 2 }, ''), 2)
+    assert.equal(lineInBlock({ start: 2, end: 4, text: 2 }, 'one\ntw'), 3)
+    assert.equal(lineInBlock({ start: 9, end: 12, text: 10 }, 'a\n'), 11)
+  })
+
+  it('keeps the line inside the block', () => {
+    assert.equal(lineInBlock({ start: 2, end: 4, text: 2 }, 'a\nb\nc\nd\n'), 4)
+    assert.equal(lineInBlock({ start: 9, end: 12, text: 10 }, ''), 10)
+  })
+
+  it('keeps only the innermost blocks', () =>
+    assert.deepEqual(
+      leavesOf(
+        blocks.filter((block) => ['ul', 'li6'].includes(block.node)),
+        contains,
+      ).map((block) => block.node),
+      ['li6'],
+    ))
+
+  it('gives one line for a selection inside one line of a paragraph', () =>
+    assert.deepEqual(span(['p'], { 'p:start': 'one\nt', 'p:end': 'one\ntwo' }), {
+      start: 3,
+      end: 3,
+    }))
+
+  it('gives the whole blocks when the points are outside them', () =>
+    assert.deepEqual(span(['p', 'ul', 'li6', 'li7']), { start: 2, end: 7 }))
+
+  it('gives the code lines of a selection in a fence', () =>
+    assert.deepEqual(span(['code'], { 'code:start': 'a\n', 'code:end': 'a\nb' }), {
+      start: 11,
+      end: 11,
+    }))
+
+  it('gives nothing for no hit', () => assert.equal(span([]), undefined))
 })

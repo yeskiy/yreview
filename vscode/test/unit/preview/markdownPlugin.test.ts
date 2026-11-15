@@ -11,6 +11,7 @@ const text = '# Title\n\nFirst paragraph.\n\n- item one\n\n```\ncode\n```\n'
 const render = (
   spans: readonly LineSpan[] | undefined,
   options: { env?: unknown; failures?: unknown[]; broken?: boolean } = {},
+  source = text,
 ): string =>
   previewPlugin({
     commented: () => {
@@ -18,20 +19,40 @@ const render = (
       return spans
     },
     failed: (error) => options.failures?.push(error),
-  })(new MarkdownIt()).render(text, options.env ?? fileEnv)
+  })(new MarkdownIt()).render(source, options.env ?? fileEnv)
 const count = (html: string, word: string): number => html.split(word).length - 1
+const lineAttributes = / data-line-(end|text)="\d+"/g
 
 describe('the preview plugin', () => {
   it('adds no link and no address to the preview', () => {
     const html = render([{ start: 3, end: 3 }])
     assert.doesNotMatch(html, /<a |href=|:\/\//)
-    assert.equal(html.replace(` class="${MARK_CLASS}"`, ''), new MarkdownIt().render(text))
+    assert.equal(
+      html.replace(` class="${MARK_CLASS}"`, '').replace(lineAttributes, ''),
+      new MarkdownIt().render(text),
+    )
   })
 
   it('marks the block that a comment covers', () => {
     const html = render([{ start: 3, end: 3 }])
     assert.equal(count(html, MARK_CLASS), 1)
-    assert.match(html, new RegExp(`<p class="${MARK_CLASS}">`))
+    assert.match(html, new RegExp(`<p [^>]*class="${MARK_CLASS}">`))
+  })
+
+  it('gives each block its last line and the first line of its text', () => {
+    // Lines: 0 heading, 2-3 paragraph, 5 list item, 7-9 fence.
+    const html = render(undefined, {}, '# T\n\npara one\npara two\n\n- item\n\n```\nx\n```\n')
+    assert.match(html, /<h1 data-line-end="0" data-line-text="0">/)
+    assert.match(html, /<p data-line-end="3" data-line-text="2">/)
+    assert.match(html, /<li data-line-end="5" data-line-text="5">/)
+    assert.match(html, /<code data-line-end="9" data-line-text="8">/)
+  })
+
+  it('leaves the blank lines after a list item out of its last line', () => {
+    // markdown-it can count the blank line after the last item as part of the item.
+    const html = render(undefined, {}, '- a\n- b\n\n\npara\n')
+    assert.match(html, /<li data-line-end="1" data-line-text="1">/)
+    assert.match(html, /<ul data-line-end="1" data-line-text="0">/)
   })
 
   it('marks each block of a long comment', () =>
@@ -62,12 +83,18 @@ describe('the preview plugin', () => {
     const once = md.renderer.render(tokens, md.options, { ...fileEnv })
     assert.equal(count(once, MARK_CLASS), 1)
     assert.equal(md.renderer.render(tokens, md.options, { ...fileEnv }), once)
-    assert.equal(md.renderer.render(tokens, md.options, {}), new MarkdownIt().render(text))
+    assert.equal(
+      md.renderer.render(tokens, md.options, {}).replace(lineAttributes, ''),
+      new MarkdownIt().render(text),
+    )
   })
 
   it('leaves the preview whole after a failure, and reports it', () => {
     const failures: unknown[] = []
-    assert.equal(render([], { failures, broken: true }), new MarkdownIt().render(text))
+    assert.equal(
+      render([], { failures, broken: true }).replace(lineAttributes, ''),
+      new MarkdownIt().render(text),
+    )
     assert.equal(failures.length, 1)
   })
 })

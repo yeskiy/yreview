@@ -5,6 +5,26 @@ type Token = Parameters<RenderRule>[0][number]
 
 export const MARK_CLASS = 'yreview-commented'
 const BLOCKS = ['paragraph_open', 'heading_open']
+export const LINE_END = 'data-line-end'
+export const LINE_TEXT = 'data-line-text'
+
+/** The last line from `first` to `after - 1` that is not blank, or `first`. */
+const lastText = (blank: readonly boolean[], first: number, after: number): number =>
+  Array.from({ length: Math.max(after - 1 - first, 0) }, (_, back) => after - 1 - back).find(
+    (line) => blank[line] !== true,
+  ) ?? first
+
+/** Adds the last source line and the first text line, 0-based, to each block. VS Code caches these tokens. */
+const lineEnds = (state: { readonly src: string; readonly tokens: Token[] }): void => {
+  const blank = state.src.split('\n').map((line) => line.trim() === '')
+  state.tokens
+    .filter((token) => token.map != null && token.type !== 'inline')
+    .forEach((token) => {
+      const [first, after] = token.map ?? [0, 0]
+      token.attrSet(LINE_END, String(lastText(blank, first, after)))
+      token.attrSet(LINE_TEXT, String(token.type === 'fence' ? first + 1 : first))
+    })
+}
 
 /** One commented range of source lines, one-based and inclusive. */
 export interface LineSpan {
@@ -91,5 +111,6 @@ export const previewPlugin =
         return render(tokens, options, env)
       },
     })
+    md.core.ruler.push('yreview_line_end', lineEnds)
     return md
   }

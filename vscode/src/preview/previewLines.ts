@@ -4,10 +4,12 @@ export interface LineRange {
   readonly end: number
 }
 
-/** One element of the preview and the source line of its data-line attribute. */
-export interface Block<N> {
+/** One block of a preview: its source lines and the line where its text starts, all 0-based. */
+export interface TextBlock<N> {
   readonly node: N
-  readonly line: number
+  readonly start: number
+  readonly end: number
+  readonly text: number
 }
 
 export const MAX_LINE = 10_000_000
@@ -19,25 +21,41 @@ const DIGITS = /^(0|[1-9][0-9]{0,7})$/
 export const lineOf = (value: string | null | undefined): number | undefined =>
   value != null && DIGITS.test(value) && Number(value) <= MAX_LINE ? Number(value) : undefined
 
-/** The lines of the innermost hit blocks. A block ends on the line before the next block. */
-export const spanOf = <N>(
-  blocks: readonly Block<N>[],
+/** The line of a point in a block, from the block text before the point. It stays inside the block. */
+export const lineInBlock = (
+  block: { readonly start: number; readonly end: number; readonly text: number },
+  before: string,
+): number => Math.min(Math.max(block.text + before.split('\n').length - 1, block.start), block.end)
+
+/** The blocks that hold no other block of the list. */
+export const leavesOf = <N>(
+  blocks: readonly TextBlock<N>[],
+  contains: (outer: N, inner: N) => boolean,
+): TextBlock<N>[] =>
+  blocks.filter(
+    (block) => !blocks.some((other) => other !== block && contains(block.node, other.node)),
+  )
+
+/** The lines from the start point in the first hit block to the end point in the last one. */
+export const selectionSpan = <N>(
+  blocks: readonly TextBlock<N>[],
   hit: (node: N) => boolean,
   contains: (outer: N, inner: N) => boolean,
+  before: (node: N, edge: 'start' | 'end') => string | undefined,
 ): LineRange | undefined => {
-  const hits = blocks.filter((block) => hit(block.node))
-  const leaves = hits
-    .filter((block) => !hits.some((other) => other !== block && contains(block.node, other.node)))
-    .map((block) => block.line)
-  if (leaves.length === 0) return undefined
-  const last = leaves.reduce((top, line) => Math.max(top, line))
-  const next = blocks
-    .map((block) => block.line)
-    .filter((line) => line > last)
-    .reduce((low, line) => Math.min(low, line), Infinity)
+  const leaves = leavesOf(
+    blocks.filter((block) => hit(block.node)),
+    contains,
+  )
+  const [first] = leaves
+  const last = leaves[leaves.length - 1]
+  if (first === undefined || last === undefined) return undefined
+  const startText = before(first.node, 'start')
+  const endText = before(last.node, 'end')
+  const start = startText === undefined ? first.start : lineInBlock(first, startText)
   return {
-    start: leaves.reduce((low, line) => Math.min(low, line)),
-    end: Number.isFinite(next) ? next - 1 : last,
+    start,
+    end: Math.max(start, endText === undefined ? last.end : lineInBlock(last, endText)),
   }
 }
 

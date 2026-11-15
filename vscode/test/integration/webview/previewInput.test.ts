@@ -27,12 +27,12 @@ const inPreview = async (body: string): Promise<unknown> => {
   return values.find((value) => (value as { missing?: boolean } | null)?.missing !== true)
 }
 
-/** Selects the preview text from the start of the paragraph of `first` to `offset` in `last`. */
-const selectInPreview = (first: number, last: number, offset: number): Promise<unknown> =>
+/** Selects the preview text from `from` in the paragraph of `first` to `offset` in `last`. */
+const selectInPreview = (first: number, last: number, offset: number, from = 0): Promise<unknown> =>
   inPreview(`
     const block = (line) => doc.querySelector('[data-line="' + line + '"]').firstChild
     const range = doc.createRange()
-    range.setStart(block(${first}), 0)
+    range.setStart(block(${first}), ${from})
     range.setEnd(block(${last}), ${offset})
     doc.getSelection().removeAllRanges()
     doc.getSelection().addRange(range)
@@ -49,10 +49,14 @@ const pressAddKey = (): Promise<void> =>
     modifiers: process.platform === 'darwin' ? 5 : 3,
   })
 
-/** Right-clicks the preview block of a source line with a real mouse. */
-const rightClickInPreview = async (line: number): Promise<void> => {
+/** Right-clicks the preview block of a source line, or the selection, with a real mouse. */
+const rightClickInPreview = async (line: number | 'selection'): Promise<void> => {
   const inner = (await inPreview(`
-    const rect = doc.querySelector('[data-line="${line}"]').getBoundingClientRect()
+    const rect = ${
+      line === 'selection'
+        ? 'doc.getSelection().getRangeAt(0).getBoundingClientRect()'
+        : `doc.querySelector('[data-line="${line}"]').getBoundingClientRect()`
+    }
     return { x: rect.left + 5, y: rect.top + rect.height / 2 }`)) as { x: number; y: number }
   const frame = (await evaluate(
     await workbench(),
@@ -137,6 +141,42 @@ describe('real input in the Markdown preview', () => {
     )
     assert.ok(stillShown('panel'), 'the preview left the view')
     assert.deepEqual(await saveBox('On the preview selection.'), [2, 4])
+  })
+
+  it('comments on one line of a paragraph of two lines from a real right-click', async () => {
+    const original = (await vscode.workspace.openTextDocument(notes())).getText()
+    // The document can close between two writes, so each write opens it again.
+    const write = async (text: string): Promise<void> => {
+      const document = await vscode.workspace.openTextDocument(notes())
+      const edit = new vscode.WorkspaceEdit()
+      edit.replace(notes(), new vscode.Range(0, 0, document.lineCount, 0), text)
+      assert.ok(await vscode.workspace.applyEdit(edit), 'the edit of the notes failed')
+      assert.ok(await document.save(), 'the notes did not save')
+    }
+    await write(original.replace('Second paragraph.', 'Second paragraph.\nThird line.'))
+    try {
+      await showNotes(new vscode.Selection(0, 0, 0, 0))
+      await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
+      await focused('panel')
+      await wait(1000)
+      // The paragraph text is "Second paragraph." and a newline, so "Third" starts at offset 18.
+      assert.equal(await selectInPreview(4, 4, 23, 18), 'Third')
+      // A right-click outside the selection moves the caret, so the click is on the selected text.
+      await rightClickInPreview('selection')
+      await chooseMenuItem('Add Review Comment')
+      assert.ok(
+        await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment'),
+        'the comment box did not get the focus',
+      )
+      assert.ok(
+        sourceBeside('panel')?.selection.isEqual(new vscode.Selection(5, 0, 5, 11)),
+        `the source is not on the selected line: ${JSON.stringify(sourceBeside('panel')?.selection)}`,
+      )
+      assert.deepEqual(await saveBox('On one line of the paragraph.'), [5, 5])
+    } finally {
+      await deleteNotesComments()
+      await write(original)
+    }
   })
 
   // TODO: remove the skip once a second box on a line with a comment gets the focus.
