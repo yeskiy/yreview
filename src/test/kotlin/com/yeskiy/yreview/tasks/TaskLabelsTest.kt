@@ -32,6 +32,15 @@ class TaskLabelsTest {
     private val part = comment.copy(startColumn = 4, endColumn = 9)
 
     @Test
+    fun `the state names an outdated, removed and missing comment`() {
+        val base = comment.copy(state = "shared")
+        assertEquals("shared, outdated", TaskLabels.taskState(base.copy(carry = TaskCarry(CarryKind.OUTDATED, "c", null))))
+        assertEquals("shared, file removed", TaskLabels.taskState(base.copy(carry = TaskCarry(CarryKind.REMOVED, "c", null))))
+        assertEquals("shared, commit missing", TaskLabels.taskState(base.copy(carry = TaskCarry(CarryKind.MISSING, "c", null))))
+        assertEquals("shared", TaskLabels.taskState(base.copy(carry = TaskCarry(CarryKind.SAME, "c", null))))
+    }
+
+    @Test
     fun `shows the characters when the task names a part of a line`() {
         assertEquals("88:4-94:9", TaskLabels.lines(part))
     }

@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.tasks
 
+import com.yeskiy.yreview.store.Range
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -50,7 +51,14 @@ data class ReviewTask(
     @Transient val state: String = "",
     @Transient val module: String = "",
     @Transient val patternRule: String = "",
+    @Transient val carry: TaskCarry? = null,
 )
+
+/** Where a comment of another commit stands in the working tree. */
+enum class CarryKind { SAME, OUTDATED, REMOVED, MISSING }
+
+/** The result of the line map for one comment row: the kind, the note commit and the stored range. */
+data class TaskCarry(val kind: CarryKind, val commit: String, val was: Range?)
 
 /**
  * The identifiers of a task.

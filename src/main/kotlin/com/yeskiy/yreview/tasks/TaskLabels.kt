@@ -61,7 +61,15 @@ object TaskLabels {
 
     /** The word after the title. A comment shows how it is stored, and a TODO shows its word. */
     fun taskState(task: ReviewTask): String =
-        if (task.kind == TaskKind.TODO) task.pattern.orEmpty() else task.state
+        if (task.kind == TaskKind.TODO) task.pattern.orEmpty()
+        else listOfNotNull(task.state.ifEmpty { null }, carryWord(task.carry)).joinToString(", ")
+
+    private fun carryWord(carry: TaskCarry?): String? = when (carry?.kind) {
+        CarryKind.OUTDATED -> "outdated"
+        CarryKind.REMOVED -> "file removed"
+        CarryKind.MISSING -> "commit missing"
+        else -> null
+    }
 
     /**
      * The tooltip of one row. It names the place and then holds the text.

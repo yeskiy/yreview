@@ -21,6 +21,8 @@ import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.GitRunner
 import com.yeskiy.yreview.store.NoteRefs
+import com.yeskiy.yreview.store.NoteStore
+import com.yeskiy.yreview.store.NotesGateway
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoreRoot
@@ -85,7 +87,7 @@ object TaskScan {
             commit,
             withModules(
                 project,
-                comments(project, repository.root, onlyFile, showResolved) +
+                comments(project, repository.root, repository.currentRevision, onlyFile, showResolved) +
                     todos(project, repository.root, roots, commit, onlyFile),
             ),
         )
@@ -123,9 +125,31 @@ object TaskScan {
     ): List<ReviewTask> {
         val log = ShareLog.getInstance(project)
         val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, store.root, '/') }
-        return records(ReviewService.getInstance(project).bookFor(store), showResolved)
-            .mapNotNull { record -> CommentTask.of(record, store.root.path, log.isUnshared(record.stored.id)) }
-            .filter { wanted == null || it.path == wanted }
+        return placedTasks(
+            ideGitRunner(project, store.root), store.root.path, FolderStore.WORKTREE, wanted, showResolved, log::isUnshared,
+            notes = ReviewService.getInstance(project).folderNotesOf(store.root),
+        )
+    }
+
+    /** The comment rows of one store. The open rows come from [PlacedComments], the same function the editor reads. */
+    internal fun placedTasks(
+        git: GitRunner,
+        root: String,
+        head: String?,
+        path: String?,
+        showResolved: Boolean,
+        unshared: (String) -> Boolean,
+        notes: NoteStore? = null,
+        checkCanceled: () -> Unit = {},
+    ): List<ReviewTask> {
+        val store = notes ?: NoteScan.read(git, root, NoteRefs.ALL, checkCanceled) ?: NotesGateway(git)
+        val open = PlacedComments.of(git, root, head, path, store, checkCanceled)
+            .mapNotNull { CommentTask.of(ScanRecord(it.stored, false), root, unshared(it.stored.id), it.carry) }
+        if (!showResolved) return open
+        val book = CommentBook(store, author = "")
+        return open + book.commits(NoteRefs.ALL).flatMap { book.closed(it, NoteRefs.ALL) }
+            .filter { path == null || it.comment.location?.path == path }
+            .mapNotNull { CommentTask.of(ScanRecord(it, true), root, unshared(it.id)) }
     }
 
     /** The records of one git repository through [NoteScan], or null when git gave no full answer. */
@@ -160,17 +184,15 @@ object TaskScan {
     private fun comments(
         project: Project,
         root: VirtualFile,
+        head: String?,
         onlyFile: VirtualFile?,
         showResolved: Boolean,
     ): List<ReviewTask> {
         val log = ShareLog.getInstance(project)
         val wanted = onlyFile?.let { VfsUtilCore.getRelativePath(it, root, '/') }
-        return (
-            gitRecords(ideGitRunner(project, root), root.path, showResolved) { ProgressManager.checkCanceled() }
-                ?: records(ReviewService.getInstance(project).bookForRoot(root), showResolved)
-            )
-            .mapNotNull { record -> CommentTask.of(record, root.path, log.isUnshared(record.stored.id)) }
-            .filter { wanted == null || it.path == wanted }
+        return placedTasks(ideGitRunner(project, root), root.path, head, wanted, showResolved, log::isUnshared) {
+            ProgressManager.checkCanceled()
+        }
     }
 
     private fun todos(

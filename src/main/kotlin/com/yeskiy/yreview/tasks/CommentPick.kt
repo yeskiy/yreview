@@ -1,9 +1,11 @@
 package com.yeskiy.yreview.tasks
 
+import com.yeskiy.yreview.store.Carry
 import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.StoredComment
 import com.yeskiy.yreview.store.endColumnOrNull
+import com.yeskiy.yreview.store.shown
 import com.yeskiy.yreview.store.startColumnOrNull
 
 /** One record that a scan read, and whether somebody already resolved it. */
@@ -64,19 +66,20 @@ object CommentWord {
 object CommentTask {
 
     /** Null when the record names no place, and null when it holds no text. */
-    fun of(record: ScanRecord, rootPath: String, unshared: Boolean): ReviewTask? {
+    fun of(record: ScanRecord, rootPath: String, unshared: Boolean, carry: Carry? = null): ReviewTask? {
         val stored = record.stored
         val location = stored.comment.location ?: return null
         val text = stored.comment.description?.trim().orEmpty()
         if (text.isEmpty()) return null
+        val range = carry?.shown ?: location.range
         return ReviewTask(
             id = stored.id,
             kind = TaskKind.COMMENT,
             path = location.path,
-            startLine = location.range?.startLine ?: 0,
-            startColumn = location.range?.startColumnOrNull(),
-            endLine = location.range?.endLine ?: 0,
-            endColumn = location.range?.endColumnOrNull(),
+            startLine = range?.startLine ?: 0,
+            startColumn = range?.startColumnOrNull(),
+            endLine = range?.endLine ?: 0,
+            endColumn = range?.endColumnOrNull(),
             text = text,
             author = stored.comment.author,
             filePath = "$rootPath/${location.path}",
@@ -88,6 +91,14 @@ object CommentTask {
                 unshared = unshared,
                 resolved = record.resolved,
             ),
+            carry = carry?.let { TaskCarry(kindOf(it), stored.commit, location.range) },
         )
+    }
+
+    private fun kindOf(carry: Carry): CarryKind = when (carry) {
+        is Carry.Same -> CarryKind.SAME
+        is Carry.Outdated -> CarryKind.OUTDATED
+        Carry.Gone -> CarryKind.REMOVED
+        Carry.Missing -> CarryKind.MISSING
     }
 }

@@ -132,12 +132,12 @@ class TaskNode(project: Project, task: ReviewTask) :
         presentation.tooltip = TaskLabels.taskTooltip(value)
     }
 
-    override fun canNavigate(): Boolean = descriptor() != null
+    override fun canNavigate(): Boolean = descriptor() != null || RemovedFileDiff.canOpen(value)
 
     override fun canNavigateToSource(): Boolean = canNavigate()
 
     override fun navigate(requestFocus: Boolean) {
-        descriptor()?.navigate(requestFocus)
+        if (RemovedFileDiff.canOpen(value)) RemovedFileDiff.open(project, value) else descriptor()?.navigate(requestFocus)
     }
 
     private fun descriptor(): OpenFileDescriptor? = TaskNodes.descriptor(project, value)

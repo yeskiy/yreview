@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.tasks
 
+import com.yeskiy.yreview.store.Carry
 import com.yeskiy.yreview.store.Comment
 import com.yeskiy.yreview.store.Location
 import com.yeskiy.yreview.store.NoteRefs
@@ -108,6 +109,22 @@ class CommentPickTest {
                 unshared = false,
             ),
         )
+    }
+
+    @Test
+    fun `an outdated comment takes the mapped lines and keeps the stored range`() {
+        val record = ScanRecord(storedWith(Range(startLine = 88, endLine = 94)), resolved = false)
+        val task = CommentTask.of(record, "/r", false, Carry.Outdated(Range(startLine = 9, endLine = 10), listOf("x")))!!
+        assertEquals(9 to 10, task.startLine to task.endLine)
+        assertEquals(TaskCarry(CarryKind.OUTDATED, record.stored.commit, record.stored.comment.location?.range), task.carry)
+    }
+
+    @Test
+    fun `a removed file keeps the stored lines`() {
+        val record = ScanRecord(storedWith(Range(startLine = 88, endLine = 94)), resolved = false)
+        val task = CommentTask.of(record, "/r", false, Carry.Gone)!!
+        assertEquals(record.stored.comment.location?.range?.startLine, task.startLine)
+        assertEquals(CarryKind.REMOVED, task.carry?.kind)
     }
 
     private fun storedWith(range: Range, text: String = "fix this"): StoredComment {
