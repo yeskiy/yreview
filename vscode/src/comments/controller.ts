@@ -202,6 +202,11 @@ const visibleUris = (): readonly vscode.Uri[] =>
 export class ReviewComments implements vscode.Disposable {
   private readonly controller = vscode.comments.createCommentController('yreview', 'Yreview')
 
+  private readonly asked = new vscode.EventEmitter<vscode.Uri>()
+
+  /** Fires when an editor asks for the commenting ranges of a document, after it opens. */
+  readonly onDidAskRanges = this.asked.event
+
   /** Text under one open comment gets the range color, text under two or more the overlap color. */
   private readonly single = vscode.window.createTextEditorDecorationType({
     backgroundColor: new vscode.ThemeColor('yreview.commentRangeBackground'),
@@ -278,10 +283,12 @@ export class ReviewComments implements vscode.Disposable {
     private readonly log: Log,
   ) {
     this.controller.commentingRangeProvider = {
-      provideCommentingRanges: (document) =>
-        canComment(document.uri)
+      provideCommentingRanges: (document) => {
+        this.asked.fire(document.uri)
+        return canComment(document.uri)
           ? [new vscode.Range(0, 0, Math.max(document.lineCount - 1, 0), 0)]
-          : undefined,
+          : undefined
+      },
     }
     this.controller.options = {
       prompt: 'Add a review comment',
@@ -289,6 +296,7 @@ export class ReviewComments implements vscode.Disposable {
     }
     this.disposables.push(
       this.controller,
+      this.asked,
       this.single,
       this.overlap,
       this.countMark,

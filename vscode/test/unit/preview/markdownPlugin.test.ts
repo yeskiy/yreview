@@ -2,13 +2,7 @@ import assert from 'node:assert/strict'
 
 import MarkdownIt from 'markdown-it'
 
-import { parseCommentLink } from '../../../src/preview/commentLink'
-import {
-  LINK_CLASS,
-  MARK_CLASS,
-  type LineSpan,
-  previewPlugin,
-} from '../../../src/preview/markdownPlugin'
+import { MARK_CLASS, type LineSpan, previewPlugin } from '../../../src/preview/markdownPlugin'
 
 const file = process.platform === 'win32' ? 'E:\\work\\demo\\notes.md' : '/work/demo/notes.md'
 const fileEnv = { currentDocument: { scheme: 'file', fsPath: file } }
@@ -16,52 +10,22 @@ const fileEnv = { currentDocument: { scheme: 'file', fsPath: file } }
 const text = '# Title\n\nFirst paragraph.\n\n- item one\n\n```\ncode\n```\n'
 const render = (
   spans: readonly LineSpan[] | undefined,
-  options: { env?: unknown; scheme?: string; failures?: unknown[]; broken?: boolean } = {},
+  options: { env?: unknown; failures?: unknown[]; broken?: boolean } = {},
 ): string =>
   previewPlugin({
-    scheme: () => options.scheme ?? 'vscode',
     commented: () => {
       if (options.broken === true) throw new Error('the cache broke')
       return spans
     },
     failed: (error) => options.failures?.push(error),
   })(new MarkdownIt()).render(text, options.env ?? fileEnv)
-const hrefs = (html: string): readonly string[] =>
-  [...html.matchAll(/href="([^"]+)"/g)].map((match) => (match[1] ?? '').replaceAll('&amp;', '&'))
 const count = (html: string, word: string): number => html.split(word).length - 1
 
 describe('the preview plugin', () => {
-  it('adds one link to each heading and paragraph, with the first line of the block', () =>
-    assert.deepEqual(
-      hrefs(render([])).map(
-        (href) => parseCommentLink(new URL(href).pathname, new URL(href).search.slice(1))?.line,
-      ),
-      [1, 3, 5],
-    ))
-
-  it('names the file of the document in each link', () =>
-    hrefs(render([])).forEach((href) =>
-      assert.equal(
-        parseCommentLink(new URL(href).pathname, new URL(href).search.slice(1))?.file,
-        file,
-      ),
-    ))
-
-  it('uses the scheme of the editor', () => {
-    assert.ok(
-      hrefs(render([])).every((href) => href.startsWith('vscode://yeskiy.yreview/comment?')),
-    )
-    assert.ok(
-      hrefs(render([], { scheme: 'cursor' })).every((href) =>
-        href.startsWith('cursor://yeskiy.yreview/comment?'),
-      ),
-    )
-  })
-
-  it('gives the link its class and a title', () => {
-    const html = render([])
-    assert.equal(count(html, `class="${LINK_CLASS}"`), 3)
-    assert.match(html, /title="Add a review comment on line 3"/)
+  it('adds no link and no address to the preview', () => {
+    const html = render([{ start: 3, end: 3 }])
+    assert.doesNotMatch(html, /<a |href=|:\/\//)
+    assert.equal(html.replace(` class="${MARK_CLASS}"`, ''), new MarkdownIt().render(text))
   })
 
   it('marks the block that a comment covers', () => {
@@ -76,12 +40,14 @@ describe('the preview plugin', () => {
   it('marks nothing while the comments load', () =>
     assert.equal(count(render(undefined), MARK_CLASS), 0))
 
-  it('adds nothing without a file document', () => {
-    assert.equal(count(render([], { env: {} }), LINK_CLASS), 0)
+  it('marks nothing without a file document', () => {
+    assert.equal(count(render([{ start: 3, end: 3 }], { env: {} }), MARK_CLASS), 0)
     assert.equal(
       count(
-        render([], { env: { currentDocument: { scheme: 'untitled', fsPath: 'x' } } }),
-        LINK_CLASS,
+        render([{ start: 3, end: 3 }], {
+          env: { currentDocument: { scheme: 'untitled', fsPath: 'x' } },
+        }),
+        MARK_CLASS,
       ),
       0,
     )
@@ -89,13 +55,11 @@ describe('the preview plugin', () => {
 
   it('reads the file at render time and keeps the parsed tokens, as the VS Code cache needs', () => {
     const md = previewPlugin({
-      scheme: () => 'vscode',
       commented: () => [{ start: 3, end: 3 }],
       failed: (error) => assert.fail(String(error)),
     })(new MarkdownIt())
     const tokens = md.parse(text, {})
     const once = md.renderer.render(tokens, md.options, { ...fileEnv })
-    assert.equal(count(once, `class="${LINK_CLASS}"`), 3)
     assert.equal(count(once, MARK_CLASS), 1)
     assert.equal(md.renderer.render(tokens, md.options, { ...fileEnv }), once)
     assert.equal(md.renderer.render(tokens, md.options, {}), new MarkdownIt().render(text))

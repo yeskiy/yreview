@@ -1,75 +1,238 @@
 import assert from 'node:assert/strict'
-import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import path from 'node:path'
+import { setTimeout as wait } from 'node:timers/promises'
 
 import * as vscode from 'vscode'
 
+import type { ReviewComments, Shown } from '../../src/comments/controller'
 import type { YreviewApi } from '../../src/extension'
 import type { PreviewHost } from '../../src/preview/previewHost'
-import { commentLink } from '../../src/preview/commentLink'
+
+import { focusWindow, until } from './window'
 
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
-const git = (...args: string[]): string =>
-  execFileSync('git', args, { cwd: workspace(), encoding: 'utf8' })
 const api = async (): Promise<YreviewApi> =>
   (
     vscode.extensions.getExtension<YreviewApi>('yeskiy.yreview') ?? assert.fail('no extension')
   ).activate()
 const preview = async (): Promise<PreviewHost> =>
   (await api()).preview ?? assert.fail('the preview is off')
-const notes = (): string => path.join(workspace(), 'src', 'notes.md')
+const reviewComments = async (): Promise<ReviewComments> =>
+  (await api()).comments ?? assert.fail('the comment features are off')
+// Lines: 0 heading, 2 first paragraph, 4 second paragraph.
+const notes = (): vscode.Uri => vscode.Uri.file(path.join(workspace(), 'src', 'notes.md'))
 const render = async (): Promise<string> =>
   vscode.commands.executeCommand<string>(
     'markdown.api.render',
-    await vscode.workspace.openTextDocument(vscode.Uri.file(notes())),
+    await vscode.workspace.openTextDocument(notes()),
   )
-const link = (file: string, line: number): vscode.Uri =>
-  vscode.Uri.parse(commentLink(vscode.env.uriScheme, file, line))
-const active = (): string =>
-  (vscode.window.activeTextEditor?.document.uri.fsPath ?? '').toLowerCase()
-const noteRefs = (): string => git('for-each-ref', 'refs/notes')
+const textOf = (shown: Shown): string =>
+  (shown.thread.comments[0]?.body as vscode.MarkdownString).value
+const isNotes = (editor: vscode.TextEditor | undefined): boolean =>
+  editor?.document.uri.toString() === notes().toString()
+
+/** The tab of a Markdown view of the notes, and its group. */
+const viewTab = (kind: 'panel' | string) =>
+  vscode.window.tabGroups.all
+    .flatMap((group) => group.tabs.map((tab) => ({ group, tab })))
+    .find(({ tab }) =>
+      kind === 'panel'
+        ? tab.input instanceof vscode.TabInputWebview &&
+          tab.input.viewType.endsWith('markdown.preview')
+        : tab.input instanceof vscode.TabInputCustom && tab.input.viewType === kind,
+    )
+
+/** The text editor of the notes in a group other than the view. The focused box hides it. */
+const sourceBeside = (kind: string): vscode.TextEditor | undefined =>
+  vscode.window.visibleTextEditors.find(
+    (editor) => isNotes(editor) && editor.viewColumn !== viewTab(kind)?.group.viewColumn,
+  )
+
+/** Waits until the view is the active tab of the active group, so that it has the focus. */
+const focused = async (kind: string): Promise<void> => {
+  assert.ok(await until(() => viewTab(kind) !== undefined), `no ${kind} tab`)
+  const { group } = viewTab(kind) ?? assert.fail()
+  await vscode.commands.executeCommand(
+    group.viewColumn === vscode.ViewColumn.One
+      ? 'workbench.action.focusFirstEditorGroup'
+      : 'workbench.action.focusSecondEditorGroup',
+  )
+  assert.ok(
+    await until(() => {
+      const active = vscode.window.tabGroups.activeTabGroup.activeTab
+      return active !== undefined && active === viewTab(kind)?.tab
+    }),
+    `the ${kind} tab has no focus`,
+  )
+}
+
+/** The view stays the active tab of its group, so the user still sees it. */
+const stillShown = (kind: string): boolean =>
+  ((found) => found !== undefined && found.group.activeTab === found.tab)(viewTab(kind))
+
+/** Counts each external open. The test shares the vscode module of the extension. */
+const spyExternal = () => {
+  const calls: string[] = []
+  const original = vscode.env.openExternal
+  Object.defineProperty(vscode.env, 'openExternal', {
+    configurable: true,
+    value: async (target: vscode.Uri) => {
+      calls.push(target.toString())
+      return false
+    },
+  })
+  return {
+    calls,
+    stop: () => Object.defineProperty(vscode.env, 'openExternal', { value: original }),
+  }
+}
+
+/** Types into the focused box. The text stays out of the file only while the box has the focus. */
+const boxHasFocus = async (): Promise<boolean> => {
+  await vscode.commands.executeCommand('type', { text: 'y' })
+  const document = await vscode.workspace.openTextDocument(notes())
+  const dirty = document.isDirty
+  if (dirty) {
+    await vscode.window.showTextDocument(document)
+    await vscode.commands.executeCommand('workbench.action.files.revert')
+  } else await vscode.commands.executeCommand('undo')
+  await vscode.commands.executeCommand('yreview.closeBox')
+  return !dirty
+}
+
+const showNotes = async (selection: vscode.Selection): Promise<void> => {
+  const editor = await vscode.window.showTextDocument(notes(), {
+    viewColumn: vscode.ViewColumn.One,
+    preview: false,
+  })
+  editor.selection = selection
+}
 
 describe('comments from the Markdown preview', () => {
-  it('adds a comment link to each block of the rendered preview', async () => {
+  beforeEach(async () => {
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors')
+    await focusWindow()
+  })
+
+  afterEach(async () => {
+    const comments = await reviewComments()
+    await comments.reload(notes())
+    await comments
+      .snapshot(notes())
+      .reduce<Promise<unknown>>(
+        (done, shown) =>
+          done.then(() => vscode.commands.executeCommand('yreview.resolve', shown.thread)),
+        Promise.resolve(),
+      )
+    await vscode.commands.executeCommand('workbench.action.closeAllEditors')
+  })
+
+  it('renders no comment link and no app address into the preview', async () => {
     const html = await render()
-    assert.equal(html.split('class="yreview-add"').length - 1, 3)
-    assert.match(
-      html,
-      new RegExp(`href="${vscode.env.uriScheme}://yeskiy\\.yreview/comment\\?file=`),
+    assert.doesNotMatch(html, /yreview-add|yeskiy\.yreview|vscode:\/\//)
+    assert.equal('handleUri' in (await preview()), false)
+  })
+
+  it('comments on the preview lines of the context menu, in the source beside the preview', async () => {
+    await showNotes(new vscode.Selection(0, 0, 0, 0))
+    await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
+    await focused('panel')
+    const external = spyExternal()
+    try {
+      // The webview context menu gives the JSON of data-vscode-context, here the lines 4 and 5.
+      await vscode.commands.executeCommand('yreview.addCommentFromPreview', {
+        webview: 'markdown.preview',
+        yreviewStart: 4,
+        yreviewEnd: 5,
+      })
+      await wait(1500)
+      const editor = sourceBeside('panel')
+      assert.ok(editor?.selection.isEqual(new vscode.Selection(4, 0, 4, 17)), 'the selection')
+      assert.ok(stillShown('panel'), 'the preview left the view')
+      await vscode.commands.executeCommand('type', { text: 'From the preview.' })
+      await vscode.commands.executeCommand('editor.action.submitComment')
+      const comments = await reviewComments()
+      assert.ok(
+        await until(() =>
+          comments.snapshot(notes()).some((shown) => textOf(shown) === 'From the preview.'),
+        ),
+        'the box did not save the comment',
+      )
+      const saved = comments
+        .snapshot(notes())
+        .find((shown) => textOf(shown) === 'From the preview.')
+      assert.deepEqual([saved?.range.start.line, saved?.range.end.line], [4, 4])
+      assert.equal(editor?.document.isDirty, false)
+      assert.deepEqual(external.calls, [])
+    } finally {
+      external.stop()
+    }
+  })
+
+  it('opens the source beside a preview in the same group, at the caret of the source', async () => {
+    await showNotes(new vscode.Selection(2, 0, 2, 5))
+    await vscode.commands.executeCommand('markdown.showPreview', notes())
+    await focused('panel')
+    const external = spyExternal()
+    try {
+      await vscode.commands.executeCommand('yreview.addCommentFromPreview')
+      await wait(1500)
+      assert.ok(
+        sourceBeside('panel')?.selection.isEqual(new vscode.Selection(2, 0, 2, 5)),
+        'no source beside the preview, or the caret moved',
+      )
+      assert.ok(stillShown('panel'), 'the preview left the view')
+      assert.ok(await boxHasFocus(), 'the comment box did not get the focus')
+      assert.deepEqual(external.calls, [])
+    } finally {
+      external.stop()
+    }
+  })
+
+  it('opens the source beside the preview editor of the tab', async () => {
+    await vscode.commands.executeCommand(
+      'vscode.openWith',
+      notes(),
+      'vscode.markdown.preview.editor',
     )
+    await focused('vscode.markdown.preview.editor')
+    await vscode.commands.executeCommand('yreview.addCommentFromPreview', {
+      webview: 'vscode.markdown.preview.editor',
+      yreviewStart: 2,
+      yreviewEnd: 3,
+    })
+    await wait(1500)
+    assert.ok(
+      sourceBeside('vscode.markdown.preview.editor')?.selection.isEqual(
+        new vscode.Selection(2, 0, 2, 16),
+      ),
+      'no source beside the preview, or not on the lines of the menu',
+    )
+    assert.ok(stillShown('vscode.markdown.preview.editor'), 'the preview left the view')
+    assert.ok(await boxHasFocus(), 'the comment box did not get the focus')
   })
 
-  it('opens the source on the line of a link, and writes nothing', async () => {
-    const refs = noteRefs()
-    await (await preview()).handleUri(link(notes(), 3))
-    assert.equal(active(), notes().toLowerCase())
-    assert.equal(vscode.window.activeTextEditor?.selection.active.line, 2)
-    assert.equal(git('status', '--porcelain'), '')
-    assert.equal(noteRefs(), refs)
-  })
-
-  it('opens nothing for a file outside the workspace', async () => {
-    const outside = mkdtempSync(path.join(tmpdir(), 'yreview-outside-'))
-    writeFileSync(path.join(outside, 'x.md'), '# x\n')
-    await vscode.window.showTextDocument(vscode.Uri.file(path.join(workspace(), 'src', 'a.txt')))
-    await (await preview()).handleUri(link(path.join(outside, 'x.md'), 1))
-    await (await preview()).handleUri(link(path.join(workspace(), 'src', '..', '..', 'x.md'), 1))
-    await (await preview()).handleUri(link(path.join(workspace(), 'src'), 1))
-    assert.equal(active(), path.join(workspace(), 'src', 'a.txt').toLowerCase())
-    rmSync(outside, { recursive: true, force: true })
+  it('opens the source beside the rich Markdown editor', async function richEditor() {
+    const editors = (
+      vscode.extensions.getExtension('vscode.markdown-language-features')?.packageJSON as
+        { contributes?: { customEditors?: { viewType: string }[] } } | undefined
+    )?.contributes?.customEditors
+    // The rich Markdown editor ships with VS Code 1.146 and later.
+    if (!(editors ?? []).some((editor) => editor.viewType === 'vscode.markdown.editor')) this.skip()
+    await vscode.commands.executeCommand('vscode.openWith', notes(), 'vscode.markdown.editor')
+    await focused('vscode.markdown.editor')
+    await vscode.commands.executeCommand('yreview.addCommentFromPreview')
+    await wait(1500)
+    assert.ok(sourceBeside('vscode.markdown.editor'), 'no source beside the rich editor')
+    assert.ok(stillShown('vscode.markdown.editor'), 'the rich editor left the view')
+    assert.ok(await boxHasFocus(), 'the comment box did not get the focus')
   })
 
   it('marks the block of an open comment', async () => {
     const controller = vscode.comments.createCommentController('yreview-preview-test', 'Test')
     await vscode.commands.executeCommand('yreview.saveLocal', {
-      thread: controller.createCommentThread(
-        vscode.Uri.file(notes()),
-        new vscode.Range(2, 0, 2, 0),
-        [],
-      ),
+      thread: controller.createCommentThread(notes(), new vscode.Range(2, 0, 2, 0), []),
       text: 'Check this paragraph.',
     })
     controller.dispose()

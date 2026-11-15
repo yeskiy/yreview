@@ -555,14 +555,21 @@
         },
         {
           "command": "yreview.addCommentFromPreview",
-          "when": "activeWebviewPanelId == 'markdown.preview'"
+          "when": "activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor'"
         }
       ],
       "editor/title": [
         {
           "command": "yreview.addCommentFromPreview",
-          "when": "activeWebviewPanelId == 'markdown.preview'",
+          "when": "activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor'",
           "group": "navigation@9"
+        }
+      ],
+      "webview/context": [
+        {
+          "command": "yreview.addCommentFromPreview",
+          "when": "webviewId == 'markdown.preview' || webviewId == 'vscode.markdown.preview.editor'",
+          "group": "z_yreview@1"
         }
       ],
       "editor/context": [
@@ -845,6 +852,18 @@
         "key": "ctrl+shift+g",
         "mac": "ctrl+shift+g",
         "when": "editorTextFocus && config.yreview.intellijKey"
+      },
+      {
+        "command": "yreview.addCommentFromPreview",
+        "key": "ctrl+alt+g",
+        "mac": "cmd+alt+g",
+        "when": "!editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && (activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor')"
+      },
+      {
+        "command": "yreview.addCommentFromPreview",
+        "key": "ctrl+shift+g",
+        "mac": "ctrl+shift+g",
+        "when": "config.yreview.intellijKey && !editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && (activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor')"
       },
       {
         "command": "yreview.closeBox",
@@ -1646,6 +1665,9 @@
       }
     },
     "markdown.markdownItPlugins": true,
+    "markdown.previewScripts": [
+      "./dist/previewSelection.js"
+    ],
     "markdown.previewStyles": [
       "./media/preview.css"
     ],

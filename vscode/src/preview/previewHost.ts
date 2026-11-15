@@ -1,64 +1,107 @@
-import { stat } from 'node:fs/promises'
-import path from 'node:path'
-
 import * as vscode from 'vscode'
 
-import { containedPath } from '../core/paths'
 import { guard } from '../guard'
 import type { Log } from '../log'
 import type { ReviewService } from '../store/reviewService'
-import { parseCommentLink } from './commentLink'
 import type { LineSpan, PreviewSource } from './markdownPlugin'
+import { fitted, rangeOfContext } from './previewLines'
 
-const NOT_OURS = 'Yreview cannot open this link. It names no file of an open workspace folder.'
+/** The custom editors of the built-in Markdown extension that show one Markdown file. */
+const MARKDOWN_EDITORS = new Set(['vscode.markdown.preview.editor', 'vscode.markdown.editor'])
+const ASK_LIMIT_MS = 2000
+
+/** The event that fires when an editor asks for the commenting ranges of a document. */
+export type RangeAsk = vscode.Event<vscode.Uri>
 
 const refresh = (): void => {
   // The command exists only while the Markdown extension runs. Without it, no preview is open.
   vscode.commands.executeCommand('markdown.preview.refresh').then(undefined, () => undefined)
 }
 
-const fromPreview = async (): Promise<void> => {
-  await vscode.commands.executeCommand('markdown.showSource')
-  await vscode.commands.executeCommand('yreview.addComment')
-}
-
-/** The real path of a file under an open workspace folder, else undefined (invariant S4). */
-const contained = async (file: string): Promise<string | undefined> => {
-  if (!path.isAbsolute(file)) return undefined
-  const real = (
-    await Promise.all(
-      (vscode.workspace.workspaceFolders ?? []).map((folder) =>
-        containedPath(
-          folder.uri.fsPath,
-          path.relative(folder.uri.fsPath, file).replaceAll('\\', '/'),
-        ),
-      ),
-    )
-  ).find((candidate) => candidate !== undefined)
-  return real !== undefined && (await stat(real).catch(() => undefined))?.isFile() === true
-    ? real
-    : undefined
-}
-
-/** Opens the line of a comment link and starts an empty thread. It never writes. */
-const open = async (uri: vscode.Uri): Promise<void> => {
-  const target = parseCommentLink(uri.path, uri.query)
-  const file = target === undefined ? undefined : await contained(target.file)
-  if (target === undefined || file === undefined) {
-    vscode.window.showWarningMessage(NOT_OURS)
-    return
-  }
-  const document = await vscode.workspace.openTextDocument(vscode.Uri.file(file))
-  const line = Math.min(target.line, document.lineCount) - 1
-  await vscode.window.showTextDocument(document, {
-    selection: new vscode.Range(line, 0, line, 0),
-    preview: false,
+/** Resolves on the first ask for the ranges of `uri`, or after the time limit. */
+const firstAsk = async (asked: RangeAsk, uri: vscode.Uri): Promise<void> => {
+  const ask = Promise.withResolvers<void>()
+  const listener = asked((target) => {
+    if (target.toString() === uri.toString()) ask.resolve()
   })
-  await vscode.commands.executeCommand('yreview.addComment')
+  const timer = setTimeout(ask.resolve, ASK_LIMIT_MS)
+  await ask.promise
+  clearTimeout(timer)
+  listener.dispose()
 }
 
-/** The comment ranges of the files in the preview, the comment links, and the preview button. */
-export class PreviewHost implements vscode.Disposable, vscode.UriHandler {
+/** Opens a new editor beside the active group, and returns when it can take a comment box. */
+const openBeside = async (
+  asked: RangeAsk,
+  document: vscode.TextDocument,
+  selection?: vscode.Selection,
+): Promise<vscode.TextEditor> => {
+  // A box that opens before this read, or before the editor has the keyboard focus, gets no focus.
+  const read = firstAsk(asked, document.uri)
+  const editor = await vscode.window.showTextDocument(document, {
+    viewColumn: vscode.ViewColumn.Beside,
+    selection,
+  })
+  await read
+  await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
+  return editor
+}
+
+/** The text editor of a file, in a visible group other than `column`, else beside it. */
+const showBeside = async (
+  asked: RangeAsk,
+  uri: vscode.Uri,
+  column: vscode.ViewColumn,
+): Promise<vscode.TextEditor> => {
+  const visible = vscode.window.visibleTextEditors.find(
+    (editor) => editor.document.uri.toString() === uri.toString() && editor.viewColumn !== column,
+  )
+  return visible === undefined
+    ? openBeside(asked, await vscode.workspace.openTextDocument(uri))
+    : vscode.window.showTextDocument(visible.document, visible.viewColumn)
+}
+
+/** The source editor of the active preview. The preview stays in view. */
+const sourceEditor = async (asked: RangeAsk): Promise<vscode.TextEditor | undefined> => {
+  const group = vscode.window.tabGroups.activeTabGroup
+  const input = group.activeTab?.input
+  if (input instanceof vscode.TabInputCustom && MARKDOWN_EDITORS.has(input.viewType)) {
+    return showBeside(asked, input.uri, group.viewColumn)
+  }
+  // Only the Markdown extension knows the file of its preview panel.
+  await vscode.commands.executeCommand('markdown.showSource')
+  const editor = vscode.window.activeTextEditor
+  if (editor === undefined || editor.viewColumn !== group.viewColumn) return editor
+  await vscode.commands.executeCommand('workbench.action.openPreviousRecentlyUsedEditorInGroup')
+  return openBeside(asked, editor.document, editor.selection)
+}
+
+/** Opens the comment box in the source, on the preview lines of the context menu or at the caret. */
+const fromPreview =
+  (asked: RangeAsk) =>
+  async (context?: unknown): Promise<void> => {
+    const lines = rangeOfContext(context)
+    const editor = await sourceEditor(asked)
+    if (editor === undefined) return
+    const { document } = editor
+    const range =
+      lines === undefined
+        ? undefined
+        : fitted(lines, document.lineCount, (line) => document.lineAt(line).isEmptyOrWhitespace)
+    if (range !== undefined) {
+      editor.selection = new vscode.Selection(
+        range.start,
+        0,
+        range.end,
+        document.lineAt(range.end).text.length,
+      )
+      editor.revealRange(editor.selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
+    }
+    await vscode.commands.executeCommand('yreview.addComment')
+  }
+
+/** The comment ranges of the files in the preview, and the Add Review Comment command there. */
+export class PreviewHost implements vscode.Disposable {
   private readonly lines = new Map<string, readonly LineSpan[]>()
 
   private readonly loads = new Map<string, Promise<void>>()
@@ -66,14 +109,14 @@ export class PreviewHost implements vscode.Disposable, vscode.UriHandler {
   private readonly disposables: vscode.Disposable[] = []
 
   readonly source: PreviewSource = {
-    scheme: () => vscode.env.uriScheme,
     commented: (file) => this.commented(file),
-    failed: (error) => this.log.error('The preview comment links failed.', error),
+    failed: (error) => this.log.error('The preview marks failed.', error),
   }
 
   constructor(
     private readonly service: ReviewService,
     private readonly log: Log,
+    asked: RangeAsk,
   ) {
     const stopListening = service.onDidChange(() => {
       this.lines.clear()
@@ -81,16 +124,11 @@ export class PreviewHost implements vscode.Disposable, vscode.UriHandler {
     })
     this.disposables.push(
       { dispose: stopListening },
-      vscode.window.registerUriHandler(this),
       vscode.commands.registerCommand(
         'yreview.addCommentFromPreview',
-        guard(log, 'Add Review Comment', fromPreview),
+        guard(log, 'Add Review Comment', fromPreview(asked)),
       ),
     )
-  }
-
-  async handleUri(uri: vscode.Uri): Promise<void> {
-    await guard(this.log, 'Open the comment link', () => open(uri))()
   }
 
   /** Waits for each load of comment ranges. Tests call it. */

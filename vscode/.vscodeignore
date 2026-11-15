@@ -1,6 +1,7 @@
 **
 !dist/extension.js
 !dist/channel.js
+!dist/previewSelection.js
 !package.json
 !README.md
 !CHANGELOG.md

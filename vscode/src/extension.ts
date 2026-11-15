@@ -127,7 +127,7 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     shareLogOf(context.workspaceState),
   )
   const comments = new ReviewComments(held.service, log)
-  const preview = new PreviewHost(held.service, log)
+  const preview = new PreviewHost(held.service, log, comments.onDidAskRanges)
   context.subscriptions.push(comments, preview)
   held.tasks = createTaskViews(held.service, comments, git, log, context.workspaceState)
   context.subscriptions.push(held.tasks)

@@ -1,15 +1,3 @@
-.yreview-add {
-  margin-right: 0.4em;
-  font-size: 0.85em;
-  text-decoration: none;
-  opacity: 0.35;
-}
-
-.yreview-add:hover,
-.yreview-add:focus {
-  opacity: 1;
-}
-
 .yreview-commented {
   border-left: 3px solid var(--vscode-textLink-foreground);
   padding-left: 0.5em;

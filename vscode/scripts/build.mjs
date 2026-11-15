@@ -23,6 +23,14 @@ await Promise.all([
     external: ['vscode'],
   }),
   build({ ...common, entryPoints: ['src/channel/main.ts'], outfile: 'dist/channel.js' }),
+  build({
+    ...common,
+    platform: 'browser',
+    target: 'es2022',
+    format: 'iife',
+    entryPoints: ['src/preview/previewSelection.ts'],
+    outfile: 'dist/previewSelection.js',
+  }),
   ...(process.argv.includes('--tests')
     ? [
         build({

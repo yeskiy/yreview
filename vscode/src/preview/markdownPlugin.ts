@@ -1,12 +1,9 @@
 import type MarkdownIt from 'markdown-it'
 
-import { commentLink } from './commentLink'
-
 type RenderRule = NonNullable<MarkdownIt['renderer']['rules'][string]>
 type Token = Parameters<RenderRule>[0][number]
 
 export const MARK_CLASS = 'yreview-commented'
-export const LINK_CLASS = 'yreview-add'
 const BLOCKS = ['paragraph_open', 'heading_open']
 
 /** One commented range of source lines, one-based and inclusive. */
@@ -16,8 +13,6 @@ export interface LineSpan {
 }
 
 export interface PreviewSource {
-  /** The URI scheme of this editor, for example vscode or cursor. */
-  readonly scheme: () => string
   /** The open comment ranges of a file, or undefined while they load. */
   readonly commented: (file: string) => readonly LineSpan[] | undefined
   readonly failed: (error: unknown) => void
@@ -36,7 +31,7 @@ const fileOf = (env: unknown): string | undefined => {
     : undefined
 }
 
-/** The links and marks of one block. The tokens stay as they are, because VS Code caches them. */
+/** The mark of one block. The tokens stay as they are, because VS Code caches them. */
 const blockRule =
   (md: MarkdownIt, source: PreviewSource, views: WeakMap<object, View>, previous?: RenderRule) =>
   (...[tokens, index, options, env, self]: Parameters<RenderRule>): string => {
@@ -52,25 +47,15 @@ const blockRule =
     try {
       const { Token: Made } = md.core.State.prototype
       const [first, after] = token.map
-      const open = new Made('link_open', 'a', 1)
-      open.attrSet('href', commentLink(source.scheme(), view.file, first + 1))
-      open.attrSet('class', LINK_CLASS)
-      open.attrSet('title', `Add a review comment on line ${first + 1}`)
       const marked = view.spans.some((span) => span.start <= after && span.end > first)
         ? Object.assign(new Made(token.type, token.tag, token.nesting), token, {
             attrs: token.attrs?.map(([name, value]): [string, string] => [name, value]) ?? null,
           })
         : undefined
       marked?.attrJoin('class', MARK_CLASS)
-      return `${plain(marked === undefined ? tokens : tokens.map((item, at) => (at === index ? marked : item)))}${self.renderInline(
-        [
-          open,
-          Object.assign(new Made('text', '', 0), { content: '+' }),
-          new Made('link_close', 'a', -1),
-        ],
-        options,
-        env,
-      )}`
+      return plain(
+        marked === undefined ? tokens : tokens.map((item, at) => (at === index ? marked : item)),
+      )
     } catch (error) {
       source.failed(error)
       return plain(tokens)

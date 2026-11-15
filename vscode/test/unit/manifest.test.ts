@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 import { reviewTools } from '../../src/channel/reviewTools'
@@ -170,20 +170,70 @@ describe('diagnostic commands', () => {
 describe('the Markdown preview', () => {
   const markdown = manifest.contributes as Record<string, unknown>
 
-  it('gives a markdown-it plugin and a style sheet that the package carries', () => {
+  const views =
+    "activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor'"
+  const fromPreview = (place: string): readonly Contributed[] =>
+    (place === 'keybindings' ? contributes.keybindings : (contributes.menus[place] ?? [])).filter(
+      (entry) => entry.command === 'yreview.addCommentFromPreview',
+    )
+  const ignored = readFileSync(path.join(root, '.vscodeignore'), 'utf8')
+
+  it('gives a markdown-it plugin, a style sheet and a script that the package carries', () => {
     assert.equal(markdown['markdown.markdownItPlugins'], true)
     assert.deepEqual(markdown['markdown.previewStyles'], ['./media/preview.css'])
-    assert.ok(
-      readFileSync(path.join(root, 'media', 'preview.css'), 'utf8').includes('.yreview-add'),
-    )
-    assert.match(readFileSync(path.join(root, '.vscodeignore'), 'utf8'), /^!media\/preview\.css$/m)
+    assert.deepEqual(markdown['markdown.previewScripts'], ['./dist/previewSelection.js'])
+    assert.match(ignored, /^!media\/preview\.css$/m)
+    assert.match(ignored, /^!dist\/previewSelection\.js$/m)
   })
 
-  it('shows the add button on the preview only', () =>
-    assert.equal(
-      contributes.menus['editor/title']?.find(
-        (entry) => entry.command === 'yreview.addCommentFromPreview',
-      )?.when,
-      "activeWebviewPanelId == 'markdown.preview'",
+  it('shows the add button on the preview and the Markdown editor only', () => {
+    assert.deepEqual(
+      fromPreview('editor/title').map((entry) => entry.when),
+      [views],
+    )
+    assert.deepEqual(
+      fromPreview('commandPalette').map((entry) => entry.when),
+      [views],
+    )
+  })
+
+  it('adds the command to the context menu of the preview, which sends the lines', () =>
+    assert.deepEqual(
+      fromPreview('webview/context').map((entry) => entry.when),
+      ["webviewId == 'markdown.preview' || webviewId == 'vscode.markdown.preview.editor'"],
     ))
+
+  it('binds the keys of Add Review Comment while the preview has the focus', () =>
+    assert.deepEqual(
+      fromPreview('keybindings').map((entry) => [entry.key, entry.when]),
+      [
+        [
+          'ctrl+alt+g',
+          `!editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && (${views})`,
+        ],
+        [
+          'ctrl+shift+g',
+          `config.yreview.intellijKey && !editorTextFocus && !inputFocus && !terminalFocus && !sideBarFocus && !panelFocus && !auxiliaryBarFocus && (${views})`,
+        ],
+      ],
+    ))
+
+  it('has no comment links, no URI handler and no style of a link', () => {
+    assert.ok(
+      !(manifest.activationEvents as readonly string[]).some((event) => event.startsWith('onUri')),
+    )
+    assert.doesNotMatch(
+      readFileSync(path.join(root, 'media', 'preview.css'), 'utf8'),
+      /yreview-add/,
+    )
+    readdirSync(path.join(root, 'src'), { recursive: true, withFileTypes: true })
+      .filter((entry) => entry.isFile())
+      .forEach((entry) =>
+        assert.doesNotMatch(
+          readFileSync(path.join(entry.parentPath, entry.name), 'utf8'),
+          /registerUriHandler|yeskiy\.yreview\/comment|handleUri/,
+          entry.name,
+        ),
+      )
+  })
 })

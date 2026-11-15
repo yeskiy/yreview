@@ -49,10 +49,15 @@ over that text to see the same count. The high contrast themes show an outline i
 `yreview.commentOverlapBorder` in place of the amber color. You can change each color in the
 setting `workbench.colorCustomizations`.
 
-In the Markdown preview, the Add Review Comment button in the title bar opens the source. The
-comment box opens at the caret. Each paragraph and heading also shows a small `+` link. The link
-opens the source on the first line of that block. The preview marks each block that an open
-comment covers.
+In the Markdown preview, Add Review Comment opens the comment box in the source file. When the
+source is not in view, it opens beside the preview, so the preview stays. Right-click a selection
+or a block of the preview and select Add Review Comment to comment on the source lines of that
+text. The title bar button and Ctrl+Alt+G use the selection or the caret of the source, because
+VS Code gives a key and a title button no data from the preview. The preview marks each block
+that an open comment covers.
+
+VS Code 1.146 and later also has a rich Markdown editor. To open it, select Reopen Editor With,
+then Markdown Editor. Its title bar button and Ctrl+Alt+G open the box in the source at the caret.
 
 ## The task views
 
@@ -88,8 +93,8 @@ limit. A slow pattern makes the scan slow.
 
 In a remote window, Yreview runs on the remote host. git, the review bridge, the agent terminal
 and the files under `~/.y-review/` are then on the remote host. The issue form opens in the
-browser of your local machine. The Markdown preview loads the Yreview links only when the
-built-in Markdown extension runs on the same host as Yreview.
+browser of your local machine. The Markdown preview loads the Yreview marks and the line script
+only when the built-in Markdown extension runs on the same host as Yreview.
 
 The table below holds the remote check of each setup. The check has not run yet, so each cell
 says "not checked yet". The table fills after the check of the maintainer.
@@ -101,7 +106,7 @@ says "not checked yet". The table fills after the check of the maintainer.
 | 3. A resolved comment stays resolved          | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 | 4. A sent task reaches Claude Code            | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 | 5. The agent resolves the task                | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
-| 6. The `+` links of the Markdown preview      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 6. The context menu of the Markdown preview   | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 | 7. The Add button of the Markdown preview     | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 | 8. The diagnostic report holds no remote path | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
 | 9. The Report button opens the issue form     | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
