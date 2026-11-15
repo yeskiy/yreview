@@ -33,6 +33,8 @@ const COMMENT = 'yreview.comment'
 const SAVING = 'yreview.saving'
 const NATIVE_ADD = 'workbench.action.addComment'
 const RELOAD_DELAY_MS = 300
+const ASK_LIMIT_MS = 2000
+const NEW_EDITOR_ASK_MS = 500
 const SCRATCH_DIR = `${path.sep}refs${path.sep}notes${path.sep}y-review${path.sep}scratch`
 
 /** The box that Add Review Comment opened last, and the uri of its comment input once known. */
@@ -198,6 +200,25 @@ const visibleUris = (): readonly vscode.Uri[] =>
     ...new Set(vscode.window.visibleTextEditors.map((editor) => editor.document.uri.toString())),
   ].map((text) => vscode.Uri.parse(text))
 
+/** The event that fires when an editor asks for the commenting ranges of a document. */
+export type RangeAsk = vscode.Event<vscode.Uri>
+
+/** Resolves after VS Code gets the answer to the first ask for the ranges of `uri`, or at the limit. */
+export const firstAsk = async (
+  asked: RangeAsk,
+  uri: vscode.Uri,
+  limit = ASK_LIMIT_MS,
+): Promise<void> => {
+  const ask = Promise.withResolvers<void>()
+  const listener = asked((target) => {
+    if (target.toString() === uri.toString()) setTimeout(ask.resolve, 0)
+  })
+  const timer = setTimeout(ask.resolve, limit)
+  await ask.promise
+  clearTimeout(timer)
+  listener.dispose()
+}
+
 /** The review comments of the open editors, drawn with the Comments API. */
 export class ReviewComments implements vscode.Disposable {
   private readonly controller = vscode.comments.createCommentController('yreview', 'Yreview')
@@ -271,6 +292,11 @@ export class ReviewComments implements vscode.Disposable {
 
   private box: Box | undefined
 
+  private visible = new Set(vscode.window.visibleTextEditors)
+
+  /** The visible editors that did not ask for their commenting ranges yet. */
+  private readonly unasked = new Set<vscode.TextEditor>()
+
   private readonly disposables: vscode.Disposable[] = []
 
   /** Sets the placeholder text of an empty comment box. */
@@ -284,6 +310,9 @@ export class ReviewComments implements vscode.Disposable {
   ) {
     this.controller.commentingRangeProvider = {
       provideCommentingRanges: (document) => {
+        ;[...this.unasked]
+          .filter((editor) => editor.document.uri.toString() === document.uri.toString())
+          .forEach((editor) => this.unasked.delete(editor))
         this.asked.fire(document.uri)
         return canComment(document.uri)
           ? [new vscode.Range(0, 0, Math.max(document.lineCount - 1, 0), 0)]
@@ -344,7 +373,10 @@ export class ReviewComments implements vscode.Disposable {
         },
         { providedCodeActionKinds: [vscode.CodeActionKind.Empty] },
       ),
-      vscode.window.onDidChangeVisibleTextEditors(() => this.showVisible()),
+      vscode.window.onDidChangeVisibleTextEditors((editors) => {
+        this.trackAsks(editors)
+        this.showVisible()
+      }),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('yreview.editorMarks')) this.applyMarks()
       }),
@@ -666,6 +698,17 @@ export class ReviewComments implements vscode.Disposable {
     return [...[...this.shown.values()].flat(), ...this.resolved].find(predicate)
   }
 
+  private trackAsks(editors: readonly vscode.TextEditor[]): void {
+    const now = new Set(editors)
+    editors
+      .filter((editor) => !this.visible.has(editor))
+      .forEach((editor) => this.unasked.add(editor))
+    ;[...this.unasked]
+      .filter((editor) => !now.has(editor))
+      .forEach((editor) => this.unasked.delete(editor))
+    this.visible = now
+  }
+
   // --- Commands ---
 
   /** The native command focuses the comment box, so it is used when it exists. */
@@ -699,6 +742,9 @@ export class ReviewComments implements vscode.Disposable {
         shown.thread.range?.end.line === at,
     )
     if ((await this.hasNativeAdd()) && glyphOnLine === undefined) {
+      // VS Code gives no focus to a box that opens before the new editor asks for its ranges.
+      if (this.unasked.has(editor))
+        await firstAsk(this.onDidAskRanges, document.uri, NEW_EDITOR_ASK_MS)
       editor.selection = new vscode.Selection(selection.start, selection.start)
       this.box = { uri: document.uri, line: at }
       await vscode.commands.executeCommand(NATIVE_ADD)

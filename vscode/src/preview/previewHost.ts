@@ -1,5 +1,6 @@
 import * as vscode from 'vscode'
 
+import { firstAsk, type RangeAsk } from '../comments/controller'
 import { guard } from '../guard'
 import type { Log } from '../log'
 import type { ReviewService } from '../store/reviewService'
@@ -8,26 +9,10 @@ import { fitted, rangeOfContext } from './previewLines'
 
 /** The custom editors of the built-in Markdown extension that show one Markdown file. */
 const MARKDOWN_EDITORS = new Set(['vscode.markdown.preview.editor', 'vscode.markdown.editor'])
-const ASK_LIMIT_MS = 2000
-
-/** The event that fires when an editor asks for the commenting ranges of a document. */
-export type RangeAsk = vscode.Event<vscode.Uri>
 
 const refresh = (): void => {
   // The command exists only while the Markdown extension runs. Without it, no preview is open.
   vscode.commands.executeCommand('markdown.preview.refresh').then(undefined, () => undefined)
-}
-
-/** Resolves on the first ask for the ranges of `uri`, or after the time limit. */
-const firstAsk = async (asked: RangeAsk, uri: vscode.Uri): Promise<void> => {
-  const ask = Promise.withResolvers<void>()
-  const listener = asked((target) => {
-    if (target.toString() === uri.toString()) ask.resolve()
-  })
-  const timer = setTimeout(ask.resolve, ASK_LIMIT_MS)
-  await ask.promise
-  clearTimeout(timer)
-  listener.dispose()
 }
 
 /** Opens a new editor beside the active group, and returns when it can take a comment box. */
