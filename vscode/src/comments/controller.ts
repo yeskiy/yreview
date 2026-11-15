@@ -4,6 +4,8 @@ import path from 'node:path'
 import * as vscode from 'vscode'
 
 import { parseGitUriQuery, refKindOf, revisionLabel } from '../core/diffAnchor'
+import { type Carry, shownRange } from '../core/lineMap'
+import { lineTextOf } from '../core/lineText'
 import { type Segment, segments } from '../core/overlap'
 import { commentRange, compactRange, hasColumns } from '../core/range'
 import type { RecordRange } from '../core/record'
@@ -81,13 +83,13 @@ export interface Shown {
   readonly anchor: Anchor
   /** The full commented text. The thread itself sits on the first line of it. */
   readonly range: vscode.Range
+  readonly carry: Carry
 }
 
 const line = (value: number): number => Math.max(value - 1, 0)
 
-/** The stored range in the document. A range of whole lines ends at the end of its last line. */
-const fullRange = (stored: StoredComment, document: vscode.TextDocument): vscode.Range => {
-  const range = stored.record.location?.range
+/** The range in the document. A range of whole lines ends at the end of its last line. */
+const fullRange = (range: RecordRange | undefined, document: vscode.TextDocument): vscode.Range => {
   if (range === undefined) return new vscode.Range(0, 0, 0, 0)
   return document.validateRange(
     hasColumns(range.startColumn, range.endColumn)
@@ -126,8 +128,24 @@ const timeOf = (stored: StoredComment): Date | undefined => {
   return Number.isFinite(seconds) ? new Date(seconds * 1000) : undefined
 }
 
-const commentOf = (stored: StoredComment): vscode.Comment => ({
-  body: untrusted(stored.record.description ?? ''),
+/** A Markdown fence that is longer than each run of backticks in the lines. */
+const fence = (lines: readonly string[]): string =>
+  '`'.repeat(
+    Math.max(
+      3,
+      ...lines.map((text) =>
+        (text.match(/`+/gu) ?? []).reduce((top, run) => Math.max(top, run.length + 1), 0),
+      ),
+    ),
+  )
+
+const bodyOf = (stored: StoredComment, carry: Carry): string =>
+  carry.kind === 'outdated'
+    ? `${stored.record.description ?? ''}\n\nOriginal text at ${stored.commit.slice(0, 7)}:\n\n${fence(carry.original)}\n${carry.original.join('\n')}\n${fence(carry.original)}`
+    : (stored.record.description ?? '')
+
+const commentOf = (stored: StoredComment, carry: Carry): vscode.Comment => ({
+  body: untrusted(bodyOf(stored, carry)),
   mode: vscode.CommentMode.Preview,
   author: { name: stored.record.author },
   label: isShared(stored.ref) ? 'shared' : 'local',
@@ -135,25 +153,40 @@ const commentOf = (stored: StoredComment): vscode.Comment => ({
   contextValue: COMMENT,
 })
 
-const commentKey = (stored: StoredComment): string =>
+const commentKey = (stored: StoredComment, carry: Carry): string =>
   JSON.stringify([
     stored.record.description,
     stored.record.author,
     stored.record.timestamp,
     isShared(stored.ref),
+    carry.kind,
+    carry.kind === 'outdated' ? carry.original : [],
   ])
 
-const labelOf = (stored: StoredComment, revision: string | undefined): string | undefined => {
-  const range = stored.record.location?.range
-  return range === undefined ? undefined : linesLabel(range, revision)
+const labelOf = (
+  stored: StoredComment,
+  carry: Carry,
+  revision: string | undefined,
+): string | undefined => {
+  const range = shownRange(carry)
+  const was = stored.record.location?.range
+  if (range === undefined) return undefined
+  return carry.kind === 'outdated' && was !== undefined
+    ? `Outdated, was lines ${compactRange(was)}`
+    : linesLabel(range, revision)
 }
 
-const openView = (stored: StoredComment, range: vscode.Range, revision: string | undefined) => ({
-  comments: [commentOf(stored)],
+const openView = (
+  stored: StoredComment,
+  carry: Carry,
+  range: vscode.Range,
+  revision: string | undefined,
+) => ({
+  comments: [commentOf(stored, carry)],
   canReply: false,
   contextValue: OPEN,
   state: vscode.CommentThreadState.Unresolved,
-  label: labelOf(stored, revision),
+  label: labelOf(stored, carry, revision),
   range: firstLine(range),
 })
 
@@ -167,12 +200,17 @@ const resolvedView = {
 const refresh = (
   old: Shown,
   stored: StoredComment,
+  carry: Carry,
   range: vscode.Range,
   revision: string | undefined,
 ): vscode.CommentThread =>
   Object.assign(old.thread, {
-    ...(commentKey(old.stored) === commentKey(stored) ? {} : { comments: [commentOf(stored)] }),
-    ...(old.thread.label === labelOf(stored, revision) ? {} : { label: labelOf(stored, revision) }),
+    ...(commentKey(old.stored, old.carry) === commentKey(stored, carry)
+      ? {}
+      : { comments: [commentOf(stored, carry)] }),
+    ...(old.thread.label === labelOf(stored, carry, revision)
+      ? {}
+      : { label: labelOf(stored, carry, revision) }),
     ...(old.thread.range?.isEqual(firstLine(range)) ? {} : { range: firstLine(range) }),
   })
 
@@ -249,7 +287,16 @@ export class ReviewComments implements vscode.Disposable {
     },
   })
 
+  /** The lines that stand where an outdated comment was. */
+  private readonly outdated = vscode.window.createTextEditorDecorationType({
+    backgroundColor: new vscode.ThemeColor('yreview.commentOutdatedBackground'),
+    isWholeLine: true,
+  })
+
   private readonly shown = new Map<string, readonly Shown[]>()
+
+  /** The files that show a comment of another commit. A save of such a file moves its comments. */
+  private readonly carried = new Set<string>()
 
   /** Threads resolved in this session. They stay on screen until the window reloads. */
   private readonly resolved = new Set<Shown>()
@@ -329,6 +376,10 @@ export class ReviewComments implements vscode.Disposable {
       this.single,
       this.overlap,
       this.countMark,
+      this.outdated,
+      vscode.workspace.onDidSaveTextDocument((document) => {
+        if (this.carried.has(document.uri.toString())) this.reloadSafely(document.uri)
+      }),
       vscode.commands.registerCommand(
         'yreview.addComment',
         guard(log, 'Add Review Comment', () => this.startThread()),
@@ -427,28 +478,42 @@ export class ReviewComments implements vscode.Disposable {
       this.decorate(uri)
       return
     }
-    const stored = (await this.service.openAt(found.anchor)).filter(
-      (entry) => !this.deleting.has(entry.id),
+    const placed = (
+      uri.scheme === FILE
+        ? await this.service.placedAt(found.anchor)
+        : (await this.service.openAt(found.anchor)).map((stored) => ({
+            stored,
+            carry: { kind: 'same', range: stored.record.location?.range } as const,
+          }))
+    ).filter(
+      (entry) =>
+        !this.deleting.has(entry.stored.id) &&
+        (entry.carry.kind === 'same' || entry.carry.kind === 'outdated'),
     )
+    this.carried[
+      placed.some((entry) => entry.stored.commit !== found.anchor.head) ? 'add' : 'delete'
+    ](uri.toString())
     const document = await vscode.workspace.openTextDocument(uri)
-    const ids = new Set(stored.map((entry) => entry.id))
+    const ids = new Set(placed.map((entry) => entry.stored.id))
     const before = this.snapshot(uri)
     const expanded = !this.shown.has(uri.toString()) && readSettings(scopeOf(uri)).editorMarks
     before
       .filter((entry) => known.has(entry.stored.id) && !ids.has(entry.stored.id))
       .forEach((entry) => entry.thread.dispose())
     this.shown.set(uri.toString(), [
-      ...stored.map((entry) => {
-        const range = fullRange(entry, document)
-        const old = before.find((shown) => shown.stored.id === entry.id)
+      ...placed.map(({ stored, carry }) => {
+        const range = fullRange(shownRange(carry), document)
+        const anchor = { ...found.anchor, head: stored.commit }
+        const old = before.find((shown) => shown.stored.id === stored.id)
         return {
           thread:
             old === undefined
-              ? this.draw(uri, entry, found.anchor, range, expanded)
-              : refresh(old, entry, range, revisionOf(uri, found.anchor)),
-          stored: entry,
-          anchor: found.anchor,
+              ? this.draw(uri, stored, carry, found.anchor, range, expanded)
+              : refresh(old, stored, carry, range, revisionOf(uri, found.anchor)),
+          stored,
+          anchor,
           range,
+          carry,
         }
       }),
       ...before.filter((entry) => !known.has(entry.stored.id) && !ids.has(entry.stored.id)),
@@ -491,10 +556,9 @@ export class ReviewComments implements vscode.Disposable {
   segmentsOf(uri: vscode.Uri): Segment[] {
     return readSettings(scopeOf(uri)).editorMarks
       ? segments(
-          this.snapshot(uri).map(({ range }) => ({
-            start: plain(range.start),
-            end: plain(range.end),
-          })),
+          this.snapshot(uri)
+            .filter(({ carry }) => carry.kind === 'same')
+            .map(({ range }) => ({ start: plain(range.start), end: plain(range.end) })),
         )
       : []
   }
@@ -528,13 +592,14 @@ export class ReviewComments implements vscode.Disposable {
   private draw(
     uri: vscode.Uri,
     stored: StoredComment,
+    carry: Carry,
     anchor: Anchor,
     range: vscode.Range,
     expanded: boolean,
   ): vscode.CommentThread {
     return Object.assign(
       this.controller.createCommentThread(uri, firstLine(range), []),
-      openView(stored, range, revisionOf(uri, anchor)),
+      openView(stored, carry, range, revisionOf(uri, anchor)),
       {
         collapsibleState: expanded
           ? vscode.CommentThreadCollapsibleState.Expanded
@@ -561,6 +626,14 @@ export class ReviewComments implements vscode.Disposable {
               range: rangeOfSegment(segment),
               hoverMessage: `${segment.count} open review comments cover this text.`,
             })),
+        )
+        editor.setDecorations(
+          this.outdated,
+          readSettings(scopeOf(uri)).editorMarks
+            ? this.snapshot(uri)
+                .filter((shown) => shown.carry.kind === 'outdated')
+                .map((shown) => shown.range)
+            : [],
         )
         editor.setDecorations(
           this.countMark,
@@ -863,15 +936,22 @@ export class ReviewComments implements vscode.Disposable {
       const found = await this.anchorFor(document.uri)
       if (found.kind !== 'found') throw new Error(refusalOf(found))
       const result = await this.write(found.anchor, () =>
-        this.service.addComment(found.anchor, range, text, shared),
+        this.service.addComment(
+          found.anchor,
+          range,
+          text,
+          shared,
+          lineTextOf((at) => document.lineAt(at - 1).text, document.lineCount, range) ?? null,
+        ),
       )
       this.author = result.stored.record.author
       this.pending.delete(key)
       this.forgetBox(thread)
-      const shownRange = fullRange(result.stored, document)
+      const carry: Carry = { kind: 'same', range: result.stored.record.location?.range }
+      const savedRange = fullRange(carry.range, document)
       Object.assign(
         thread,
-        openView(result.stored, shownRange, revisionOf(document.uri, found.anchor)),
+        openView(result.stored, carry, savedRange, revisionOf(document.uri, found.anchor)),
       )
       const twins = this.snapshot(document.uri).filter(
         (entry) => entry.stored.id === result.stored.id,
@@ -879,7 +959,7 @@ export class ReviewComments implements vscode.Disposable {
       twins.forEach((entry) => entry.thread.dispose())
       this.shown.set(document.uri.toString(), [
         ...this.snapshot(document.uri).filter((entry) => !twins.includes(entry)),
-        { thread, stored: result.stored, anchor: found.anchor, range: shownRange },
+        { thread, stored: result.stored, anchor: found.anchor, range: savedRange, carry },
       ])
       this.decorate(document.uri)
       // A message that waits for a click would hold the command, so the notices do not wait.
@@ -956,7 +1036,7 @@ export class ReviewComments implements vscode.Disposable {
           )
         }
       } catch (error) {
-        const thread = this.draw(uri, entry.stored, entry.anchor, entry.range, false)
+        const thread = this.draw(uri, entry.stored, entry.carry, entry.anchor, entry.range, false)
         const back = {
           ...entry,
           thread: wasResolved ? Object.assign(thread, resolvedView) : thread,

@@ -65,6 +65,20 @@ describe('comments in the editor', () => {
     await vscode.commands.executeCommand('yreview.saveLocal', { thread: draft, text })
     return draft
   }
+  const head = (): string => git('rev-parse', 'HEAD').trim()
+  const restore = (commit: string): string => git('reset', '-q', '--hard', commit)
+  const described = (comments: ReviewComments, text: string): Shown | undefined =>
+    comments.snapshot(file()).find((shown) => shown.stored.record.description === text)
+  /** Writes the file and waits until the open document shows the new text. */
+  const writeText = async (text: string): Promise<void> => {
+    writeFileSync(file().fsPath, text)
+    const document = await vscode.workspace.openTextDocument(file())
+    assert.ok(await until(() => document.getText() === text), 'the document did not reload')
+  }
+  const commitText = async (text: string): Promise<void> => {
+    await writeText(text)
+    git('commit', '-q', '-am', 'change')
+  }
   const shownWith = async (text: string): Promise<Shown> =>
     (await reviewComments()).snapshot(file()).find((shown) => textOf(shown) === text) ??
     assert.fail(`no thread with the text ${text}`)
@@ -259,20 +273,99 @@ describe('comments in the editor', () => {
     }
   })
 
-  it('draws the comments of the new HEAD after a commit, and of the old HEAD after a reset', async () => {
+  it('keeps the comments of the old HEAD after a commit that does not change the file', async () => {
     const comments = await reviewComments()
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(file()))
     await saveDraft(new vscode.Range(2, 0, 2, 0), 'On the first commit.')
-    const shows = (): boolean =>
-      comments.snapshot(file()).some((shown) => textOf(shown) === 'On the first commit.')
-    assert.ok(shows())
+    const entry = (): Shown | undefined =>
+      comments.snapshot(file()).find((shown) => textOf(shown) === 'On the first commit.')
     git('commit', '-q', '--allow-empty', '-m', 'move')
     try {
-      assert.ok(await until(() => !shows(), 80), 'the threads of the old HEAD still show')
+      await wait(1500)
+      assert.equal(entry()?.carry.kind, 'same')
+      assert.equal(entry()?.range.start.line, 2)
     } finally {
       git('reset', '-q', '--soft', 'HEAD~1')
     }
-    assert.ok(await until(shows, 80), 'the threads of HEAD did not show again')
+  })
+
+  it('moves a comment of the old HEAD after lines added above', async () => {
+    const comments = await reviewComments()
+    const start = head()
+    await saveDraft(new vscode.Range(1, 0, 1, 0), 'Moves down.')
+    try {
+      await commitText('zero\nhalf\none\ntwo\nthree\n')
+      assert.ok(await until(() => described(comments, 'Moves down.')?.range.start.line === 3))
+      assert.equal(described(comments, 'Moves down.')?.carry.kind, 'same')
+    } finally {
+      restore(start)
+    }
+  })
+
+  it('marks a comment outdated when its lines change, with the original text', async () => {
+    const comments = await reviewComments()
+    const start = head()
+    await saveDraft(new vscode.Range(1, 0, 1, 0), 'Changes.')
+    try {
+      await commitText('one\nTWO\nthree\n')
+      assert.ok(await until(() => described(comments, 'Changes.')?.carry.kind === 'outdated'))
+      const shown = described(comments, 'Changes.') ?? assert.fail('no outdated thread')
+      assert.match(shown.thread.label ?? '', /^Outdated/u)
+      assert.match(textOf(shown), /\ntwo\n/u)
+      assert.equal(shown.range.start.line, 1)
+    } finally {
+      restore(start)
+    }
+  })
+
+  it('counts a moved comment and a HEAD comment on the same lines as an overlap', async () => {
+    const comments = await reviewComments()
+    const start = head()
+    await saveDraft(new vscode.Range(1, 0, 1, 0), 'Moved.')
+    try {
+      await commitText('zero\none\ntwo\nthree\n')
+      assert.ok(await until(() => described(comments, 'Moved.')?.range.start.line === 2))
+      await saveDraft(new vscode.Range(2, 0, 2, 0), 'On the new HEAD.')
+      assert.ok(comments.segmentsOf(file()).some((segment) => segment.count === 2))
+    } finally {
+      restore(start)
+    }
+  })
+
+  it('keeps a comment on uncommitted lines on its text after the commit', async () => {
+    const comments = await reviewComments()
+    const start = head()
+    try {
+      await writeText('one\ninserted\ntwo\nthree\n')
+      await saveDraft(new vscode.Range(1, 0, 1, 0), 'On new text.')
+      assert.match(localNotes(), /"text":"inserted"/u)
+      await commitText('top\none\ninserted\ntwo\nthree\n')
+      assert.ok(await until(() => described(comments, 'On new text.')?.range.start.line === 2))
+      assert.equal(described(comments, 'On new text.')?.carry.kind, 'same')
+    } finally {
+      restore(start)
+    }
+  })
+
+  it('resolves and deletes a carried comment in the note of its commit', async () => {
+    const comments = await reviewComments()
+    const start = head()
+    await saveDraft(new vscode.Range(0, 0, 0, 0), 'Resolve me.')
+    await saveDraft(new vscode.Range(2, 0, 2, 0), 'Delete me.')
+    try {
+      await commitText('zero\none\ntwo\nthree\n')
+      assert.ok(await until(() => described(comments, 'Delete me.')?.range.start.line === 3))
+      const resolve = described(comments, 'Resolve me.') ?? assert.fail('no thread to resolve')
+      const remove = described(comments, 'Delete me.') ?? assert.fail('no thread to delete')
+      await vscode.commands.executeCommand('yreview.resolve', resolve.thread)
+      await comments.deleteComment(remove.thread.comments[0] ?? assert.fail('no comment'))
+      const note = git('notes', '--ref', 'refs/notes/y-review/local', 'show', start)
+      assert.match(note, /"resolved":true/u)
+      assert.doesNotMatch(note, /Delete me\./u)
+      assert.throws(() => localNotes())
+    } finally {
+      restore(start)
+    }
   })
 
   it('registers the comment commands', async () => {
