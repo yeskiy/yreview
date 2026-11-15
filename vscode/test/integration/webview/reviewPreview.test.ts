@@ -7,8 +7,8 @@ import * as vscode from 'vscode'
 import type { YreviewApi } from '../../../src/extension'
 import type { ReviewPreviews } from '../../../src/reviewPreview/reviewPreviews'
 
-import { REVIEW_PAGE, inWebview, untilInWebview } from '../webviewFrames'
-import { focusWindow, until } from '../window'
+import { REVIEW_PAGE, inWebview, focusWorkbench, untilInWebview } from '../webviewFrames'
+import { until } from '../window'
 
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
@@ -47,7 +47,7 @@ const setting = async (section: string, key: string, value: unknown): Promise<vo
 describe('the review preview', () => {
   beforeEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
-    await focusWindow()
+    await focusWorkbench()
   })
   afterEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')

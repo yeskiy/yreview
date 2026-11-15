@@ -12,26 +12,39 @@ const devtoolsPort = (): string =>
     ?.trim() ?? ''
 
 export interface Target {
+  readonly id: string
   readonly type: string
   readonly url: string
   readonly webSocketDebuggerUrl: string
 }
 
-/** Runs a loopback call again after a failure. A loopback connect on Windows fails at times. */
+/** A script that throws in the page. A retry cannot change it, so it fails at once. */
+class ScriptError extends Error {}
+
+const LOOPBACK_TIMEOUT_MS = 5000
+const CALL_TIMEOUT_MS = 15000
+
+/** Runs a loopback call again after a failure, at most `tries` times. A loaded machine drops some. */
 const retried = async <T>(call: () => Promise<T>, tries = 5): Promise<T> => {
   try {
     return await call()
   } catch (error) {
-    if (tries <= 1) throw error
+    if (tries <= 1 || error instanceof ScriptError) throw error
     await wait(500)
     return retried(call, tries - 1)
   }
 }
 
+/** The targets of the port. The port file and the server come late after the start of the host. */
 export const targets = (): Promise<readonly Target[]> =>
   retried(
     async () =>
-      (await (await fetch(`http://127.0.0.1:${devtoolsPort()}/json/list`)).json()) as Target[],
+      (await (
+        await fetch(`http://127.0.0.1:${devtoolsPort()}/json/list`, {
+          signal: AbortSignal.timeout(LOOPBACK_TIMEOUT_MS),
+        })
+      ).json()) as Target[],
+    20,
   )
 
 /** Opens the WebSocket of one DevTools target with the handshake of RFC 6455. */
@@ -45,6 +58,9 @@ const connect = (url: string): Promise<Duplex> =>
         'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
       },
     })
+    asked.setTimeout(LOOPBACK_TIMEOUT_MS, () =>
+      asked.destroy(new Error(`The DevTools connect took over ${LOOPBACK_TIMEOUT_MS} ms.`)),
+    )
     asked.on('upgrade', (_response, socket) => resolve(socket))
     asked.on('response', (response) => reject(new Error(`No upgrade: ${response.statusCode}`)))
     asked.on('error', reject)
@@ -87,6 +103,10 @@ export const attach = async (target: Target) => {
   const socket = await retried(() => connect(target.webSocketDebuggerUrl))
   const waiting = new Map<number, (reply: { result?: unknown; error?: unknown }) => void>()
   const state: { rest: Buffer; next: number } = { rest: Buffer.alloc(0), next: 1 }
+  const fail = (error: Error): void =>
+    [...waiting.values()].forEach((settle) => settle({ error: error.message }))
+  socket.on('error', fail)
+  socket.on('close', () => fail(new Error('The DevTools socket closed.')))
   socket.on('data', (data: Buffer) => {
     const [texts, rest] = unframe(Buffer.concat([state.rest, data]))
     state.rest = rest
@@ -100,7 +120,12 @@ export const attach = async (target: Target) => {
       new Promise((resolve, reject) => {
         const id = state.next
         state.next += 1
+        const timer = setTimeout(
+          () => waiting.get(id)?.({ error: `no reply in ${CALL_TIMEOUT_MS} ms` }),
+          CALL_TIMEOUT_MS,
+        )
         waiting.set(id, (reply) => {
+          clearTimeout(timer)
           waiting.delete(id)
           if (reply.error === undefined) resolve(reply.result)
           else reject(new Error(`${method}: ${JSON.stringify(reply.error)}`))
@@ -112,26 +137,62 @@ export const attach = async (target: Target) => {
 }
 
 /** Runs a script expression in a target, and gives its value. A promise resolves first. */
-export const evaluate = async (target: Target, expression: string): Promise<unknown> => {
-  const session = await attach(target)
-  try {
-    const reply = (await session.call('Runtime.evaluate', {
-      expression,
-      returnByValue: true,
-      awaitPromise: true,
-    })) as { result?: { value?: unknown }; exceptionDetails?: unknown }
-    if (reply.exceptionDetails !== undefined)
-      throw new Error(`The script failed: ${JSON.stringify(reply.exceptionDetails)}`)
-    return reply.result?.value
-  } finally {
-    session.close()
-  }
-}
+export const evaluate = (target: Target, expression: string): Promise<unknown> =>
+  retried(async () => {
+    const session = await attach(target)
+    try {
+      const reply = (await session.call('Runtime.evaluate', {
+        expression,
+        returnByValue: true,
+        awaitPromise: true,
+      })) as { result?: { value?: unknown }; exceptionDetails?: unknown }
+      if (reply.exceptionDetails !== undefined)
+        throw new ScriptError(`The script failed: ${JSON.stringify(reply.exceptionDetails)}`)
+      return reply.result?.value
+    } finally {
+      session.close()
+    }
+  }, 3)
 
-/** The workbench page of the test window. */
-export const workbench = async (): Promise<Target> =>
-  (await targets()).find((target) => target.type === 'page') ??
-  Promise.reject(new Error('The DevTools port shows no workbench page.'))
+/** The workbench page of the test window. The port lists it late after the start of the host. */
+export const workbench = (): Promise<Target> =>
+  retried(
+    async () =>
+      (await targets()).find((target) => target.type === 'page') ??
+      Promise.reject(new Error('The DevTools port shows no workbench page.')),
+    20,
+  )
+
+type Session = Awaited<ReturnType<typeof attach>>
+
+/** The sessions that keep the focus emulation on. Chromium ends the emulation with its session. */
+const emulating = new Map<string, Promise<Session>>()
+
+/** Makes each page and frame act as focused, so the focus works while another app has the OS focus. */
+export const emulateFocus = async (): Promise<void> => {
+  const listed = (await targets()).filter(
+    (target) => target.type === 'page' || target.type === 'iframe',
+  )
+  const ids = new Set(listed.map((target) => target.id))
+  ;[...emulating]
+    .filter(([id]) => !ids.has(id))
+    .forEach(([id, session]) => {
+      emulating.delete(id)
+      session.then((open) => open.close()).catch(() => undefined)
+    })
+  listed
+    .filter((target) => !emulating.has(target.id))
+    .forEach((target) =>
+      emulating.set(
+        target.id,
+        attach(target).then(async (session) => {
+          await session.call('Emulation.setFocusEmulationEnabled', { enabled: true })
+          return session
+        }),
+      ),
+    )
+  await Promise.all(emulating.values())
+}
 
 /** Sends a real key press to the focused element of the workbench. Modifier bits: 2 Ctrl, 4 Meta. */
 export const pressKey = async (event: object): Promise<void> => {

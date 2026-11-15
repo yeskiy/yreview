@@ -7,16 +7,19 @@ import * as vscode from 'vscode'
 
 import type { YreviewApi } from '../../../src/extension'
 
-import { pressSaveKey } from '../keymap/devtools'
+import { evaluate, pressSaveKey, workbench } from '../keymap/devtools'
 import {
   REVIEW_PAGE,
   chooseMenuItem,
   inWebview,
   pressAddKey,
+  requireOsFocus,
+  focusWorkbench,
   rightClickAt,
   untilInWebview,
+  untilKeyboardIn,
 } from '../webviewFrames'
-import { focusWindow } from '../window'
+import { until } from '../window'
 
 const workspace = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
@@ -55,6 +58,14 @@ const eventually = async (check: () => Promise<boolean>, tries = 40): Promise<bo
 const savedAt = (text: string, lines: readonly number[]): Promise<boolean> =>
   eventually(async () => JSON.stringify(await linesOf(text)) === JSON.stringify([lines]))
 
+const previewActive = (): boolean => {
+  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input
+  return input instanceof vscode.TabInputWebview && input.viewType.endsWith('yreview.preview')
+}
+const untilInWorkbench = async (check: string, tries = 40): Promise<boolean> =>
+  (await evaluate(await workbench(), check)) === true ||
+  (tries > 0 && wait(250).then(() => untilInWorkbench(check, tries - 1)))
+
 const openReview = async (): Promise<void> => {
   const editor = await vscode.window.showTextDocument(review(), {
     viewColumn: vscode.ViewColumn.One,
@@ -63,12 +74,20 @@ const openReview = async (): Promise<void> => {
   // The editor keeps the scroll of an earlier test, and the page follows it.
   editor.revealRange(new vscode.Range(0, 0, 0, 0), vscode.TextEditorRevealType.AtTop)
   await vscode.commands.executeCommand('yreview.openReviewPreview')
+  const previews = (await yreview()).reviewPreviews ?? assert.fail('no review previews')
+  await (
+    previews.all().find((one) => one.uri.fsPath === review().fsPath) ?? assert.fail('no preview')
+  ).whenReady()
   assert.ok(
     await untilInWebview(REVIEW_PAGE, `return doc.querySelector('[data-line-end]') !== null`),
     'no content',
   )
-  // A new webview takes the keyboard focus late, and no event tells when.
-  await wait(1000)
+  // The add key reaches the preview when its tab is active and no text editor takes the keys.
+  assert.ok(
+    (await until(previewActive)) &&
+      (await untilInWorkbench(`!document.activeElement?.closest('.monaco-editor')`)),
+    'the add key does not reach the review preview',
+  )
 }
 
 /** Selects from `startOffset` to `endOffset` of the text of the block with `data-line="line"`. */
@@ -100,11 +119,9 @@ const boxLines = async (): Promise<unknown> => {
   )
   return inWebview(REVIEW_PAGE, `return doc.querySelector('.yreview-box').dataset.lines`)
 }
-const boxHasFocus = (): Promise<boolean> =>
-  untilInWebview(
-    REVIEW_PAGE,
-    `return doc.hasFocus() && doc.activeElement === doc.querySelector('.yreview-box textarea')`,
-  )
+/** The review preview is the active tab, and its box takes the keys. The OS focus can be elsewhere. */
+const boxHasFocus = async (): Promise<boolean> =>
+  (await until(previewActive)) && untilKeyboardIn(REVIEW_PAGE, '.yreview-box textarea')
 const typeInBox = (text: string): Promise<unknown> =>
   inWebview(
     REVIEW_PAGE,
@@ -123,7 +140,7 @@ const boxClosed = (): Promise<boolean> =>
 describe('comments in the review preview', () => {
   beforeEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
-    await focusWindow()
+    await focusWorkbench()
   })
 
   afterEach(async () => {
@@ -146,7 +163,8 @@ describe('comments in the review preview', () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
   })
 
-  it('opens a focused box on the selected lines with the real key, and saves with the real save key', async () => {
+  it('opens a focused box on the selected lines with the real key, and saves with the real save key', async function run() {
+    requireOsFocus(this)
     await openReview()
     await select(2, 0, 40)
     await pressAddKey()
@@ -190,7 +208,8 @@ describe('comments in the review preview', () => {
     assert.equal(await boxLines(), '8-8')
   })
 
-  it('opens a focused box on a line that has a saved comment, and saves a second one', async () => {
+  it('opens a focused box on a line that has a saved comment, and saves a second one', async function run() {
+    requireOsFocus(this)
     const comments = (await yreview()).comments ?? assert.fail('no comments')
     await comments.addAt(review(), { start: 2, end: 2 }, 'First.', false)
     await openReview()
@@ -205,10 +224,32 @@ describe('comments in the review preview', () => {
     assert.ok(await savedAt('First.', [2, 2]))
   })
 
-  it('asks for the text before a save, and keeps the box open', async () => {
+  it('keeps the focus in the box when the workbench focuses the panel again', async function run() {
+    requireOsFocus(this)
+    const comments = (await yreview()).comments ?? assert.fail('no comments')
+    await comments.addAt(review(), { start: 2, end: 2 }, 'First.', false)
     await openReview()
     await select(2, 0, 5)
     await pressAddKey()
+    assert.ok(await boxHasFocus(), 'the box has no focus')
+    await inWebview(
+      REVIEW_PAGE,
+      `doc.defaultView.addEventListener('focus', () => { doc.body.dataset.refocused = 'yes' }, { once: true })
+       return true`,
+    )
+    // The workbench focuses the outer frame first, and the page after it.
+    await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
+    assert.ok(
+      await untilInWebview(REVIEW_PAGE, `return doc.body.dataset.refocused === 'yes'`),
+      'the page did not get the focus again',
+    )
+    assert.ok(await boxHasFocus(), 'the box lost the focus')
+  })
+
+  it('asks for the text before a save, and keeps the box open', async () => {
+    await openReview()
+    await select(2, 0, 5)
+    await vscode.commands.executeCommand('yreview.addCommentFromReviewPreview')
     assert.equal(await boxLines(), '3-3')
     await click('.yreview-save-local')
     assert.ok(

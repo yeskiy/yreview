@@ -1,9 +1,43 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { setTimeout as wait } from 'node:timers/promises'
 
-import { clickAt, evaluate, pressKey, targets, workbench } from './keymap/devtools'
+import * as vscode from 'vscode'
+
+import { clickAt, emulateFocus, evaluate, pressKey, targets, workbench } from './keymap/devtools'
 
 export const REVIEW_PAGE = 'body[data-yreview-preview]'
+
+// Reads the foreground window and walks up from this process. It sends no input and moves no window.
+const FOREGROUND_SCRIPT = `
+Add-Type -Namespace Y -Name U -MemberDefinition '
+[DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);'
+$front = 0; $null = [Y.U]::GetWindowThreadProcessId([Y.U]::GetForegroundWindow(), [ref]$front)
+$chain = @(1..12 | ForEach-Object -Begin { $id = ${process.pid} } -Process {
+  if ($id) { $id; $id = (Get-CimInstance Win32_Process -Filter "ProcessId=$id").ParentProcessId } })
+$chain -contains $front`
+
+/** True when the test window has the OS foreground. The focus emulation hides it from the page. */
+const inFront = (): boolean =>
+  process.platform !== 'win32' ||
+  execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', FOREGROUND_SCRIPT], {
+    encoding: 'utf8',
+  }).trim() === 'True'
+
+/** Skips a test that sends real keys while another app has the OS focus. Chromium drops those keys. */
+export const requireOsFocus = (test: Mocha.Context): void => {
+  if (inFront()) return
+  const current = test.test
+  if (current !== undefined) current.title += ' (skipped: another app has the OS focus)'
+  test.skip()
+}
+
+/** Gives the editor group the focus inside VS Code. The pages act as focused without the OS focus. */
+export const focusWorkbench = async (): Promise<void> => {
+  await emulateFocus()
+  await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
+}
 
 /** Runs a script in the content document `doc` of the webview whose page matches `marker`. */
 export const inWebview = async (marker: string, body: string): Promise<unknown> => {
@@ -12,9 +46,16 @@ export const inWebview = async (marker: string, body: string): Promise<unknown> 
     if (!doc?.querySelector(${JSON.stringify(marker)})) return { missing: true }
     ${body}
   })()`
+  await emulateFocus()
   const frames = (await targets()).filter((target) => target.type === 'iframe')
+  // A frame that closes during the call is not the page. Any other error fails the test.
   const values = await Promise.all(
-    frames.map((frame) => evaluate(frame, script).catch(() => ({ missing: true }))),
+    frames.map((frame) =>
+      evaluate(frame, script).catch(async (error: unknown) => {
+        if ((await targets()).some((target) => target.id === frame.id)) throw error
+        return { missing: true }
+      }),
+    ),
   )
   return values.find((value) => (value as { missing?: boolean } | null)?.missing !== true)
 }
@@ -23,6 +64,27 @@ export const inWebview = async (marker: string, body: string): Promise<unknown> 
 export const untilInWebview = async (marker: string, body: string, tries = 40): Promise<boolean> =>
   Boolean(await inWebview(marker, body)) ||
   (tries > 0 && wait(250).then(() => untilInWebview(marker, body, tries - 1)))
+
+/** The keys reach the element of the page: the workbench, the webview host and the page focus the chain. */
+export const keyboardIn = async (marker: string, selector: string): Promise<boolean> =>
+  (await evaluate(
+    await workbench(),
+    `document.activeElement?.matches('iframe.webview') === true`,
+  )) === true &&
+  (await inWebview(
+    marker,
+    `return document.activeElement === document.getElementById('active-frame') &&
+      doc.activeElement === doc.querySelector(${JSON.stringify(selector)})`,
+  )) === true
+
+/** Waits until the keys reach the element of the page. */
+export const untilKeyboardIn = async (
+  marker: string,
+  selector: string,
+  tries = 40,
+): Promise<boolean> =>
+  (await keyboardIn(marker, selector)) ||
+  (tries > 0 && wait(250).then(() => untilKeyboardIn(marker, selector, tries - 1)))
 
 /** The top left point of the visible webview in the workbench page. */
 export const webviewOrigin = async (): Promise<{ x: number; y: number }> =>

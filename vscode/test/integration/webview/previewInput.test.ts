@@ -13,7 +13,8 @@ import {
   sourceBeside,
   stillShown,
 } from '../previewKit'
-import { focusWindow, until } from '../window'
+import { focusWorkbench } from '../webviewFrames'
+import { until } from '../window'
 
 /** Runs a script in the content document `doc` of the preview webview, and gives its value. */
 const inPreview = async (body: string): Promise<unknown> => {
@@ -100,7 +101,7 @@ const chooseMenuItem = async (label: string): Promise<void> => {
 describe('real input in the Markdown preview', () => {
   beforeEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
-    await focusWindow()
+    await focusWorkbench()
   })
 
   afterEach(deleteNotesComments)
