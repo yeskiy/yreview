@@ -1,4 +1,11 @@
 <idea-plugin>
+  <extensions defaultExtensionNs="org.intellij.markdown">
+    <browserPreviewExtensionProvider
+        implementation="com.yeskiy.yreview.markdown.PreviewSelectionExtension$Provider" />
+  </extensions>
+  <extensions defaultExtensionNs="com.yeskiy.yreview">
+    <previewLines implementation="com.yeskiy.yreview.markdown.MarkdownPreviewLines" />
+  </extensions>
   <actions>
     <reference ref="com.yeskiy.yreview.AddComment">
       <add-to-group group-id="Markdown.PreviewGroup" anchor="last" />

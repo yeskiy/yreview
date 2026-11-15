@@ -52,6 +52,11 @@
     <module name="intellij.platform.collaborationTools" />
   </dependencies>
 
+  <extensionPoints>
+    <extensionPoint qualifiedName="com.yeskiy.yreview.previewLines"
+                    interface="com.yeskiy.yreview.action.PreviewLines" dynamic="true" />
+  </extensionPoints>
+
   <extensions defaultExtensionNs="com.intellij">
     <diff.DiffExtension implementation="com.yeskiy.yreview.diff.ReviewDiffExtension" />
 

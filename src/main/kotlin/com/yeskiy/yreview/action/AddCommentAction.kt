@@ -52,6 +52,23 @@ object CommentTarget {
             document = document,
         )
     }
+
+    /** A target of whole lines (0-based, inclusive) of [document]. */
+    fun fromLines(document: Document, path: String, lines: IntRange): Target {
+        val endStart = document.getLineStartOffset(lines.last)
+        val endLength = document.getLineEndOffset(lines.last) - endStart
+        return Target(
+            path = path,
+            range = CommentRange.of(
+                startLine = lines.first + 1,
+                startColumn = 0,
+                endLine = lines.last + 1,
+                endColumn = endLength,
+                endLineLength = endLength,
+            ),
+            document = document,
+        )
+    }
 }
 
 class AddCommentAction : AnAction(), DumbAware {
@@ -87,7 +104,9 @@ class AddCommentAction : AnAction(), DumbAware {
             return
         }
         val anchor = (found as? AnchorResult.Found)?.anchor ?: return
-        val target = CommentTarget.fromEditor(editor, anchor.path)
+        val target = PreviewLines.of(event, editor.document)
+            ?.let { CommentTarget.fromLines(editor.document, anchor.path, it) }
+            ?: CommentTarget.fromEditor(editor, anchor.path)
 
         val header = CommentText.header(target.path, target.range)
         val canPush = anchor.kind == StoreKind.GIT
