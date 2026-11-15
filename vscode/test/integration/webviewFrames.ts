@@ -111,8 +111,15 @@ export const pressAddKey = (): Promise<void> =>
 
 /** Right-clicks the first element of the page that matches `selector`, with a real mouse. */
 export const rightClickAt = async (marker: string, selector: string): Promise<void> => {
-  // A new webview takes the focus late, and that closes a context menu that is already open.
-  if (!(await untilKeyboardIn(marker, undefined, 8)))
+  const inner = (await inWebview(
+    marker,
+    `const rect = doc.querySelector(${JSON.stringify(selector)}).getBoundingClientRect()
+     return { x: rect.left + 5, y: rect.top + rect.height / 2 }`,
+  )) as { x: number; y: number }
+  const { x, y } = await webviewOrigin()
+  // The workbench can keep the focus on its body. A first click gives the page the focus, as a user does.
+  if (!(await keyboardIn(marker))) await clickAt(x + inner.x, y + inner.y)
+  if (!(await untilKeyboardIn(marker, undefined, 20)))
     assert.fail(
       `the page did not get the focus before the right-click: ${JSON.stringify({
         workbench: await evaluate(
@@ -125,12 +132,6 @@ export const rightClickAt = async (marker: string, selector: string): Promise<vo
         ),
       })}`,
     )
-  const inner = (await inWebview(
-    marker,
-    `const rect = doc.querySelector(${JSON.stringify(selector)}).getBoundingClientRect()
-     return { x: rect.left + 5, y: rect.top + rect.height / 2 }`,
-  )) as { x: number; y: number }
-  const { x, y } = await webviewOrigin()
   await clickAt(x + inner.x, y + inner.y, 'right')
 }
 
