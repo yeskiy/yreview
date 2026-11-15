@@ -49,6 +49,13 @@ over that text to see the same count. The high contrast themes show an outline i
 `yreview.commentOverlapBorder` in place of the amber color. You can change each color in the
 setting `workbench.colorCustomizations`.
 
+Yreview shows the open comments of every commit, not only those of HEAD. A comment of an
+earlier commit follows its lines: when lines above it change, the comment moves with them.
+When the commented lines change, the thread label starts with `Outdated`, the thread shows
+the original text, and the lines get the color `yreview.commentOutdatedBackground`. When
+the file is removed, the comment shows only in the task views, with the words
+`file removed`. Click that row to open the file as it was at the commit of the comment.
+
 In the Markdown preview, Add Review Comment opens the comment box in the source file. When the
 source is not in view, it opens beside the preview, so the preview stays. Right-click a selection
 or a block of the preview and select Add Review Comment to comment on the source lines of that

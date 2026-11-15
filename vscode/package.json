@@ -2,7 +2,7 @@
   "name": "yreview",
   "displayName": "Yreview",
   "description": "Review comments that live in git notes. The same comments show in the Yreview plugin for JetBrains IDEs.",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "publisher": "yeskiy",
   "license": "Apache-2.0",
   "icon": "images/icon.png",
@@ -1506,6 +1506,16 @@
           "light": "#00000000",
           "highContrast": "contrastActiveBorder",
           "highContrastLight": "contrastActiveBorder"
+        }
+      },
+      {
+        "id": "yreview.commentOutdatedBackground",
+        "description": "Background of the lines that stand where an outdated review comment was. The commented lines changed after the comment.",
+        "defaults": {
+          "dark": "#8080801f",
+          "light": "#8080801a",
+          "highContrast": null,
+          "highContrastLight": null
         }
       }
     ],

@@ -87,11 +87,15 @@ describe('manifest', () => {
       'yreview.commentRangeBackground',
       'yreview.commentOverlapBackground',
       'yreview.commentOverlapBorder',
+      'yreview.commentOutdatedBackground',
     ])
     const overlap = contributes.colors[1]?.defaults ?? {}
     assert.match(overlap.dark ?? '', /^#[0-9a-f]{8}$/)
     assert.match(overlap.light ?? '', /^#[0-9a-f]{8}$/)
     assert.equal(contributes.colors[2]?.defaults?.highContrast, 'contrastActiveBorder')
+    const outdated = contributes.colors[3]?.defaults ?? {}
+    assert.match(outdated.dark ?? '', /^#[0-9a-f]{8}$/)
+    assert.match(outdated.light ?? '', /^#[0-9a-f]{8}$/)
   })
 
   it('puts the task views in an activity bar container', () => {

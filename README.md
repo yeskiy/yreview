@@ -70,6 +70,9 @@ goes, what one record holds, and every file the plugin writes.
 - A gutter icon and a quiet background mark a commented range.
 - A card opens inside the editor. The card reads Markdown, and it carries a Resolve button
   and a Delete button.
+- Comments of earlier commits follow their lines. A comment whose lines changed shows as
+  outdated with its original text, and a comment of a removed file shows in the task views
+  as "file removed".
 
 **The storage**
 

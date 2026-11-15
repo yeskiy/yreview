@@ -49,7 +49,7 @@ const ROWS: readonly { intellij: string; vscode?: string; gap?: string }[] = [
   },
   {
     intellij: 'Colors page',
-    gap: 'The color yreview.commentRangeBackground in contributes.colors. A theme changes it.',
+    gap: 'The colors yreview.commentRangeBackground and yreview.commentOutdatedBackground in contributes.colors. A theme changes them.',
   },
 ]
 // The TODO patterns and the TODO filters of IntelliJ are IDE settings, not plugin settings.
