@@ -195,10 +195,19 @@ describe('comments from the Markdown preview', () => {
       Promise.resolve(),
     )
     await vscode.commands.executeCommand('yreview.addCommentFromPreview')
-    assert.ok(
-      await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment'),
-      'the comment box did not get the focus',
-    )
+    if (!(await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment')))
+      assert.fail(
+        `the comment box did not get the focus: ${JSON.stringify({
+          group: vscode.window.tabGroups.activeTabGroup.viewColumn,
+          tabs: vscode.window.tabGroups.all.map((group) =>
+            group.tabs.map(
+              ({ input, isActive }) =>
+                `${isActive ? '*' : ''}${(input as { viewType?: string } | undefined)?.viewType ?? (input instanceof vscode.TabInputText ? 'text' : 'other')}`,
+            ),
+          ),
+          editor: vscode.window.activeTextEditor?.document.uri.toString(),
+        })}`,
+      )
     assert.ok(
       sourceBeside('vscode.markdown.editor')?.selection.isEqual(new vscode.Selection(2, 0, 4, 17)),
       'no source beside the rich editor, or not on its selection',

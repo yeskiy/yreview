@@ -67,14 +67,27 @@ const sourceEditor = async (asked: RangeAsk): Promise<vscode.TextEditor | undefi
 }
 
 /** The selection of the active rich editor, read from a text editor that replaces it for a moment. */
-const richSelection = async (): Promise<vscode.Selection | undefined> => {
-  const input = vscode.window.tabGroups.activeTabGroup.activeTab?.input
+const richSelection = async (asked: RangeAsk): Promise<vscode.Selection | undefined> => {
+  const { activeTab, viewColumn } = vscode.window.tabGroups.activeTabGroup
+  const input = activeTab?.input
   if (!(input instanceof vscode.TabInputCustom) || input.viewType !== RICH_EDITOR) return undefined
+  // The late range ask of this text editor would count as the ask of the source editor beside.
+  const read = firstAsk(asked, input.uri)
   await vscode.commands.executeCommand('reopenActiveEditorWith', 'default')
   const text = vscode.window.activeTextEditor
   const selection =
     text?.document.uri.toString() === input.uri.toString() ? text.selection : undefined
-  await vscode.commands.executeCommand('reopenActiveEditorWith', RICH_EDITOR)
+  const temporary = vscode.window.tabGroups.activeTabGroup.activeTab
+  await read
+  // A webview that opens with the focus takes it late, also from the comment box.
+  await vscode.commands.executeCommand('vscode.openWith', input.uri, RICH_EDITOR, {
+    viewColumn,
+    preserveFocus: true,
+    preview: activeTab?.isPreview,
+    selection,
+  } satisfies vscode.TextDocumentShowOptions)
+  if (temporary?.input instanceof vscode.TabInputText)
+    await vscode.window.tabGroups.close(temporary, true)
   return selection
 }
 
@@ -97,7 +110,7 @@ const fromPreview =
   (asked: RangeAsk) =>
   async (context?: unknown): Promise<void> => {
     const lines = rangeOfContext(context)
-    const rich = lines === undefined ? await richSelection() : undefined
+    const rich = lines === undefined ? await richSelection(asked) : undefined
     const editor = await sourceEditor(asked)
     if (editor === undefined) return
     const selection = rich ?? linesIn(editor.document, lines)
