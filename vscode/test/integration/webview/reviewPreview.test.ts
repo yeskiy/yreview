@@ -29,12 +29,19 @@ const reviewTabs = () =>
         tab.input.viewType.endsWith('yreview.preview'),
     )
 const openReview = async (): Promise<void> => {
-  await vscode.window.showTextDocument(review(), {
+  const editor = await vscode.window.showTextDocument(review(), {
     viewColumn: vscode.ViewColumn.One,
     preview: false,
   })
+  // The editor keeps the scroll of an earlier test, and the page follows it.
+  editor.revealRange(new vscode.Range(0, 0, 0, 0), vscode.TextEditorRevealType.AtTop)
   await vscode.commands.executeCommand('yreview.openReviewPreview')
   assert.ok(await until(() => reviewTabs().length === 1), 'no review preview tab')
+  // The page shows its first HTML before its script listens, and it drops a message before that.
+  await (
+    (await previews()).all().find((one) => one.uri.fsPath === review().fsPath) ??
+    assert.fail('no preview')
+  ).whenReady()
   assert.ok(
     await untilInWebview(REVIEW_PAGE, `return doc.querySelector('[data-line-end]') !== null`),
     'no content',
@@ -121,10 +128,17 @@ describe('the review preview', () => {
         (shown) => shown.document.uri.fsPath === review().fsPath,
       ) ?? assert.fail('no source')
     editor.revealRange(new vscode.Range(100, 0, 100, 0), vscode.TextEditorRevealType.AtTop)
-    assert.ok(
-      await untilInWebview(REVIEW_PAGE, `return doc.defaultView.scrollY > 200`),
-      'the page did not scroll',
-    )
+    if (!(await untilInWebview(REVIEW_PAGE, `return doc.defaultView.scrollY > 200`)))
+      assert.fail(
+        `the page did not scroll: ${JSON.stringify({
+          source: editor.visibleRanges[0]?.start.line,
+          page: await inWebview(
+            REVIEW_PAGE,
+            `return { y: doc.defaultView.scrollY, height: doc.documentElement.scrollHeight,
+              view: doc.defaultView.innerHeight, blocks: doc.querySelectorAll('[data-line]').length }`,
+          ),
+        })}`,
+      )
   })
 
   it('runs no script of the document', async () => {
