@@ -7,7 +7,7 @@ import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
-import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.tasks.Placed
 import com.yeskiy.yreview.ui.CommentCard
 import icons.CollaborationToolsIcons
 import javax.swing.Icon
@@ -19,7 +19,7 @@ import javax.swing.Icon
 class CommentIconRenderer(
     private val project: Project,
     private val root: VirtualFile,
-    private val comments: List<StoredComment>,
+    private val comments: List<Placed>,
     private val cover: Int = 0,
 ) : GutterIconRenderer() {
 
@@ -27,11 +27,13 @@ class CommentIconRenderer(
 
     override fun getAlignment(): Alignment = Alignment.LEFT
 
-    override fun getTooltipText(): String = CoverNote.html(cover, CommentCard.html(comments))
+    override fun getTooltipText(): String =
+        CoverNote.html(cover, CommentCard.html(comments.map { it.stored }, carry = carry()))
 
     override fun getAccessibleName(): String = "Review comment"
 
-    override fun getAccessibleTooltipText(): String = CoverNote.plain(cover, CommentCard.plain(comments))
+    override fun getAccessibleTooltipText(): String =
+        CoverNote.plain(cover, CommentCard.plain(comments.map { it.stored }, carry = carry()))
 
     override fun getClickAction(): AnAction = DumbAwareAction.create { open(it) }
 
@@ -39,6 +41,8 @@ class CommentIconRenderer(
         other is CommentIconRenderer && other.root == root && other.comments == comments && other.cover == cover
 
     override fun hashCode(): Int = 31 * (31 * root.hashCode() + comments.hashCode()) + cover
+
+    private fun carry() = comments.associate { it.stored.id to it.carry }
 
     /** The gutter of the editor puts the editor itself in the context of the click. */
     private fun open(event: AnActionEvent) {

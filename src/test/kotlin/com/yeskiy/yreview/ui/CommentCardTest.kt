@@ -1,5 +1,6 @@
 package com.yeskiy.yreview.ui
 
+import com.yeskiy.yreview.store.Carry
 import com.yeskiy.yreview.store.Comment
 import com.yeskiy.yreview.store.Location
 import com.yeskiy.yreview.store.NoteRefs
@@ -127,5 +128,23 @@ class CommentCardTest {
             CommentCard.plain(listOf(stored(author = "one@b.c"), stored(author = "two@b.c")), time)
                 .contains("second line\n\ntwo@b.c"),
         )
+    }
+
+    @Test
+    fun `an outdated comment states it and shows the original text`() {
+        val stored = stored(range = Range(startLine = 3, endLine = 3))
+        val carry = mapOf(stored.id to Carry.Outdated(Range(startLine = 5, endLine = 5), listOf("val a = 1")))
+        val card = CommentCard.plain(listOf(stored), time, carry)
+        assertTrue(card.contains("Outdated, was lines 3-3"), card)
+        assertTrue(card.contains("Original text:\nval a = 1"), card)
+    }
+
+    @Test
+    fun `the html card of an outdated comment escapes the original text`() {
+        val stored = stored()
+        val carry = mapOf(stored.id to Carry.Outdated(Range(startLine = 5, endLine = 5), listOf("<b>x</b>")))
+        val card = CommentCard.html(listOf(stored), time, carry)
+        assertTrue(card.contains("Outdated"), card)
+        assertTrue(card.contains("&lt;b&gt;x&lt;/b&gt;"), card)
     }
 }

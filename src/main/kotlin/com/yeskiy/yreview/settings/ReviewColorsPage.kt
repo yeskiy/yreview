@@ -23,18 +23,24 @@ class ReviewColorsPage : ColorSettingsPage {
         fun parse(text: String): Result {
             val trimmed = <range>text.trim()</range>
         <range>    return Result(trimmed)</range>
+        <outdated>    return Result(text)</outdated>
         }
 
         fun check(<range>value: </range><overlap>Int</overlap><range> = 0</range>) = value > 0
         """.trimIndent()
 
     override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> =
-        mapOf("range" to ReviewColors.COMMENT_RANGE, "overlap" to ReviewColors.COMMENT_OVERLAP)
+        mapOf(
+            "range" to ReviewColors.COMMENT_RANGE,
+            "overlap" to ReviewColors.COMMENT_OVERLAP,
+            "outdated" to ReviewColors.COMMENT_OUTDATED,
+        )
 
     override fun getAttributeDescriptors(): Array<AttributesDescriptor> =
         arrayOf(
             AttributesDescriptor("Text of an open comment", ReviewColors.COMMENT_RANGE),
             AttributesDescriptor("Text that two or more open comments cover", ReviewColors.COMMENT_OVERLAP),
+            AttributesDescriptor("Lines of an outdated comment", ReviewColors.COMMENT_OUTDATED),
         )
 
     override fun getColorDescriptors(): Array<ColorDescriptor> = ColorDescriptor.EMPTY_ARRAY

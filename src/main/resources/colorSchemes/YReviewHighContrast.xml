@@ -6,4 +6,10 @@
       <option name="EFFECT_TYPE" value="0"/>
     </value>
   </option>
+  <option name="Y_REVIEW_COMMENT_OUTDATED">
+    <value>
+      <option name="EFFECT_COLOR" value="808080"/>
+      <option name="EFFECT_TYPE" value="5"/>
+    </value>
+  </option>
 </list>

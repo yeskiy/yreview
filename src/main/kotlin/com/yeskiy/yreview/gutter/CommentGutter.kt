@@ -14,11 +14,17 @@ import com.intellij.openapi.editor.markup.RangeHighlighter
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.newvfs.events.VFileContentChangeEvent
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.yeskiy.yreview.diff.DiffAnchor
 import com.yeskiy.yreview.diff.REVIEW_ANCHOR
 import com.yeskiy.yreview.diff.REVIEW_ROOT
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.AnchorResult
+import com.yeskiy.yreview.store.Carry
+import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.ReviewAnchor
@@ -26,6 +32,9 @@ import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.store.ideGitRunner
+import com.yeskiy.yreview.tasks.Placed
+import com.yeskiy.yreview.tasks.PlacedComments
 import com.yeskiy.yreview.ui.CommentDelete
 import com.yeskiy.yreview.ui.CommentResolve
 import com.yeskiy.yreview.ui.ReadBox
@@ -35,17 +44,24 @@ import git4idea.repo.GitRepositoryChangeListener
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * The icons, the ranges, and the count of open comments on each icon line of one file.
- * The plugin builds this off the user interface thread.
+ * The icons, the current and the outdated ranges, and the count of open comments on each icon
+ * line of one file. The plugin builds this off the user interface thread.
  */
 data class CommentMarks(
-    val byLine: Map<Int, List<StoredComment>>,
+    val byLine: Map<Int, List<Placed>>,
     val ranges: List<Range>,
+    val dim: List<Range>,
     val covers: Map<Int, Int>,
 ) {
 
     companion object {
-        val EMPTY = CommentMarks(emptyMap(), emptyList(), emptyMap())
+        val EMPTY = CommentMarks(emptyMap(), emptyList(), emptyList(), emptyMap())
+
+        fun of(placed: List<Placed>): CommentMarks {
+            val byLine = CommentIndex.byStartLine(placed)
+            val ranges = CommentIndex.ranges(placed)
+            return CommentMarks(byLine, ranges, CommentIndex.dim(placed), CommentIndex.covers(ranges, byLine.keys))
+        }
     }
 }
 
@@ -65,11 +81,27 @@ class CommentGutter(private val project: Project) : Disposable {
 
     private val boxes = ConcurrentHashMap<Editor, EditorInlays>()
 
+    /** True for the absolute path of a file whose editor shows a comment of another commit. */
+    private val carried = ConcurrentHashMap<String, Boolean>()
+
     init {
         val bus = project.messageBus.connect(this)
         bus.subscribe(REVIEW_COMMENTS, ReviewCommentListener { repaintAll() })
         bus.subscribe(GitRepository.GIT_REPO_CHANGE, GitRepositoryChangeListener { repaintAll() })
         bus.subscribe(EditorColorsManager.TOPIC, EditorColorsListener { repaintAll() })
+        bus.subscribe(
+            VirtualFileManager.VFS_CHANGES,
+            object : BulkFileListener {
+                override fun after(events: List<VFileEvent>) {
+                    val written = events.filterIsInstance<VFileContentChangeEvent>().map { it.file.path }.toSet()
+                    if (written.isEmpty()) return
+                    painted.keys.filter { editor ->
+                        val path = FileDocumentManager.getInstance().getFile(editor.document)?.path
+                        path != null && path in written && carried[path] == true
+                    }.forEach { repaint(it) }
+                }
+            },
+        )
     }
 
     fun attach(editor: Editor) {
@@ -106,7 +138,8 @@ class CommentGutter(private val project: Project) : Disposable {
      * The Delete key acts on a card that holds one comment. The key does nothing on a card of
      * several comments, because the key cannot name the comment that the user means.
      */
-    fun toggleCard(editor: Editor, root: VirtualFile, comments: List<StoredComment>) {
+    fun toggleCard(editor: Editor, root: VirtualFile, placed: List<Placed>) {
+        val comments = placed.map { it.stored }
         val key = InlayKey(InlayKind.CARD, comments.firstOrNull()?.id.orEmpty())
         val inlays = inlaysOf(editor)
         if (inlays.holds(key)) {
@@ -119,8 +152,8 @@ class CommentGutter(private val project: Project) : Disposable {
             CommentResolve.run(project, root, stored)
         }
         val delete = { stored: StoredComment -> CommentDelete.run(project, stored, close) }
-        val card = ReadBox.build(project, comments, resolve, delete, close)
-        val inlay = inlays.show(key, CommentIndex.lastLine(comments), card)
+        val card = ReadBox.build(project, comments, resolve, delete, close, placed.associate { it.stored.id to it.carry })
+        val inlay = inlays.show(key, CommentIndex.lastShownLine(placed), card)
         val alone = comments.singleOrNull()
         if (inlay != null && alone != null) ReadBox.bindDelete(card, inlay) { delete(alone) }
     }
@@ -192,7 +225,7 @@ class CommentGutter(private val project: Project) : Disposable {
         if (side == null && file == null) return
         ApplicationManager.getApplication().executeOnPooledThread {
             val anchor = anchorOf(side, sideRoot, if (side == null) fileAnchor(file) else null)
-            val marks = marksOf(anchor)
+            val marks = marksOf(anchor, side)
             ApplicationManager.getApplication().invokeLater({ draw(editor, anchor?.root, marks) }, project.disposed)
         }
     }
@@ -215,12 +248,24 @@ class CommentGutter(private val project: Project) : Disposable {
         return ReviewAnchor(kind, root, place.key, place.path)
     }
 
-    private fun marksOf(anchor: ReviewAnchor?): CommentMarks {
+    /**
+     * A file editor reads the shared function, so it shows what the task views list. A diff side
+     * shows the comments of its own revision at their stored lines.
+     */
+    private fun marksOf(anchor: ReviewAnchor?, side: DiffAnchor?): CommentMarks {
         if (anchor == null) return CommentMarks.EMPTY
-        val open = ReviewService.getInstance(project).bookFor(anchor).open(anchor.key)
-        val byLine = CommentIndex.byStartLine(open, anchor.path)
-        val ranges = CommentIndex.ranges(open, anchor.path)
-        return CommentMarks(byLine, ranges, CommentIndex.covers(ranges, byLine.keys))
+        val service = ReviewService.getInstance(project)
+        val git = ideGitRunner(project, anchor.root)
+        val placed = when {
+            side != null -> service.bookFor(anchor).open(anchor.key)
+                .filter { it.comment.location?.path == anchor.path }
+                .map { Placed(it, Carry.Same(it.comment.location?.range)) }
+            anchor.kind == StoreKind.FOLDER ->
+                PlacedComments.of(git, anchor.root.path, FolderStore.WORKTREE, anchor.path, service.folderNotesOf(anchor.root))
+            else -> PlacedComments.of(git, anchor.root.path, anchor.key, anchor.path)
+        }
+        if (side == null) carried[anchor.root.path + "/" + anchor.path] = placed.any { it.stored.commit != anchor.key }
+        return CommentMarks.of(placed)
     }
 
     /**
@@ -234,7 +279,7 @@ class CommentGutter(private val project: Project) : Disposable {
         old.clear(editor)
         painted[editor] =
             if (root == null) Drawn.NONE
-            else CommentLayers.paint(editor, marks.ranges).let { drawn ->
+            else CommentLayers.paint(editor, marks.ranges, marks.dim).let { drawn ->
                 drawn.copy(
                     highlighters = drawn.highlighters + marks.byLine.entries.mapNotNull { (line, here) ->
                         mark(editor, root, line, here, marks.covers[line] ?: 0)
@@ -247,7 +292,7 @@ class CommentGutter(private val project: Project) : Disposable {
         editor: Editor,
         root: VirtualFile,
         line: Int,
-        here: List<StoredComment>,
+        here: List<Placed>,
         cover: Int,
     ): RangeHighlighter? {
         if (line < 1 || line > editor.document.lineCount) return null

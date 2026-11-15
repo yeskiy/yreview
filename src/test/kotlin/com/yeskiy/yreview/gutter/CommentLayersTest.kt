@@ -96,6 +96,30 @@ class CommentLayersTest : BasePlatformTestCase() {
         )
     }
 
+    fun `test an outdated range paints the dim key and shows no count`() {
+        myFixture.configureByText("a.txt", text)
+        val line = Range(startLine = 1, endLine = 1)
+
+        val drawn = CommentLayers.paint(myFixture.editor, emptyList(), listOf(line))
+
+        assertEquals(listOf(ReviewColors.COMMENT_OUTDATED), drawn.highlighters.map { it.textAttributesKey })
+        assertEquals(Triple(0, 15, HighlighterTargetArea.LINES_IN_RANGE), drawn.highlighters.single().place())
+        assertEquals(emptyList<Pair<Int, String>>(), counts(drawn))
+    }
+
+    fun `test an outdated range on the lines of a current comment adds no overlap`() {
+        myFixture.configureByText("a.txt", text)
+        val line = Range(startLine = 1, endLine = 1)
+
+        val drawn = CommentLayers.paint(myFixture.editor, listOf(line), listOf(line))
+
+        assertEquals(
+            listOf(ReviewColors.COMMENT_RANGE, ReviewColors.COMMENT_OUTDATED),
+            drawn.highlighters.map { it.textAttributesKey },
+        )
+        assertEquals(emptyList<Pair<Int, String>>(), counts(drawn))
+    }
+
     private fun layers(vararg ranges: Range): List<CommentLayer> =
         CommentLayers.layersOf(myFixture.editor.document, ranges.toList())
 

@@ -23,4 +23,8 @@ object ReviewColors {
      */
     val COMMENT_OVERLAP: TextAttributesKey =
         TextAttributesKey.createTextAttributesKey("Y_REVIEW_COMMENT_OVERLAP", EditorColors.SEARCH_RESULT_ATTRIBUTES)
+
+    /** The lines that stand where an outdated comment was. The scheme files give it a dim background. */
+    val COMMENT_OUTDATED: TextAttributesKey =
+        TextAttributesKey.createTextAttributesKey("Y_REVIEW_COMMENT_OUTDATED", EditorColors.INJECTED_LANGUAGE_FRAGMENT)
 }

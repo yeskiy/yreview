@@ -1,18 +1,27 @@
 package com.yeskiy.yreview.gutter
 
+import com.yeskiy.yreview.store.Carry
 import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.store.shown
+import com.yeskiy.yreview.tasks.Placed
 
 object CommentIndex {
 
-    /** Groups the comments of one file by the first line of their range. Line numbers are 1-based. */
-    fun byStartLine(comments: List<StoredComment>, path: String): Map<Int, List<StoredComment>> =
-        comments.mapNotNull { stored -> spanOf(stored, path)?.let { it.first to stored } }
+    /** Groups the shown comments by the first line of their place. Line numbers are 1-based. */
+    fun byStartLine(placed: List<Placed>): Map<Int, List<Placed>> =
+        placed.mapNotNull { entry -> entry.carry.shown?.let { minOf(it.startLine, it.endLine) to entry } }
             .groupBy({ it.first }, { it.second })
 
-    /** The ranges of the comments of one file. A comment without a range names no text. */
-    fun ranges(comments: List<StoredComment>, path: String): List<Range> =
-        comments.mapNotNull { stored -> stored.comment.location?.takeIf { it.path == path }?.range }
+    /** The ranges of the comments whose lines did not change. Only these join the overlap count. */
+    fun ranges(placed: List<Placed>): List<Range> = placed.mapNotNull { (it.carry as? Carry.Same)?.range }
+
+    /** The ranges of the outdated comments, which get the dim color. */
+    fun dim(placed: List<Placed>): List<Range> = placed.mapNotNull { (it.carry as? Carry.Outdated)?.range }
+
+    /** The last shown line of these comments. The card of the editor sits under it. */
+    fun lastShownLine(placed: List<Placed>): Int =
+        placed.mapNotNull { it.carry.shown }.maxOfOrNull { maxOf(it.startLine, it.endLine) } ?: 0
 
     /**
      * How many of [ranges] cover each of [lines]. The count is the ranges that start on or
@@ -40,10 +49,4 @@ object CommentIndex {
         comments.mapNotNull { it.comment.location?.range }
             .maxOfOrNull { maxOf(it.startLine, it.endLine) } ?: 0
 
-    private fun spanOf(stored: StoredComment, path: String): IntRange? {
-        val location = stored.comment.location ?: return null
-        if (location.path != path) return null
-        val range = location.range ?: return null
-        return minOf(range.startLine, range.endLine)..maxOf(range.startLine, range.endLine)
-    }
 }

@@ -7,15 +7,18 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.editor.Inlay
 import com.intellij.openapi.editor.event.DocumentEvent
 import com.intellij.openapi.editor.event.DocumentListener
+import com.intellij.openapi.editor.ex.util.EditorUtil
 import com.intellij.openapi.project.DumbAwareAction
 import com.intellij.openapi.project.Project
 import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBCheckBox
 import com.intellij.ui.components.JBLabel
+import com.intellij.ui.components.JBTextArea
 import com.intellij.util.ui.JBFont
 import com.intellij.util.ui.JBUI
 import com.intellij.util.ui.UIUtil
 import com.yeskiy.yreview.settings.ReviewSettings
+import com.yeskiy.yreview.store.Carry
 import com.yeskiy.yreview.store.StoredComment
 import java.awt.BorderLayout
 import java.awt.Dimension
@@ -49,7 +52,8 @@ object ReadBox {
         resolve: ((StoredComment) -> Unit)?,
         delete: ((StoredComment) -> Unit)?,
         close: (() -> Unit)?,
-    ): JComponent = CardHost(card(project, comments, resolve, delete, close))
+        carry: Map<String, Carry> = emptyMap(),
+    ): JComponent = CardHost(card(project, comments, resolve, delete, close, carry))
 
     /** Builds the card that the preview pane shows. That pane reads a comment back and writes nothing. */
     fun preview(project: Project, comments: List<StoredComment>): JComponent =
@@ -66,13 +70,16 @@ object ReadBox {
         resolve: ((StoredComment) -> Unit)?,
         delete: ((StoredComment) -> Unit)?,
         close: (() -> Unit)?,
+        carry: Map<String, Carry> = emptyMap(),
     ): JPanel {
         val alone = comments.singleOrNull()
         val column = JPanel().also { it.layout = BoxLayout(it, BoxLayout.Y_AXIS) }
         column.isOpaque = false
         comments.forEachIndexed { index, stored ->
             if (index > 0) column.add(JSeparator())
-            column.add(block(project, stored, resolve.takeIf { alone == null }, delete.takeIf { alone == null }))
+            column.add(
+                block(project, stored, resolve.takeIf { alone == null }, delete.takeIf { alone == null }, carry[stored.id]),
+            )
         }
         return BoxParts.card(BorderLayout(0, JBUI.scale(8))).also { card ->
             card.add(column, BorderLayout.CENTER)
@@ -113,6 +120,7 @@ object ReadBox {
         stored: StoredComment,
         resolve: ((StoredComment) -> Unit)?,
         delete: ((StoredComment) -> Unit)?,
+        carry: Carry?,
     ): JPanel {
         val body = CommentField(project)
         body.isViewer = true
@@ -120,17 +128,36 @@ object ReadBox {
 
         return JPanel(BorderLayout(0, JBUI.scale(6))).also { panel ->
             panel.isOpaque = false
-            panel.add(head(stored), BorderLayout.NORTH)
-            panel.add(body, BorderLayout.CENTER)
+            panel.add(head(stored, carry), BorderLayout.NORTH)
+            panel.add(
+                CommentCard.original(carry)?.let { lines -> withOriginal(body, lines) } ?: body,
+                BorderLayout.CENTER,
+            )
             BoxParts.row(buttons(stored, resolve, delete))?.let { panel.add(it, BorderLayout.SOUTH) }
         }
     }
 
-    private fun head(stored: StoredComment): JComponent =
+    /** The text of the comment, then the lines that an outdated comment named, in the editor font. */
+    private fun withOriginal(body: JComponent, lines: List<String>): JComponent =
+        JPanel(BorderLayout(0, JBUI.scale(4))).also { panel ->
+            panel.isOpaque = false
+            panel.add(body, BorderLayout.NORTH)
+            panel.add(BoxParts.small(CommentCard.ORIGINAL), BorderLayout.CENTER)
+            panel.add(
+                JBTextArea(lines.joinToString("\n")).also { area ->
+                    area.isEditable = false
+                    area.isOpaque = false
+                    area.font = EditorUtil.getEditorFont()
+                },
+                BorderLayout.SOUTH,
+            )
+        }
+
+    private fun head(stored: StoredComment, carry: Carry?): JComponent =
         JPanel(BorderLayout(0, JBUI.scale(2))).also {
             it.isOpaque = false
             it.add(nameLine(stored), BorderLayout.NORTH)
-            it.add(BoxParts.small(CommentCard.state(stored)), BorderLayout.SOUTH)
+            it.add(BoxParts.small(CommentCard.state(stored, carry)), BorderLayout.SOUTH)
         }
 
     private fun nameLine(stored: StoredComment): JComponent =

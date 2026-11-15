@@ -48,7 +48,11 @@ object CommentLayers {
 
     private const val LINE_LAYER = HighlighterLayer.CARET_ROW - 2
 
-    fun paint(editor: Editor, ranges: List<Range>): Drawn {
+    /** The layer of an outdated comment stays under the layers of the current comments. */
+    private const val DIM_LAYER = HighlighterLayer.CARET_ROW - 3
+
+    /** [dim] holds the outdated ranges. They take the dim color as whole lines and join no count. */
+    fun paint(editor: Editor, ranges: List<Range>, dim: List<Range> = emptyList()): Drawn {
         val layers = layersOf(editor.document, ranges)
         val highlighters = layers.map { layer ->
             val area = if (layer.wholeLines) HighlighterTargetArea.LINES_IN_RANGE else HighlighterTargetArea.EXACT_RANGE
@@ -60,7 +64,12 @@ object CommentLayers {
         val inlays = countsOf(editor.document, layers).mapNotNull { (offset, count) ->
             editor.inlayModel.addAfterLineEndElement(offset, InlayProperties(), CountRenderer(count.toString()))
         }
-        return Drawn(highlighters, inlays)
+        val dimmed = dim.mapNotNull { placeOf(editor.document, it) }.map { place ->
+            editor.markupModel.addRangeHighlighter(
+                ReviewColors.COMMENT_OUTDATED, place.start, place.end, DIM_LAYER, HighlighterTargetArea.LINES_IN_RANGE,
+            )
+        }
+        return Drawn(highlighters + dimmed, inlays)
     }
 
     /**
