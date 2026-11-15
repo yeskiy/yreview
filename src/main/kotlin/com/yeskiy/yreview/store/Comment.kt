@@ -17,6 +17,7 @@ data class Location(
     val commit: String,
     val path: String,
     val range: Range? = null,
+    val text: String? = null,
 )
 
 @Serializable
@@ -44,7 +45,9 @@ object CommentJson {
     fun decode(line: String): Comment = json.decodeFromString(Comment.serializer(), line)
 }
 
+/** The identifier leaves out `location.text` (spec section 4, rule 7), so a 1.0 reader gives the same value. */
 fun Comment.id(): String {
-    val digest = MessageDigest.getInstance("SHA-1").digest(CommentJson.encode(this).toByteArray())
+    val digest = MessageDigest.getInstance("SHA-1")
+        .digest(CommentJson.encode(copy(location = location?.copy(text = null))).toByteArray())
     return digest.joinToString("") { "%02x".format(it) }
 }

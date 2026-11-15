@@ -256,5 +256,17 @@
         "line": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"p\",\"path\":\"q\",\"range\":{\"startLine\":1,\"endLine\":2,\"endLine\":5}}}",
         "canonical": "{\"timestamp\":\"1\",\"author\":\"a@b.c\",\"location\":{\"commit\":\"c\",\"path\":\"q\",\"range\":{\"startLine\":1,\"endLine\":5}}}",
         "id": "ea114ccb71cab9604794674b6ef24f3e69fe1cbd"
+    },
+    {
+        "name": "location text is last and not in the identifier",
+        "line": "{\"timestamp\":\"1787194427\",\"author\":\"a@b.c\",\"description\":\"Check this.\",\"location\":{\"text\":\"b\\nc\",\"commit\":\"0123456789abcdef0123456789abcdef01234567\",\"path\":\"src/a.txt\",\"range\":{\"startLine\":2,\"endLine\":3}}}",
+        "canonical": "{\"timestamp\":\"1787194427\",\"author\":\"a@b.c\",\"description\":\"Check this.\",\"location\":{\"commit\":\"0123456789abcdef0123456789abcdef01234567\",\"path\":\"src/a.txt\",\"range\":{\"startLine\":2,\"endLine\":3},\"text\":\"b\\nc\"}}",
+        "id": "3952ca369dbc5cc4dd4cfdebaec1cd6e0d36b958"
+    },
+    {
+        "name": "location text and an unknown location key",
+        "line": "{\"timestamp\":\"1787194427\",\"author\":\"a@b.c\",\"description\":\"Check this.\",\"location\":{\"commit\":\"0123456789abcdef0123456789abcdef01234567\",\"path\":\"src/a.txt\",\"range\":{\"startLine\":2,\"endLine\":3},\"text\":\"b\\nc\",\"zzz\":1}}",
+        "canonical": "{\"timestamp\":\"1787194427\",\"author\":\"a@b.c\",\"description\":\"Check this.\",\"location\":{\"commit\":\"0123456789abcdef0123456789abcdef01234567\",\"path\":\"src/a.txt\",\"range\":{\"startLine\":2,\"endLine\":3},\"text\":\"b\\nc\"}}",
+        "id": "3952ca369dbc5cc4dd4cfdebaec1cd6e0d36b958"
     }
 ]

@@ -25,12 +25,13 @@ class CommentBook(
         path: String,
         range: Range,
         text: String,
+        lineText: String? = null,
     ): StoredComment {
         val comment = Comment(
             timestamp = clock().toString(),
             author = authorOf(),
             description = text,
-            location = Location(commit = commit, path = path, range = range),
+            location = Location(commit = commit, path = path, range = range, text = lineText),
         )
         return write(ref, commit, comment)
     }
@@ -41,7 +42,7 @@ class CommentBook(
             author = authorOf(),
             original = stored.id,
             resolved = true,
-            location = stored.comment.location,
+            location = stored.comment.location?.copy(text = null),
         )
         return write(stored.ref, stored.commit, update)
     }

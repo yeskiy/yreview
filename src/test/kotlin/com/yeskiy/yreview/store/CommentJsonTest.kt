@@ -1,5 +1,11 @@
 package com.yeskiy.yreview.store
 
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -54,5 +60,25 @@ class CommentJsonTest {
         assertEquals(sample.id(), sample.copy().id())
         assertTrue(sample.id() != other.id())
         assertEquals(40, sample.id().length)
+    }
+
+    @Test
+    fun `location text is the last key and the identifier leaves it out`() {
+        val case = Json.parseToJsonElement(Files.readString(Path.of("spec", "vectors", "carry.json")))
+            .jsonObject.getValue("compat").jsonArray.first().jsonObject
+        val comment = Comment(
+            timestamp = "1787194427",
+            author = "a@b.c",
+            description = "Check this.",
+            location = Location(
+                commit = "0123456789abcdef0123456789abcdef01234567",
+                path = "src/a.txt",
+                range = Range(startLine = 2, endLine = 3),
+                text = "b\nc",
+            ),
+        )
+        assertEquals(case.getValue("line").jsonPrimitive.content, CommentJson.encode(comment))
+        assertTrue(CommentJson.encode(comment).endsWith("\"text\":\"b\\nc\"}}"))
+        assertEquals(case.getValue("id").jsonPrimitive.content, comment.id())
     }
 }

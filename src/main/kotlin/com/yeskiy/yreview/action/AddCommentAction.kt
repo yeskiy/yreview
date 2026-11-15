@@ -4,6 +4,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.editor.Document
 import com.intellij.openapi.editor.Editor
 import com.intellij.openapi.editor.EditorKind
 import com.intellij.openapi.project.DumbAware
@@ -18,7 +19,8 @@ import com.yeskiy.yreview.ui.AddCommentPopup
 import com.yeskiy.yreview.ui.CommentText
 import com.yeskiy.yreview.ui.ReviewNotice
 
-data class Target(val path: String, val range: Range) {
+/** [document] is the text that the user sees, and the writer reads `location.text` from it. */
+data class Target(val path: String, val range: Range, val document: Document? = null) {
 
     val startLine: Int get() = range.startLine
 
@@ -47,6 +49,7 @@ object CommentTarget {
                 endColumn = endOffset - endLineStart,
                 endLineLength = document.getLineEndOffset(endLine) - endLineStart,
             ),
+            document = document,
         )
     }
 }

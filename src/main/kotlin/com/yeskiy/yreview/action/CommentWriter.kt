@@ -1,10 +1,13 @@
 package com.yeskiy.yreview.action
 
+import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
+import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.VfsUtil
 import com.yeskiy.yreview.settings.FolderNoticeLog
 import com.yeskiy.yreview.store.FolderStore
+import com.yeskiy.yreview.store.LineText
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewAnchor
@@ -33,10 +36,15 @@ object CommentWriter {
     fun write(project: Project, anchor: ReviewAnchor, target: Target, text: String, share: Boolean): Boolean {
         val firstFolderWrite = anchor.kind == StoreKind.FOLDER &&
             !FolderNoticeLog.getInstance(project).told(anchor.root.path)
+        val lineText = target.document?.let { document ->
+            ReadAction.compute<String?, RuntimeException> {
+                LineText.of({ document.getText(TextRange(document.getLineStartOffset(it - 1), document.getLineEndOffset(it - 1))) }, document.lineCount, target.range)
+            }
+        }
         try {
             StoreWrite.run(project, PROGRESS) {
                 ReviewService.getInstance(project)
-                    .addComment(anchor, NoteRefs.refFor(share), target.range, text)
+                    .addComment(anchor, NoteRefs.refFor(share), target.range, text, lineText)
             }.shareError?.let { ShareFailure.report(project, TITLE, it) }
         } catch (failure: NotesWriteException) {
             Messages.showErrorDialog(project, failure.message ?: "The comment was not written.", TITLE)
