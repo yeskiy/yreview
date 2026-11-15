@@ -52,6 +52,7 @@ export class ReviewPreviews implements vscode.Disposable {
           const preview = this.current
           if (preview === undefined) return
           preview.panel.reveal(undefined, false)
+          await preview.whenReady()
           await preview.post({
             type: 'openBox',
             lines: rangeOfContext(context),

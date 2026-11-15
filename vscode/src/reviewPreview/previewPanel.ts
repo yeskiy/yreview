@@ -67,6 +67,11 @@ export class ReviewPreview implements vscode.Disposable {
   /** The document version in the page HTML. A page that loads again after a hide shows it. */
   private pageVersion = -1
 
+  /** Settles when the page script listens. The page drops a message that comes before that. */
+  private page = Promise.withResolvers<void>()
+
+  private pageLoaded = false
+
   constructor(
     readonly panel: vscode.WebviewPanel,
     readonly uri: vscode.Uri,
@@ -79,6 +84,10 @@ export class ReviewPreview implements vscode.Disposable {
     this.disposables.push(
       this.closed,
       panel.onDidDispose(() => this.dispose()),
+      // A hidden page unloads, and it loads again when it shows.
+      panel.onDidChangeViewState(() => {
+        if (!panel.visible) this.reload()
+      }),
       panel.webview.onDidReceiveMessage((value: unknown) => this.receive(value)),
       vscode.workspace.onDidChangeTextDocument((event) => {
         if (sameFile(event.document.uri, uri)) this.later()
@@ -98,6 +107,11 @@ export class ReviewPreview implements vscode.Disposable {
 
   post(message: ToWebview): Thenable<boolean> {
     return this.panel.webview.postMessage(message)
+  }
+
+  /** Waits until the page script listens for messages. */
+  whenReady(): Promise<void> {
+    return this.page.promise
   }
 
   /** Waits for the render and the page build that run now. Tests call it. */
@@ -160,6 +174,7 @@ export class ReviewPreview implements vscode.Disposable {
       ],
     }
     this.pageVersion = document.version
+    this.reload()
     webview.html = pageHtml({
       cspSource: webview.cspSource,
       nonce: randomBytes(16).toString('base64'),
@@ -222,6 +237,12 @@ export class ReviewPreview implements vscode.Disposable {
     return editor
   }
 
+  private reload(): void {
+    if (!this.pageLoaded) return
+    this.pageLoaded = false
+    this.page = Promise.withResolvers<void>()
+  }
+
   private receive(value: unknown): void {
     const message = fromWebview(value)
     if (message === undefined) {
@@ -242,6 +263,8 @@ export class ReviewPreview implements vscode.Disposable {
 
   /** A page that loads again after a hide has the HTML of the last build, so it gets the text now. */
   private async ready(): Promise<void> {
+    this.pageLoaded = true
+    this.page.resolve()
     if ((await vscode.workspace.openTextDocument(this.uri)).version !== this.pageVersion)
       await this.post({ type: 'content', html: await this.render() })
     this.hooks()?.onReady(this)

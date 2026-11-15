@@ -226,6 +226,13 @@ document.addEventListener('selectionchange', () => {
   else if (document.hasFocus()) state.last = undefined
 })
 
+// The workbench focuses the outer frame before the page, and that takes the focus from an open box.
+window.addEventListener('focus', () => {
+  const lost = document.activeElement === null || document.activeElement === document.body
+  if (state.box !== undefined && lost && document.getSelection()?.isCollapsed !== false)
+    state.box.text.focus()
+})
+
 content.addEventListener('click', (event) => {
   state.clicked = selectionLines(content, event.target) ?? state.clicked
 })
