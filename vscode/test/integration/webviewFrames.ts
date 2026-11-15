@@ -112,7 +112,19 @@ export const pressAddKey = (): Promise<void> =>
 /** Right-clicks the first element of the page that matches `selector`, with a real mouse. */
 export const rightClickAt = async (marker: string, selector: string): Promise<void> => {
   // A new webview takes the focus late, and that closes a context menu that is already open.
-  assert.ok(await untilKeyboardIn(marker), 'the page did not get the focus before the right-click')
+  if (!(await untilKeyboardIn(marker, undefined, 8)))
+    assert.fail(
+      `the page did not get the focus before the right-click: ${JSON.stringify({
+        workbench: await evaluate(
+          await workbench(),
+          `(({ tagName, className }) => tagName + '.' + className)(document.activeElement ?? {})`,
+        ),
+        host: await inWebview(
+          marker,
+          `return [document.activeElement?.id, document.hasFocus(), doc.hasFocus(), doc.activeElement?.tagName]`,
+        ),
+      })}`,
+    )
   const inner = (await inWebview(
     marker,
     `const rect = doc.querySelector(${JSON.stringify(selector)}).getBoundingClientRect()
