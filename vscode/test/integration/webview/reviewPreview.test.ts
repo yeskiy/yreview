@@ -138,28 +138,39 @@ describe('the review preview', () => {
 
   it('opens a relative link in an editor and a web link outside', async () => {
     const calls: string[] = []
-    const original = vscode.env.openExternal
-    Object.defineProperty(vscode.env, 'openExternal', {
-      configurable: true,
-      value: async (target: vscode.Uri) => {
-        calls.push(target.toString())
-        return false
-      },
+    const shown = await previews()
+    shown.setOpener(async (target) => {
+      calls.push(target.toString())
+      return false
     })
     try {
       await openReview()
-      await inWebview(
-        REVIEW_PAGE,
-        `doc.querySelector('a[href="https://example.com/"]').click(); return true`,
-      )
+      // The webview host opens a link whose click reaches the window. VS Code 1.101 also opens a script click.
+      const click = (href: string): Promise<unknown> =>
+        inWebview(
+          REVIEW_PAGE,
+          `const view = doc.defaultView
+          if (view.yreviewLeaks === undefined) {
+            view.yreviewLeaks = 0
+            view.addEventListener('click', () => { view.yreviewLeaks += 1 })
+          }
+          doc.querySelector(${JSON.stringify(`a[href="${href}"]`)}).click()
+          return true`,
+        )
+      await click('https://example.com/')
       assert.ok(await until(() => calls.length === 1))
       assert.deepEqual(calls, ['https://example.com/'])
-      await inWebview(REVIEW_PAGE, `doc.querySelector('a[href="notes.md"]').click(); return true`)
+      await click('notes.md')
       assert.ok(
         await until(() => vscode.window.activeTextEditor?.document.uri.fsPath === notes().fsPath),
       )
+      assert.equal(
+        await inWebview(REVIEW_PAGE, `return doc.defaultView.yreviewLeaks`),
+        0,
+        'a link click reached the window of the page',
+      )
     } finally {
-      Object.defineProperty(vscode.env, 'openExternal', { value: original })
+      shown.setOpener((target) => vscode.env.openExternal(target))
     }
   })
 

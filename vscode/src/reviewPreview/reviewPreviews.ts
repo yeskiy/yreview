@@ -4,7 +4,7 @@ import { guard } from '../guard'
 import type { Log } from '../log'
 import { rangeOfContext } from '../preview/previewLines'
 import { readSettings } from '../settings'
-import { type PreviewHooks, ReviewPreview, VIEW_TYPE } from './previewPanel'
+import { type Opener, type PreviewHooks, ReviewPreview, VIEW_TYPE } from './previewPanel'
 import { stateOf } from './protocol'
 
 /** The Markdown file of the active editor or tab, or undefined. */
@@ -20,6 +20,8 @@ const activeMarkdown = (): vscode.Uri | undefined => {
     : undefined
 }
 
+const openOutside: Opener = (uri) => vscode.env.openExternal(uri)
+
 /** The review previews of the window, their commands and their restore after a reload. */
 export class ReviewPreviews implements vscode.Disposable {
   private readonly shown = new Map<string, ReviewPreview>()
@@ -27,6 +29,8 @@ export class ReviewPreviews implements vscode.Disposable {
   private current: ReviewPreview | undefined
 
   private hooks: PreviewHooks | undefined
+
+  private opener: Opener = openOutside
 
   private readonly disposables: vscode.Disposable[] = []
 
@@ -75,6 +79,11 @@ export class ReviewPreviews implements vscode.Disposable {
     this.hooks = hooks
   }
 
+  /** Replaces the opener of web and mail links. Tests use it. */
+  setOpener(opener: Opener): void {
+    this.opener = opener
+  }
+
   active(): ReviewPreview | undefined {
     return this.current
   }
@@ -107,7 +116,14 @@ export class ReviewPreviews implements vscode.Disposable {
   }
 
   private adopt(panel: vscode.WebviewPanel, uri: vscode.Uri): ReviewPreview {
-    const preview = new ReviewPreview(panel, uri, this.extensionUri, this.log, () => this.hooks)
+    const preview = new ReviewPreview(
+      panel,
+      uri,
+      this.extensionUri,
+      this.log,
+      () => this.hooks,
+      (target) => this.opener(target),
+    )
     this.shown.set(uri.toString(), preview)
     if (panel.active) this.current = preview
     panel.onDidChangeViewState((event) => {

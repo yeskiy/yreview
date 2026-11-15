@@ -55,7 +55,9 @@ document.addEventListener(
   (event) => {
     const link = event.target instanceof Element ? event.target.closest('a[href]') : null
     if (link === null) return
+    // The webview host opens a link that reaches its window listener, and that skips the host check.
     event.preventDefault()
+    event.stopPropagation()
     const href = link.getAttribute('href') ?? ''
     if (href.startsWith('#'))
       document.getElementById(decodeURIComponent(href.slice(1)))?.scrollIntoView()

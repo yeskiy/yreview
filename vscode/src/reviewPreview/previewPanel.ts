@@ -13,6 +13,9 @@ export const VIEW_TYPE = 'yreview.preview'
 const OWN_ID = 'yeskiy.yreview'
 const RENDER_DELAY_MS = 200
 
+/** Opens a URI outside VS Code. Tests replace it, so that no test starts a browser. */
+export type Opener = (uri: vscode.Uri) => Thenable<boolean>
+
 export interface PreviewHooks {
   readonly onMessage: (preview: ReviewPreview, message: FromWebview) => Promise<boolean>
   readonly onReady: (preview: ReviewPreview) => void
@@ -70,6 +73,7 @@ export class ReviewPreview implements vscode.Disposable {
     private readonly extensionUri: vscode.Uri,
     private readonly log: Log,
     private readonly hooks: () => PreviewHooks | undefined,
+    private readonly openExternal: Opener,
   ) {
     this.panel.title = `Review ${path.basename(uri.fsPath)}`
     this.disposables.push(
@@ -253,7 +257,7 @@ export class ReviewPreview implements vscode.Disposable {
       this.uri.fsPath,
       vscode.workspace.getWorkspaceFolder(this.uri)?.uri.fsPath,
     )
-    if (target?.kind === 'external') await vscode.env.openExternal(vscode.Uri.parse(target.uri))
+    if (target?.kind === 'external') await this.openExternal(vscode.Uri.parse(target.uri))
     if (target?.kind === 'file')
       await vscode.window.showTextDocument(vscode.Uri.file(target.path), {
         viewColumn: this.sourceColumn(),

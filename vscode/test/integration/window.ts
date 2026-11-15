@@ -4,6 +4,25 @@ import { setTimeout as wait } from 'node:timers/promises'
 
 import * as vscode from 'vscode'
 
+// --- No external app ---
+
+/** Each test bundle has its own copy of this module, so the guard state lives on globalThis. */
+const shared = globalThis as { yreviewExternal?: string[] }
+if (shared.yreviewExternal === undefined) {
+  const opened: string[] = []
+  shared.yreviewExternal = opened
+  Object.defineProperty(vscode.env, 'openExternal', {
+    configurable: true,
+    value: async (target: vscode.Uri | string) => {
+      opened.push(target.toString())
+      return false
+    },
+  })
+  afterEach('opens nothing outside VS Code', () =>
+    assert.deepEqual(opened.splice(0), [], 'the test reached the real vscode.env.openExternal'),
+  )
+}
+
 export const until = async (check: () => boolean, tries = 40): Promise<boolean> =>
   check() || (tries > 0 && wait(250).then(() => until(check, tries - 1)))
 
