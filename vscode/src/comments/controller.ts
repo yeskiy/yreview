@@ -930,7 +930,17 @@ export class ReviewComments implements vscode.Disposable {
         await firstAsk(this.onDidAskRanges, document.uri, NEW_EDITOR_ASK_MS)
       editor.selection = new vscode.Selection(selection.start, selection.start)
       this.box = { uri: document.uri, line: at }
-      await vscode.commands.executeCommand(NATIVE_ADD)
+      // The box takes the focus before the command resolves, so the selection comes back with the focus.
+      const restore = vscode.window.onDidChangeActiveTextEditor((active) => {
+        if (inputOf(active) === undefined) return
+        editor.selection = selection
+        restore.dispose()
+      })
+      try {
+        await vscode.commands.executeCommand(NATIVE_ADD)
+      } finally {
+        restore.dispose()
+      }
       editor.selection = selection
       this.box.input ??= inputOf(vscode.window.activeTextEditor)
       return
