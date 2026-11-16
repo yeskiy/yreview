@@ -42,7 +42,9 @@ object DiffCache {
             refused[root to commit] = head
             return null
         }
-        val earlier = answers.filter { !it.second.ok }.flatMap { it.first }.associateWith { cache[Key(root, commit, it)] }
+        val earlier = answers.filter { !it.second.ok }.flatMap { it.first }.associateWith { path ->
+            cache[Key(root, commit, path)]?.takeUnless { it.diff?.deleted == true }
+        }
         val fresh = answers.filter { it.second.ok }.flatMap { (chunk, result) ->
             LineMap.parse(result.stdout).let { found -> chunk.map { it to found[it] } }
         }.toMap()

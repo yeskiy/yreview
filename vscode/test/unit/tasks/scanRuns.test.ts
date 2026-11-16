@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { ScanRuns } from '../../../src/tasks/scanRuns'
+import { ScanRuns, newest } from '../../../src/tasks/scanRuns'
 
 describe('ScanRuns', () => {
   it('a scan that runs to the end gives its rows', async () => {
@@ -50,5 +50,25 @@ describe('ScanRuns', () => {
     const open = runs.next()
     runs.cancel()
     assert.equal(open.aborted, true)
+  })
+
+  it('a wait on an aborted scan ends after the newer scan that replaced it', async () => {
+    const order: string[] = []
+    const newer = Promise.withResolvers<void>()
+    const latest: { scan: Promise<unknown> } = {
+      scan: Promise.resolve().then(() => order.push('older')),
+    }
+    const waited = newest(() => latest.scan).then(() => order.push('waited'))
+    latest.scan = newer.promise.then(() => order.push('newer'))
+    newer.resolve()
+    await waited
+    assert.deepEqual(order, ['older', 'newer', 'waited'])
+  })
+
+  it('a wait with no newer scan ends after its own scan', async () => {
+    const order: string[] = []
+    const own = Promise.resolve().then(() => order.push('own'))
+    await newest(() => own).then(() => order.push('waited'))
+    assert.deepEqual(order, ['own', 'waited'])
   })
 })

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { writeFileSync } from 'node:fs'
+import { rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import {
@@ -172,5 +172,18 @@ describe('diff cache', function cache() {
     assert.deepEqual(during, good)
     assert.equal(after?.get('a.txt')?.hunks.length, 2)
     assert.equal(calls.length, 3)
+  })
+
+  it('gives undefined while git fails, when the last good diff deleted the file', async () => {
+    const dir = repo()
+    const old = commitFile(dir, 'a.txt', '1\n')
+    const head = commitFile(dir, 'b.txt', '2\n')
+    rmSync(path.join(dir, 'a.txt'))
+    const { runner, state } = failing(dir, TIMEOUT)
+    state.fail = false
+    assert.equal((await diffsOf(runner, dir, head, old, ['a.txt']))?.get('a.txt')?.deleted, true)
+    writeFileSync(path.join(dir, 'a.txt'), '1\n')
+    state.fail = true
+    assert.equal(await diffsOf(runner, dir, head, old, ['a.txt']), undefined)
   })
 })

@@ -15,6 +15,13 @@ export const readScope = async <T>(read: () => Promise<T | undefined>): Promise<
   }
 }
 
+/** Waits for the scan that `latest` gives, and again for each newer scan that started meanwhile. */
+export const newest = async (latest: () => Promise<unknown>): Promise<void> => {
+  const scan = latest()
+  await scan
+  if (latest() !== scan) await newest(latest)
+}
+
 /** A newer scan aborts the older one, and an aborted scan gives nothing. */
 export class ScanRuns {
   private current: AbortController | undefined

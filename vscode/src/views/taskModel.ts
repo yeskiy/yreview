@@ -8,7 +8,7 @@ import type { Anchor, ReviewService } from '../store/reviewService'
 import { changeFiles } from '../tasks/changeScan'
 import { type ChangeFacts, NO_CHANGES } from '../tasks/changeTab'
 import { basePathOf } from '../tasks/roots'
-import { FirstScan, type ScanPhase, ScanRuns, ScanState } from '../tasks/scanRuns'
+import { FirstScan, type ScanPhase, ScanRuns, ScanState, newest } from '../tasks/scanRuns'
 import {
   type RepositoryTasks,
   SCAN_DELAY_MS,
@@ -176,11 +176,11 @@ export class TaskModel implements vscode.Disposable {
     return this.first.after(() => this.base.roots)
   }
 
-  /** Scans now. A later signal starts a new scan, which aborts this one. */
-  refresh(): Promise<void> {
+  /** Scans now. A newer scan aborts this one, and the wait then ends after the newer scan. */
+  async refresh(): Promise<void> {
     this.schedule.cancel()
     this.pending = this.scan('full')
-    return this.pending
+    await newest(() => this.pending)
   }
 
   settled(): Promise<void> {

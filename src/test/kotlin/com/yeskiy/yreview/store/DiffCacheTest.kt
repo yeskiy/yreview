@@ -136,6 +136,20 @@ class DiffCacheTest {
         assertEquals(3, calls.size)
     }
 
+    @Test
+    fun `a failed run gives null when the last good diff deleted the file`() = TempRepo().use { repo ->
+        val old = repo.commit("a.txt", "1\n")
+        val head = repo.commit("b.txt", "2\n")
+        File(repo.dir, "a.txt").delete()
+        val git = failing(repo, TIMEOUT)
+        fail = false
+        assertEquals(true, DiffCache.diffs(git, repo.dir.path, head, old, listOf("a.txt"))?.get("a.txt")?.deleted)
+        File(repo.dir, "a.txt").writeText("1\n")
+
+        fail = true
+        assertNull(DiffCache.diffs(git, repo.dir.path, head, old, listOf("a.txt")))
+    }
+
     private companion object {
         val TIMEOUT = GitResult(GitResult.TIMED_OUT, "", "Git did not stop.")
         val LOCKED = GitResult(128, "", "fatal: Unable to create '.git/index.lock': File exists.")

@@ -109,6 +109,7 @@ export const diffsOf = async (
   const earlier = answers
     .flatMap(([chunk, answer]) => (answer === 'failed' ? chunk : []))
     .map((file) => [file, CACHE.get(keyOf(root, commit, file))] as const)
+    .map(([file, entry]) => [file, entry?.diff?.deleted === true ? undefined : entry] as const)
   const fresh = answers.flatMap(([chunk, answer]) =>
     typeof answer === 'string' ? [] : chunk.map((file) => [file, answer.get(file)] as const),
   )
