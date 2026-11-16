@@ -1,0 +1,287 @@
+# Runs the remote check of the VS Code extension in each editor setup. It holds no secret and writes nothing.
+name: Check the VS Code extension in each setup
+
+on:
+  push:
+    branches:
+      - "ci/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package the extension
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install the exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Check the types and the lint
+        run: |
+          npm run typecheck
+          npx eslint test/compat scripts/compat.mjs scripts/compat-checks.mjs scripts/compat-table.mjs
+
+      - name: Package the VSIX
+        run: npx vsce package --no-dependencies --out yreview.vsix
+
+      - name: Keep the VSIX
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: yreview-vsix
+          path: vscode/yreview.vsix
+
+  linux:
+    name: Check ${{ matrix.setup }}
+    needs: package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { setup: remote-ssh, editor: vscode, mode: ssh }
+          - { setup: devcontainers, editor: vscode, mode: devcontainer }
+          - { setup: cursor-linux, editor: cursor, mode: local }
+          - { setup: windsurf-linux, editor: windsurf, mode: local }
+          - { setup: vscodium-linux, editor: vscodium, mode: local }
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install the exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Get the VSIX
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: yreview-vsix
+          path: vscode
+
+      - name: Install the virtual display
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb
+
+      - name: Get VSCodium and check its SHA-256
+        if: matrix.editor == 'vscodium'
+        run: |
+          tag=$(curl -fsSI https://github.com/VSCodium/vscodium/releases/latest | tr -d '\r' | sed -n 's|^location: .*/tag/||ip')
+          file="VSCodium-linux-x64-$tag.tar.gz"
+          curl -fsSLO "https://github.com/VSCodium/vscodium/releases/download/$tag/$file"
+          curl -fsSLO "https://github.com/VSCodium/vscodium/releases/download/$tag/$file.sha256"
+          sha256sum -c "$file.sha256"
+          mkdir -p "$RUNNER_TEMP/editor" && tar -xzf "$file" -C "$RUNNER_TEMP/editor"
+
+      - name: Get Cursor and check its SHA-1 from the zsync file
+        if: matrix.editor == 'cursor'
+        run: |
+          meta=$(curl -fsSL "https://cursor.com/api/download?platform=linux-x64&releaseTrack=stable")
+          url=$(jq -r .downloadUrl <<<"$meta")
+          echo "Cursor $(jq -r .version <<<"$meta") from $url"
+          curl -fsSL -o cursor.AppImage "$url"
+          expected=$(curl -fsSL "$url.zsync" | head -c 4096 | tr -d '\r' | sed -n 's/^SHA-1: //p' | head -1)
+          test -n "$expected"
+          echo "$expected  cursor.AppImage" | sha1sum -c -
+          chmod +x cursor.AppImage
+          mkdir -p "$RUNNER_TEMP/editor" && (cd "$RUNNER_TEMP/editor" && "$GITHUB_WORKSPACE/vscode/cursor.AppImage" --appimage-extract >/dev/null)
+
+      - name: Get Windsurf and check its SHA-256
+        if: matrix.editor == 'windsurf'
+        run: |
+          meta=$(curl -fsSL https://windsurf-stable.codeium.com/api/update/linux-x64/stable/latest)
+          url=$(jq -r .url <<<"$meta")
+          echo "Windsurf $(jq -r .windsurfVersion <<<"$meta") from $url"
+          curl -fsSL -o windsurf.tar.gz "$url"
+          echo "$(jq -r .sha256hash <<<"$meta")  windsurf.tar.gz" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/editor" && tar -xzf windsurf.tar.gz -C "$RUNNER_TEMP/editor"
+
+      - name: Start an SSH server on the runner with key login
+        if: matrix.mode == 'ssh'
+        run: |
+          command -v sshd >/dev/null || sudo apt-get install -y -q openssh-server
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh && chmod go-w ~
+          ssh-keygen -q -t ed25519 -N '' -f ~/.ssh/yreview-ci
+          cat ~/.ssh/yreview-ci.pub >> ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+          printf 'Host yreview-ci\n  HostName 127.0.0.1\n  User %s\n  IdentityFile %s\n  IdentitiesOnly yes\n  StrictHostKeyChecking no\n  UserKnownHostsFile /dev/null\n' \
+            "$USER" "$HOME/.ssh/yreview-ci" > ~/.ssh/yreview-ci.config
+          sudo systemctl start ssh || sudo service ssh start
+          ssh -F ~/.ssh/yreview-ci.config yreview-ci 'echo "The SSH login works on $(hostname)."'
+
+      - name: Run the checks
+        timeout-minutes: 20
+        run: |
+          install=vscode-stable
+          if [ "${{ matrix.editor }}" != vscode ]; then install="$RUNNER_TEMP/editor"; fi
+          xvfb-run -a -s "-screen 0 1600x1000x24" node scripts/compat.mjs --setup "${{ matrix.setup }}" \
+            --mode "${{ matrix.mode }}" --install "$install" --vsix yreview.vsix --out compat-results
+
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compat-${{ matrix.setup }}
+          path: vscode/compat-results
+          if-no-files-found: warn
+
+  windows:
+    name: Check ${{ matrix.setup }}
+    needs: package
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { setup: local-windows, editor: vscode, mode: local }
+          - { setup: wsl, editor: vscode, mode: wsl }
+          - { setup: cursor-windows, editor: cursor, mode: local }
+          - { setup: windsurf-windows, editor: windsurf, mode: local }
+          - { setup: vscodium-windows, editor: vscodium, mode: local }
+    defaults:
+      run:
+        working-directory: vscode
+        shell: pwsh
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install the exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Get the VSIX
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: yreview-vsix
+          path: vscode
+
+      - name: Set up WSL 1 with git
+        if: matrix.mode == 'wsl'
+        uses: Vampire/setup-wsl@4c48163d9f981914dd8caa0fc335fe19cca5bff4 # v7.2.0
+        with:
+          distribution: Ubuntu-24.04
+          wsl-version: 1
+          additional-packages: git ca-certificates curl wget
+
+      - name: Get VSCodium and check its SHA-256
+        if: matrix.editor == 'vscodium'
+        run: |
+          $tag = (Invoke-WebRequest -UseBasicParsing https://github.com/VSCodium/vscodium/releases/latest).BaseResponse.RequestMessage.RequestUri.Segments[-1]
+          $file = "VSCodium-win32-x64-$tag.zip"
+          Invoke-WebRequest -UseBasicParsing -OutFile $file "https://github.com/VSCodium/vscodium/releases/download/$tag/$file"
+          $expected = ((Invoke-WebRequest -UseBasicParsing "https://github.com/VSCodium/vscodium/releases/download/$tag/$file.sha256").Content -split '\s+')[0]
+          if ((Get-FileHash -Algorithm SHA256 $file).Hash -ne $expected.ToUpper()) { throw "The SHA-256 of $file does not match." }
+          Expand-Archive $file -DestinationPath "$env:RUNNER_TEMP\editor"
+
+      - name: Get Cursor and check its signature
+        if: matrix.editor == 'cursor'
+        run: |
+          $meta = Invoke-RestMethod "https://cursor.com/api/download?platform=win32-x64-user&releaseTrack=stable"
+          "Cursor $($meta.version) from $($meta.downloadUrl)"
+          Invoke-WebRequest -UseBasicParsing -OutFile cursor-setup.exe $meta.downloadUrl
+          $signature = Get-AuthenticodeSignature cursor-setup.exe
+          "Signed by: $($signature.SignerCertificate.Subject)"
+          if ($signature.Status -ne 'Valid') { throw "The signature of the Cursor setup is $($signature.Status)." }
+          Start-Process -Wait -FilePath .\cursor-setup.exe -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', '/CURRENTUSER', '/MERGETASKS=!runcode', "/DIR=$env:RUNNER_TEMP\editor"
+
+      - name: Get Windsurf and check its SHA-256
+        if: matrix.editor == 'windsurf'
+        run: |
+          $meta = Invoke-RestMethod https://windsurf-stable.codeium.com/api/update/win32-x64-archive/stable/latest
+          "Windsurf $($meta.windsurfVersion) from $($meta.url)"
+          Invoke-WebRequest -UseBasicParsing -OutFile windsurf.zip $meta.url
+          if ((Get-FileHash -Algorithm SHA256 windsurf.zip).Hash -ne $meta.sha256hash.ToUpper()) { throw 'The SHA-256 of the Windsurf archive does not match.' }
+          Expand-Archive windsurf.zip -DestinationPath "$env:RUNNER_TEMP\editor"
+
+      - name: Run the checks
+        timeout-minutes: 20
+        run: |
+          $install = if ('${{ matrix.editor }}' -eq 'vscode') { 'vscode-stable' } else { "$env:RUNNER_TEMP\editor" }
+          node scripts/compat.mjs --setup '${{ matrix.setup }}' --mode '${{ matrix.mode }}' --install $install --vsix yreview.vsix --out compat-results
+
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compat-${{ matrix.setup }}
+          path: vscode/compat-results
+          if-no-files-found: warn
+
+  table:
+    name: Merge the results into one table
+    needs: [linux, windows]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: vscode
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+
+      - name: Get the results
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: compat-*
+          path: vscode/compat-results
+
+      - name: Write the table
+        run: node scripts/compat-table.mjs compat-results compat-table.md
+
+      - name: Keep the table
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: compat-table
+          path: |
+            vscode/compat-table.md
+            vscode/compat-results

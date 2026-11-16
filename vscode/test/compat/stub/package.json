@@ -1,0 +1,9 @@
+{
+  "name": "yreview-compat-stub",
+  "displayName": "Yreview compatibility stub",
+  "publisher": "yreview-test",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.80.0"
+  }
+}
