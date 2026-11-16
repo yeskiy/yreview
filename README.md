@@ -4,22 +4,41 @@
 
 # Yreview
 
+[![Install from the JetBrains Marketplace](https://img.shields.io/badge/JetBrains_Marketplace-Install-000000?style=for-the-badge&logo=jetbrains&logoColor=white)](https://plugins.jetbrains.com/plugin/34134-yreview)
+[![Install from the VS Code Marketplace](https://img.shields.io/badge/VS_Code_Marketplace-Install-007ACC?style=for-the-badge)](https://marketplace.visualstudio.com/items?itemName=yeskiy.yreview)
+[![Install from Open VSX](https://img.shields.io/badge/Open_VSX-Install-C160EF?style=for-the-badge&logo=eclipseide&logoColor=white)](https://open-vsx.org/extension/yeskiy/yreview)
+
 [![License](https://img.shields.io/github/license/yeskiy/yreview)](https://github.com/yeskiy/yreview/blob/main/LICENSE)
 [![JetBrains Marketplace](https://img.shields.io/jetbrains/plugin/v/com.yeskiy.yreview)](https://plugins.jetbrains.com/plugin/34134-yreview)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/com.yeskiy.yreview)](https://plugins.jetbrains.com/plugin/34134-yreview)
+[![VS Code Marketplace](https://vsmarketplacebadges.dev/version-short/yeskiy.yreview.svg)](https://marketplace.visualstudio.com/items?itemName=yeskiy.yreview)
+[![VS Code installs](https://vsmarketplacebadges.dev/installs-short/yeskiy.yreview.svg)](https://marketplace.visualstudio.com/items?itemName=yeskiy.yreview)
+[![Open VSX](https://img.shields.io/open-vsx/v/yeskiy/yreview)](https://open-vsx.org/extension/yeskiy/yreview)
+[![Open VSX downloads](https://img.shields.io/open-vsx/dt/yeskiy/yreview)](https://open-vsx.org/extension/yeskiy/yreview)
 [![Build](https://img.shields.io/github/actions/workflow/status/yeskiy/yreview/build.yml?branch=main)](https://github.com/yeskiy/yreview/actions/workflows/build.yml)
 [![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=yeskiy_yreview&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=yeskiy_yreview)
 [![Known Vulnerabilities](https://snyk.io/test/github/yeskiy/yreview/badge.svg)](https://snyk.io/test/github/yeskiy/yreview)
 
-Yreview writes code review comments on any line of the editor and on any line of a diff,
-inside IntelliJ IDEA. It stores each comment as a git note in your own repository, in the
-git-appraise format, so a comment travels with the code and needs no server and no account.
-It also lists every open comment and every TODO item of the project in one tool window. It
-hands those tasks to a command line agent that runs in a tool window of the IDE. The plugin
-knows nine agents, and it also runs a command that you type.
+Review the code that an AI agent wrote the same way you review a pull request, in IntelliJ
+IDEA or in VS Code. Select lines, write a comment, and go on to the next file. Then send the
+comments to Claude Code, Codex or another command line agent. When the agent reports a fix,
+Yreview marks the comment resolved.
 
-Nothing leaves your machine. The plugin has no server, and the author receives no data. See
-[Privacy](#privacy).
+Each comment is a git note in your own repository, so Yreview needs no server and no account.
+Nothing leaves your machine, and the author receives no data. See [Privacy](#privacy).
+
+## How it works
+
+1. **Comment.** Select lines in the editor or in a diff and write a comment, in Markdown.
+2. **Send to the agent.** One button sends the open tasks to a command line agent. The agent
+   runs inside the IDE and gets each task with its file and its lines.
+3. **The agent fixes, Yreview resolves.** The agent changes the code and reports each task
+   done. Yreview then marks the comment resolved.
+
+Yreview knows nine agents: Claude Code, OpenCode, OpenAI Codex CLI, Antigravity CLI, Gemini
+CLI, GitHub Copilot CLI, Cursor CLI, Aider, and Amp. It also runs a command that you type.
+The IntelliJ plugin and the VS Code extension read and write the same notes, so one team can
+use both.
 
 - Reference: [docs/reference.md](docs/reference.md)
 - License: [Apache License 2.0](LICENSE)
@@ -30,7 +49,7 @@ Nothing leaves your machine. The plugin has no server, and the author receives n
 
 ![A comment card open in the editor, over the lines that it covers](docs/images/comment-card.png)
 
-## What it does
+## IntelliJ IDEA
 
 Write a comment on one line or on a range of lines. The action sits in the editor context
 menu, in the intention list under Alt and Enter, and on the shortcut Control Shift G. The
@@ -57,7 +76,34 @@ resolved.
 [docs/reference.md](docs/reference.md#where-the-comments-are-stored) says where each comment
 goes, what one record holds, and every file the plugin writes.
 
-## Features
+## VS Code
+
+Select lines and press Ctrl+Alt+G (Cmd+Alt+G on macOS). Write the comment and save it. The
+thread shows on the lines, in a file or on either side of a diff.
+
+![Select lines, press Ctrl+Alt+G, write a comment, and save it](docs/images/vscode/comment.gif)
+
+The Yreview container in the activity bar lists the open comments and TODO items in three
+views: Project, Current File, and Local Changes. Check the tasks, then click Send Review Tasks
+to the Agent. The agent runs in a terminal of VS Code.
+
+![The task views. A task opens, then the tasks go to the agent.](docs/images/vscode/tasks.gif)
+
+The review preview renders a Markdown file, for example a plan that an agent wrote. Select text
+in the preview to comment on its source lines.
+
+![A comment in the review preview of a Markdown file](docs/images/vscode/preview.gif)
+
+| A comment thread                                                 | A comment in a diff                                         |
+|------------------------------------------------------------------|-------------------------------------------------------------|
+| ![A comment thread on two lines](docs/images/vscode/thread.png)  | ![A comment on a side of a diff](docs/images/vscode/diff.png) |
+| **The task views**                                               | **The review preview**                                      |
+| ![The three task views](docs/images/vscode/task-views.png)       | ![The review preview with a marked block](docs/images/vscode/preview.png) |
+
+[vscode/README.md](vscode/README.md) holds the full guide of the extension: keys, settings,
+and every place it writes.
+
+## Features of the IntelliJ plugin
 
 **The comment**
 
@@ -152,9 +198,15 @@ the gear icon, then Install Plugin from Disk. Pick the archive, then restart the
 
 **From source.** Read [CONTRIBUTING.md](CONTRIBUTING.md). One command builds the archive.
 
+**VS Code.** Install Yreview from the
+[VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=yeskiy.yreview), or
+search for `Yreview` in the Extensions view. Editors that use Open VSX get it from
+[Open VSX](https://open-vsx.org/extension/yeskiy/yreview). The extension needs VS Code 1.101 or
+later and git 2.24 or later.
+
 ## Settings
 
-Open Settings, Tools, Yreview.
+Open Settings, Tools, Yreview. In VS Code, run Yreview: Open Settings.
 
 [docs/reference.md](docs/reference.md#settings-reference) holds every setting, its default,
 and what it does.
