@@ -2,7 +2,7 @@ import { stat } from 'node:fs/promises'
 import path from 'node:path'
 
 import { type FileDiff, parseDiff } from '../core/lineMap'
-import { type GitRunner, isOk } from '../git/runner'
+import { type GitResult, type GitRunner, isOk, ran } from '../git/runner'
 
 interface Entry {
   readonly head: string
@@ -15,6 +15,16 @@ const REFUSED = new Map<string, string>()
 const MAX_ENTRIES = 4000
 const PATHS_PER_CALL = 100
 const OBJECT_ID = /^[0-9a-f]{40}([0-9a-f]{24})?$/u
+/** The messages of git for a commit that does not exist. Any other failure can pass on a retry. */
+const NO_COMMIT =
+  /bad object|bad revision|unknown revision|not a valid object name|invalid object name/iu
+
+type Answer = ReadonlyMap<string, FileDiff> | 'refused' | 'failed'
+
+const answerOf = (result: GitResult): Answer => {
+  if (isOk(result)) return parseDiff(result.stdout)
+  return ran(result) && NO_COMMIT.test(result.stderr) ? 'refused' : 'failed'
+}
 
 export const forgetDiffs = (): void => {
   CACHE.clear()
@@ -38,30 +48,33 @@ const read = async (
   commit: string,
   paths: readonly string[],
   signal?: AbortSignal,
-): Promise<ReadonlyMap<string, FileDiff> | undefined> => {
-  const result = await git.run(
-    [
-      '--literal-pathspecs',
-      '-c',
-      'core.quotePath=false',
-      'diff',
-      '-U0',
-      '--no-color',
-      '--no-ext-diff',
-      '--no-renames',
-      '--no-textconv',
-      '--src-prefix=a/',
-      '--dst-prefix=b/',
-      commit,
-      '--',
-      ...paths,
-    ],
-    signal,
+): Promise<Answer> =>
+  answerOf(
+    await git.run(
+      [
+        '--literal-pathspecs',
+        '-c',
+        'core.quotePath=false',
+        'diff',
+        '-U0',
+        '--no-color',
+        '--no-ext-diff',
+        '--no-renames',
+        '--no-textconv',
+        '--src-prefix=a/',
+        '--dst-prefix=b/',
+        commit,
+        '--',
+        ...paths,
+      ],
+      signal,
+    ),
   )
-  return isOk(result) ? parseDiff(result.stdout) : undefined
-}
 
-/** The diff of each path from `commit` to the working tree. Undefined when git refused the commit. */
+/**
+ * The diff of each path from `commit` to the working tree, or the last good diff after a failed run.
+ * Undefined when git refused the commit, or when git failed and a path has no good diff yet.
+ */
 export const diffsOf = async (
   git: GitRunner,
   root: string,
@@ -84,21 +97,26 @@ export const diffsOf = async (
   )
   const wanted = paths.filter((file) => !known.has(file))
   const answers = await chunksOf(wanted).reduce<
-    Promise<readonly (ReadonlyMap<string, FileDiff> | undefined)[]>
+    Promise<readonly (readonly [readonly string[], Answer])[]>
   >(
-    async (done, chunk) => [...(await done), await read(git, commit, chunk, signal)],
+    async (done, chunk) => [...(await done), [chunk, await read(git, commit, chunk, signal)]],
     Promise.resolve([]),
   )
-  if (answers.includes(undefined)) {
+  if (answers.some(([, answer]) => answer === 'refused')) {
     REFUSED.set(keyOf(root, commit), head)
     return undefined
   }
-  if (CACHE.size + wanted.length > MAX_ENTRIES) CACHE.clear()
-  const fresh = wanted.map(
-    (file) => [file, answers.find((answer) => answer?.has(file))?.get(file)] as const,
+  const earlier = answers
+    .flatMap(([chunk, answer]) => (answer === 'failed' ? chunk : []))
+    .map((file) => [file, CACHE.get(keyOf(root, commit, file))] as const)
+  const fresh = answers.flatMap(([chunk, answer]) =>
+    typeof answer === 'string' ? [] : chunk.map((file) => [file, answer.get(file)] as const),
   )
+  if (CACHE.size + fresh.length > MAX_ENTRIES) CACHE.clear()
   fresh.forEach(([file, diff]) =>
     CACHE.set(keyOf(root, commit, file), { head, stamp: stamps.get(file) ?? 'missing', diff }),
   )
-  return new Map([...known, ...fresh])
+  return earlier.some(([, entry]) => entry === undefined)
+    ? undefined
+    : new Map([...known, ...fresh, ...earlier.map(([file, entry]) => [file, entry?.diff] as const)])
 }

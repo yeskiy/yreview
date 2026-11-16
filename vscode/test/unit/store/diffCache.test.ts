@@ -2,7 +2,12 @@ import assert from 'node:assert/strict'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 
-import { type GitRunner, ProcessGitRunner } from '../../../src/git/runner'
+import {
+  type GitResult,
+  type GitRunner,
+  ProcessGitRunner,
+  TIMED_OUT,
+} from '../../../src/git/runner'
 import { diffsOf, forgetDiffs } from '../../../src/store/diffCache'
 import { git, makeRepo, removeDir } from '../../fixtures/scratch'
 
@@ -18,6 +23,33 @@ const counting = (dir: string): { runner: GitRunner; calls: string[][] } => {
       },
     },
   }
+}
+
+/** A runner that gives `failure` while `state.fail` is true, else runs git. */
+const failing = (
+  dir: string,
+  failure: GitResult,
+): { runner: GitRunner; calls: string[][]; state: { fail: boolean } } => {
+  const inner = new ProcessGitRunner(dir)
+  const calls: string[][] = []
+  const state = { fail: true }
+  return {
+    calls,
+    state,
+    runner: {
+      run: async (args, signal) => {
+        calls.push([...args])
+        return state.fail ? failure : inner.run(args, signal)
+      },
+    },
+  }
+}
+
+const TIMEOUT: GitResult = { exitCode: TIMED_OUT, stdout: '', stderr: 'Git did not stop.' }
+const LOCKED: GitResult = {
+  exitCode: 128,
+  stdout: '',
+  stderr: "fatal: Unable to create '.git/index.lock': File exists.",
 }
 
 describe('diff cache', function cache() {
@@ -84,5 +116,61 @@ describe('diff cache', function cache() {
     const { runner, calls } = counting(dir)
     assert.equal(await diffsOf(runner, dir, head, '--output=x', ['a.txt']), undefined)
     assert.equal(calls.length, 0)
+  })
+
+  it('does not keep a timeout, and asks git again on the next ask', async () => {
+    const dir = repo()
+    const old = commitFile(dir, 'a.txt', '1\n')
+    const head = commitFile(dir, 'b.txt', '2\n')
+    const { runner, calls, state } = failing(dir, TIMEOUT)
+    assert.equal(await diffsOf(runner, dir, head, old, ['a.txt']), undefined)
+    state.fail = false
+    assert.equal((await diffsOf(runner, dir, head, old, ['a.txt']))?.has('a.txt'), true)
+    assert.equal(calls.length, 2)
+  })
+
+  it('does not keep a failure on a lock file', async () => {
+    const dir = repo()
+    const old = commitFile(dir, 'a.txt', '1\n')
+    const head = commitFile(dir, 'b.txt', '2\n')
+    const { runner, calls } = failing(dir, LOCKED)
+    assert.equal(await diffsOf(runner, dir, head, old, ['a.txt']), undefined)
+    assert.equal(await diffsOf(runner, dir, head, old, ['a.txt']), undefined)
+    assert.equal(calls.length, 2)
+  })
+
+  it('keeps a bad revision as refused until HEAD moves', async () => {
+    const dir = repo()
+    const old = commitFile(dir, 'a.txt', '1\n')
+    const head = commitFile(dir, 'b.txt', '2\n')
+    const { runner, calls } = failing(dir, {
+      exitCode: 128,
+      stdout: '',
+      stderr: `fatal: bad revision '${old}'`,
+    })
+    assert.equal(await diffsOf(runner, dir, head, old, ['a.txt']), undefined)
+    assert.equal(await diffsOf(runner, dir, head, old, ['a.txt']), undefined)
+    assert.equal(calls.length, 1)
+    await diffsOf(runner, dir, old, old, ['a.txt'])
+    assert.equal(calls.length, 2)
+  })
+
+  it('gives the last good diff while git fails, and the new diff after', async () => {
+    const dir = repo()
+    const old = commitFile(dir, 'a.txt', '1\n')
+    const head = commitFile(dir, 'b.txt', '2\n')
+    writeFileSync(path.join(dir, 'a.txt'), '0\n1\n')
+    const { runner, calls, state } = failing(dir, TIMEOUT)
+    state.fail = false
+    const good = await diffsOf(runner, dir, head, old, ['a.txt'])
+    writeFileSync(path.join(dir, 'a.txt'), '0\n1\n2\n3\n')
+    state.fail = true
+    const during = await diffsOf(runner, dir, git(dir, 'rev-parse', 'HEAD~1'), old, ['a.txt'])
+    state.fail = false
+    const after = await diffsOf(runner, dir, head, old, ['a.txt'])
+    assert.equal(good?.get('a.txt')?.hunks.length, 1)
+    assert.deepEqual(during, good)
+    assert.equal(after?.get('a.txt')?.hunks.length, 2)
+    assert.equal(calls.length, 3)
   })
 })

@@ -658,7 +658,14 @@ For every other comment, the reader runs one command for each comment commit, wi
 `git --literal-pathspecs -c core.quotePath=false diff -U0 --no-color --no-ext-diff --no-renames --no-textconv --src-prefix=a/ --dst-prefix=b/ <commit> -- <paths>`
 
 The diff compares the commit with the working tree on disk. Text in an unsaved editor is not
-part of it. A failed command gives `missing` for each comment of that commit.
+part of it. The reader sorts a failed command into one of two kinds:
+
+| Kind | When | Result |
+|---|---|---|
+| Refusal | Git ran, and its error text holds `bad object`, `bad revision`, `unknown revision`, `not a valid object name` or `invalid object name`, in any case | Each comment of that commit is `missing`. The reader does not run the command for that commit again until HEAD moves |
+| Failure | Any other failed command, for example a time limit, a stopped process, too much output, or a lock file such as `index.lock` | The reader keeps nothing. Each path gets the last good diff of that commit and path. When a path has no good diff, each comment of that commit is `missing` until the next read. The next read runs the command again |
+
+A cancelled read gives no result and changes nothing.
 
 ### 17.1 Parse
 
