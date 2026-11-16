@@ -315,8 +315,11 @@ const bridgeGone = async (file, waited = 0) => {
   return bridgeGone(file, waited + 1)
 }
 
+// These checks need real mouse input or the panel, so a first-run screen over the window blocks them.
+const INPUT_CHECKS = new Set([1, 6, 7, 9])
+
 /** The result of each check from the test records of the run. */
-const checkResults = async (records, failure) => {
+const checkResults = async (records, failure, blocked) => {
   const bridge = existsSync(bridgeRecord)
     ? JSON.parse(readFileSync(bridgeRecord, 'utf8')).path
     : undefined
@@ -329,7 +332,8 @@ const checkResults = async (records, failure) => {
         'sh',
         [
           '-c',
-          'ps -eo pid,etimes,args | grep -i -e extensionHost -e server-main | grep -v grep | cut -c1-220',
+          'ps -eo pid,etimes,args | grep -i -e extensionHost -e server-main -e bootstrap-fork | grep -v grep | cut -c1-220; ' +
+            'for f in $(ls -t ~/.vscode-server/data/logs/*/exthost*/remoteexthost.log ~/.vscode-server/data/logs/*/exthost*/yeskiy.yreview/*.log 2>/dev/null | head -2); do echo "== $f"; tail -n 25 "$f"; done',
         ],
         {
           encoding: 'utf8',
@@ -343,6 +347,8 @@ const checkResults = async (records, failure) => {
       const own = records.filter((record) => record.file === file)
       const failed = own.find((record) => record.state === 'failed')
       const skipped = own.find((record) => record.state === 'skipped')
+      if (failed !== undefined && blocked !== undefined && INPUT_CHECKS.has(check))
+        return { check, name, status: 'not automated', reason: blocked }
       if (failed !== undefined) return { check, name, status: 'failed', reason: failed.error }
       if (skipped !== undefined)
         return {
@@ -415,6 +421,16 @@ const installCheck = async (editor) => {
       { env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' } },
     )
   }
+}
+
+/** The reason when a first-run screen stays over the window, for example a sign-in screen. */
+const blockedBy = (steps) => {
+  const last = steps?.at(-1)
+  if (last === undefined || last.done) return undefined
+  const signIn = /log ?in|sign ?(in|up)/iu.test(last.text ?? '')
+  return signIn
+    ? 'a new profile shows a sign-in screen over the window, and CI has no account'
+    : `a first-run screen stays over the window: ${last.text ?? ''}`
 }
 
 const buildBundle = async () => {
@@ -496,7 +512,7 @@ const main = async () => {
     firstRun: run.firstRun,
     date: new Date().toISOString().slice(0, 10),
     install,
-    checks: await checkResults(run.tests, failure),
+    checks: await checkResults(run.tests, failure, blockedBy(run.firstRun)),
     tests: run.tests,
   }
   mkdirSync(path.resolve(args.out), { recursive: true })

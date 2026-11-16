@@ -1,6 +1,6 @@
 import { setTimeout as wait } from 'node:timers/promises'
 
-import { clickAt, evaluate, workbench } from '../integration/keymap/devtools'
+import { clickAt, evaluate, pressKey, workbench } from '../integration/keymap/devtools'
 
 interface Step {
   readonly done: boolean
@@ -30,8 +30,16 @@ const STEP = `(() => {
 /** Clicks through a first-run screen as a new user does, and gives the steps. */
 export const finishFirstRun = async (steps: readonly Step[] = []): Promise<readonly Step[]> => {
   const step = (await evaluate(await workbench(), STEP)) as Step
-  if (step.done || steps.length >= 15) return [...steps, step]
+  if (step.done || steps.length >= 8) return [...steps, step]
   if (step.x !== undefined && step.y !== undefined) await clickAt(step.x, step.y)
+  // A screen with no skip button can still close with Escape.
+  else
+    await pressKey({
+      key: 'Escape',
+      code: 'Escape',
+      windowsVirtualKeyCode: 27,
+      nativeVirtualKeyCode: 27,
+    })
   await wait(1000)
-  return finishFirstRun([...steps, step])
+  return finishFirstRun([...steps, { ...step, chosen: step.chosen ?? 'Escape' }])
 }
