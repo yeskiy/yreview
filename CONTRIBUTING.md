@@ -219,6 +219,28 @@ has a version of the form `major.minor.patch`.
 Each release workflow stops when the major and minor of its tag differ from those of the
 other product in the same commit.
 
+## For maintainers: the remote check of the VS Code extension
+
+The maintainer runs each check below in each setup of the VS Code extension. Each cell records
+the result. Check 10 also records which command holds the Yreview log:
+Developer: Export Logs or Developer: Open Logs Folder.
+
+| Check                                         | Local Windows   | Remote-SSH      | WSL             | Dev Containers  | Codespaces      | Cursor          | Windsurf        | VSCodium        |
+| --------------------------------------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- | --------------- |
+| 1. Show Log shows the start and the host      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 2. A shared comment reaches a second clone    | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 3. A resolved comment stays resolved          | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 4. A sent task reaches Claude Code            | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 5. The agent resolves the task                | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 6. The context menu of the Markdown preview   | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 7. The Add button of the Markdown preview     | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 8. The diagnostic report holds no remote path | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 9. The Report button opens the issue form     | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 10. The log export holds the Yreview log      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 11. The bridge file goes when the window goes | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 12. The review preview opens and renders      | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+| 13. The key in the review preview saves lines | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet | not checked yet |
+
 ## The license of your contribution
 
 This project uses the Apache License 2.0. When you open a pull request, you agree that your
