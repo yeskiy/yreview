@@ -66,8 +66,10 @@ const sourceEditor = async (asked: RangeAsk): Promise<vscode.TextEditor | undefi
   return openBeside(asked, editor.document, editor.selection)
 }
 
-/** The selection of the active rich editor, read from a text editor that replaces it for a moment. */
-const richSelection = async (asked: RangeAsk): Promise<vscode.Selection | undefined> => {
+/** The source beside the active rich editor, and the rich editor selection that a text editor reads. */
+const besideRich = async (
+  asked: RangeAsk,
+): Promise<{ editor: vscode.TextEditor; selection?: vscode.Selection } | undefined> => {
   const { activeTab, viewColumn } = vscode.window.tabGroups.activeTabGroup
   const input = activeTab?.input
   if (!(input instanceof vscode.TabInputCustom) || input.viewType !== RICH_EDITOR) return undefined
@@ -79,7 +81,8 @@ const richSelection = async (asked: RangeAsk): Promise<vscode.Selection | undefi
     text?.document.uri.toString() === input.uri.toString() ? text.selection : undefined
   const temporary = vscode.window.tabGroups.activeTabGroup.activeTab
   await read
-  // A webview that opens with the focus takes it late, also from the comment box.
+  const editor = await showBeside(asked, input.uri, viewColumn)
+  // The rich editor comes back after the focus left its group. A focused webview takes the focus late.
   await vscode.commands.executeCommand('vscode.openWith', input.uri, RICH_EDITOR, {
     viewColumn,
     preserveFocus: true,
@@ -88,7 +91,7 @@ const richSelection = async (asked: RangeAsk): Promise<vscode.Selection | undefi
   } satisfies vscode.TextDocumentShowOptions)
   if (temporary?.input instanceof vscode.TabInputText)
     await vscode.window.tabGroups.close(temporary, true)
-  return selection
+  return { editor, selection }
 }
 
 /** The lines of the context menu as a selection of whole lines, without blank lines at the end. */
@@ -110,10 +113,10 @@ const fromPreview =
   (asked: RangeAsk) =>
   async (context?: unknown): Promise<void> => {
     const lines = rangeOfContext(context)
-    const rich = lines === undefined ? await richSelection(asked) : undefined
-    const editor = await sourceEditor(asked)
+    const rich = lines === undefined ? await besideRich(asked) : undefined
+    const editor = rich?.editor ?? (await sourceEditor(asked))
     if (editor === undefined) return
-    const selection = rich ?? linesIn(editor.document, lines)
+    const selection = rich === undefined ? linesIn(editor.document, lines) : rich.selection
     if (selection !== undefined) {
       editor.selection = selection
       editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
