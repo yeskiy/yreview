@@ -16,6 +16,10 @@ const display = process.env.DISPLAY ?? assert.fail('DISPLAY is not set')
 const width = Number(process.env.DEMO_WIDTH ?? '1120')
 const height = Number(process.env.DEMO_HEIGHT ?? '700')
 
+/** The height of the native window parts above the page, for example a menu bar. */
+const page = { top: 0 }
+const active: { video?: ChildProcess } = {}
+
 const root = (): string =>
   vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? assert.fail('no workspace')
 const fileOf = (name: string): vscode.Uri => vscode.Uri.file(path.join(root(), name))
@@ -80,7 +84,7 @@ const grabArgs = ['-f', 'x11grab', '-video_size', `${width}x${height}`]
 
 const record = (name: string): ChildProcess => {
   say(`record ${name}`)
-  return spawn(
+  active.video = spawn(
     'ffmpeg',
     [
       '-y',
@@ -103,9 +107,11 @@ const record = (name: string): ChildProcess => {
     ],
     { stdio: ['pipe', 'ignore', 'inherit'] },
   )
+  return active.video
 }
 
 const stop = async (ffmpeg: ChildProcess): Promise<void> => {
+  active.video = undefined
   ffmpeg.stdin?.end('q')
   await once(ffmpeg, 'exit')
 }
@@ -149,7 +155,7 @@ const boxIn = async (expression: string): Promise<Box | null> =>
       const node = ${expression}
       if (!node) return null
       const rect = node.getBoundingClientRect()
-      return rect.width > 0 ? { x: rect.left, y: rect.top, w: rect.width, h: rect.height } : null
+      return rect.width > 0 ? { x: rect.left, y: rect.top + ${page.top}, w: rect.width, h: rect.height } : null
     })()`,
   )) as Box | null
 
@@ -192,7 +198,7 @@ const lineOf = (line: number): Promise<{ left: number; right: number; y: number 
           const text = [...editor.querySelectorAll('.view-line')].find((node) => Math.abs(node.getBoundingClientRect().top - row.top) < 2)
           const lines = editor.querySelector('.view-lines').getBoundingClientRect()
           const end = text?.firstElementChild?.getBoundingClientRect().right ?? lines.left
-          return { left: lines.left, right: end, y: row.top + row.height / 2 }
+          return { left: lines.left, right: end, y: row.top + row.height / 2 + ${page.top} }
         })()`,
       )) as { left: number; right: number; y: number } | null,
     `line ${line}`,
@@ -230,6 +236,8 @@ const placeWindow = async (): Promise<void> => {
   xdo('windowsize', id, String(width), String(height))
   xdo('windowfocus', '--sync', id)
   await wait(1500)
+  page.top = height - Number(await evaluate(await workbench(), 'window.innerHeight'))
+  say(`page top ${page.top}`)
   say(`window ${id} ${xdo('getwindowgeometry', id).replaceAll('\n', ' ')}`)
 }
 
@@ -297,6 +305,11 @@ const commentScene = async (): Promise<void> => {
 const PREVIEW_TEXT = 'After 30 minutes without errors, it deploys to production.'
 const PREVIEW_COMMENT = 'Name the dashboard that shows these errors, and who watches it.'
 
+const pageOrigin = async (): Promise<Point> => {
+  const origin = await webviewOrigin()
+  return { x: origin.x, y: origin.y + page.top }
+}
+
 /** The page points of the start and the end of a text in the review preview. */
 const textEnds = async (text: string): Promise<{ from: Point; to: Point }> => {
   const inner = await untilValue(
@@ -318,7 +331,7 @@ const textEnds = async (text: string): Promise<{ from: Point; to: Point }> => {
       )) as { from: Point; to: Point } | null,
     'preview text',
   )
-  const origin = await webviewOrigin()
+  const origin = await pageOrigin()
   const shift = (point: Point): Point => ({
     x: Math.round(origin.x + point.x),
     y: Math.round(origin.y + point.y),
@@ -362,7 +375,7 @@ const previewScene = async (): Promise<void> => {
     `const rect = doc.querySelector('.yreview-save-local').getBoundingClientRect()
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }`,
   )) as Point
-  const origin = await webviewOrigin()
+  const origin = await pageOrigin()
   await click({ x: Math.round(origin.x + save.x), y: Math.round(origin.y + save.y) })
   await untilValue(
     async () =>
@@ -477,7 +490,7 @@ const tasksScene = async (): Promise<void> => {
   still('task-views')
 }
 
-export const run = async (): Promise<void> => {
+const scenes = async (): Promise<void> => {
   await yreview()
   await gitReady()
   await placeWindow()
@@ -489,3 +502,11 @@ export const run = async (): Promise<void> => {
   await tasksScene()
   say('done')
 }
+
+/** A failed scene keeps its video and a still of the screen, so the run shows what went wrong. */
+export const run = (): Promise<void> =>
+  scenes().catch(async (error: unknown) => {
+    if (active.video !== undefined) await stop(active.video)
+    still('failure')
+    throw error
+  })
