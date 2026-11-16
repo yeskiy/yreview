@@ -28,6 +28,8 @@ import {
 } from '../store/reviewService'
 import { gitApi, watchHeads } from '../views/repositories'
 
+import { CommentDrafts } from './draft'
+
 const FILE = 'file'
 const GIT = 'git'
 const OPEN = 'yreview.open'
@@ -365,6 +367,9 @@ export class ReviewComments implements vscode.Disposable {
 
   private readonly disposables: vscode.Disposable[] = []
 
+  /** The draft editors that take a new comment on a line that shows a thread. */
+  private readonly drafts: CommentDrafts
+
   /** Sets the placeholder text of an empty comment box. */
   placeholder(text: string): void {
     this.controller.options = { ...this.controller.options, placeHolder: text }
@@ -374,6 +379,15 @@ export class ReviewComments implements vscode.Disposable {
     private readonly service: ReviewService,
     private readonly log: Log,
   ) {
+    this.drafts = new CommentDrafts(
+      (source, selection, text, shared) => this.addRange(source, selection, text, shared),
+      (source) => readSettings(scopeOf(source)).newComments === 'shared',
+      (source, selection) => {
+        if (this.pending.get(pendingKey(source, selection.start.line))?.isEqual(selection))
+          this.pending.delete(pendingKey(source, selection.start.line))
+      },
+      log,
+    )
     this.controller.commentingRangeProvider = {
       provideCommentingRanges: (document) => {
         ;[...this.unasked]
@@ -390,6 +404,7 @@ export class ReviewComments implements vscode.Disposable {
       placeHolder: placeholderText(undefined, process.platform),
     }
     this.disposables.push(
+      this.drafts,
       this.controller,
       this.asked,
       this.single,
@@ -578,12 +593,25 @@ export class ReviewComments implements vscode.Disposable {
     text: string,
     shared: boolean,
   ): Promise<void> {
+    await this.addRange(
+      uri,
+      new vscode.Range(lines.start, 0, Math.max(lines.start, lines.end), Number.MAX_SAFE_INTEGER),
+      text,
+      shared,
+    )
+  }
+
+  /** Writes a new comment on a range of a file and draws the file again. A failure rejects. */
+  private async addRange(
+    uri: vscode.Uri,
+    range: vscode.Range,
+    text: string,
+    shared: boolean,
+  ): Promise<void> {
     const trimmed = text.trim()
     if (trimmed === '') throw new Error('Write the comment text first.')
     const document = await vscode.workspace.openTextDocument(uri)
-    const selected = document.validateRange(
-      new vscode.Range(lines.start, 0, Math.max(lines.start, lines.end), Number.MAX_SAFE_INTEGER),
-    )
+    const selected = document.validateRange(range)
     await this.timed(shared ? 'Save Shared' : 'Save Local', async () => {
       const { result } = await this.writeNew(document, rangeOf(document, selected), trimmed, shared)
       result.notices?.forEach((notice) => {
@@ -905,7 +933,8 @@ export class ReviewComments implements vscode.Disposable {
     return this.nativeAdd
   }
 
-  /** VS Code opens a comment box itself, with the focus in it, on the first line of the selection. */
+  /** VS Code opens a comment box with the focus on the first line of the selection.
+   * A first line that shows a thread gets a draft editor instead. */
   private async startThread(): Promise<void> {
     const editor = vscode.window.activeTextEditor
     if (editor === undefined || !canComment(editor.document.uri)) return
@@ -924,7 +953,13 @@ export class ReviewComments implements vscode.Disposable {
         shown.thread.uri.toString() === document.uri.toString() &&
         shown.thread.range?.end.line === at,
     )
-    if ((await this.hasNativeAdd()) && glyphOnLine === undefined) {
+    // The native add on a line with a thread only toggles the thread, and a new thread gets no focus.
+    if (glyphOnLine !== undefined) {
+      const lines = rangeOf(document, selection)
+      await this.drafts.open(editor, selection, { start: lines.startLine, end: lines.endLine })
+      return
+    }
+    if (await this.hasNativeAdd()) {
       // VS Code gives no focus to a box that opens before the new editor asks for its ranges.
       if (this.unasked.has(editor))
         await firstAsk(this.onDidAskRanges, document.uri, NEW_EDITOR_ASK_MS)

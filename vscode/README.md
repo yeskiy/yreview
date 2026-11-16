@@ -15,6 +15,14 @@ writes the same notes, so one team can use VS Code and IntelliJ IDEA together.
 To close a new comment box, click Discard or press Escape. Discard closes the box at once.
 Escape asks first when the box has text, as for each comment box of VS Code.
 
+A comment box cannot get the focus on a line that already shows a comment thread. When the
+first selected line shows a thread, Add Review Comment opens a draft editor beside the file.
+The title of the draft names the file and the lines. Write the comment in the draft, then
+click Save Local or Save Shared in the title bar, or press Ctrl+Enter (Cmd+Enter on macOS).
+The comment goes to the selected lines, the draft closes, and the file gets the focus and
+the selection again. Escape closes the draft. When the draft has text, Escape asks first.
+The draft stays in memory only, so VS Code does not write it to a file.
+
 A keymap extension can bind Ctrl+Enter to another command in each text editor. For example,
 the IntelliJ IDEA Keybindings extension binds it to Go to Declaration. An extension cannot
 win over that binding, but a user key binding can. When Yreview finds such a binding, it

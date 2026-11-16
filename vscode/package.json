@@ -77,6 +77,25 @@
         "title": "Close Comment Box"
       },
       {
+        "command": "yreview.draft.save",
+        "title": "Save Comment"
+      },
+      {
+        "command": "yreview.draft.saveLocal",
+        "title": "Save Local",
+        "icon": "$(save)"
+      },
+      {
+        "command": "yreview.draft.saveShared",
+        "title": "Save Shared",
+        "icon": "$(cloud-upload)"
+      },
+      {
+        "command": "yreview.draft.discard",
+        "title": "Discard Comment",
+        "icon": "$(close)"
+      },
+      {
         "command": "yreview.resolve",
         "title": "Resolve",
         "icon": "$(check)"
@@ -425,6 +444,22 @@
           "when": "false"
         },
         {
+          "command": "yreview.draft.save",
+          "when": "false"
+        },
+        {
+          "command": "yreview.draft.saveLocal",
+          "when": "resourceScheme == yreview-draft"
+        },
+        {
+          "command": "yreview.draft.saveShared",
+          "when": "resourceScheme == yreview-draft"
+        },
+        {
+          "command": "yreview.draft.discard",
+          "when": "resourceScheme == yreview-draft"
+        },
+        {
           "command": "yreview.resolve",
           "when": "false"
         },
@@ -590,6 +625,21 @@
         }
       ],
       "editor/title": [
+        {
+          "command": "yreview.draft.saveLocal",
+          "when": "resourceScheme == yreview-draft",
+          "group": "navigation@1"
+        },
+        {
+          "command": "yreview.draft.saveShared",
+          "when": "resourceScheme == yreview-draft",
+          "group": "navigation@2"
+        },
+        {
+          "command": "yreview.draft.discard",
+          "when": "resourceScheme == yreview-draft",
+          "group": "navigation@3"
+        },
         {
           "command": "yreview.addCommentFromPreview",
           "when": "activeWebviewPanelId == 'markdown.preview' || activeCustomEditorId == 'vscode.markdown.preview.editor' || activeCustomEditorId == 'vscode.markdown.editor'",
@@ -1538,6 +1588,17 @@
         "key": "ctrl+enter",
         "mac": "cmd+enter",
         "when": "commentEditorFocused && commentController == yreview"
+      },
+      {
+        "command": "yreview.draft.save",
+        "key": "ctrl+enter",
+        "mac": "cmd+enter",
+        "when": "resourceScheme == yreview-draft && editorTextFocus"
+      },
+      {
+        "command": "yreview.draft.discard",
+        "key": "escape",
+        "when": "resourceScheme == yreview-draft && editorTextFocus && !editorHasSelection && !editorHasMultipleSelections && !suggestWidgetVisible && !inlineSuggestionVisible && !parameterHintsVisible && !inSnippetMode && !findWidgetVisible"
       }
     ],
     "colors": [
