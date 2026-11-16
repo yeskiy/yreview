@@ -27,7 +27,7 @@ export type ToWebview =
   | { readonly type: 'failed'; readonly message: string }
 
 export type FromWebview =
-  | { readonly type: 'ready' }
+  | { readonly type: 'ready'; readonly build?: number }
   | {
       readonly type: 'save'
       readonly lines: Lines
@@ -42,6 +42,8 @@ export type FromWebview =
 /** The webview state that a restore after a reload reads. */
 export interface PageState {
   readonly uri: string
+  /** The number of the page build. A page that reports an old number shows old settings. */
+  readonly build?: number
 }
 
 export const MAX_TEXT = 65_536
@@ -63,7 +65,11 @@ const linesOf = (value: unknown): Lines | undefined => {
 export const fromWebview = (value: unknown): FromWebview | undefined => {
   const message = fieldsOf(value)
   const { type, id, text, href, line, shared } = message
-  if (type === 'ready' || type === 'noLines') return { type }
+  if (type === 'ready')
+    return Number.isSafeInteger(message.build) && (message.build as number) >= 0
+      ? { type, build: message.build as number }
+      : { type }
+  if (type === 'noLines') return { type }
   if ((type === 'resolve' || type === 'delete' || type === 'reveal') && typeof id === 'string')
     return ID.test(id) ? { type, id } : undefined
   if (type === 'openLink' && typeof href === 'string')

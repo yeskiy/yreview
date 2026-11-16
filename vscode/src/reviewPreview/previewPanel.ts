@@ -74,6 +74,9 @@ export class ReviewPreview implements vscode.Disposable {
 
   private pageLoaded = false
 
+  /** The number of the last page build, and its HTML. */
+  private built = { build: 0, html: '', resends: 0 }
+
   constructor(
     readonly panel: vscode.WebviewPanel,
     readonly uri: vscode.Uri,
@@ -177,7 +180,8 @@ export class ReviewPreview implements vscode.Disposable {
     }
     this.pageVersion = document.version
     this.reload()
-    webview.html = pageHtml({
+    const build = this.built.build + 1
+    const html = pageHtml({
       cspSource: webview.cspSource,
       nonce: randomBytes(16).toString('base64'),
       base: webview.asWebviewUri(this.uri).toString(),
@@ -195,8 +199,10 @@ export class ReviewPreview implements vscode.Disposable {
       })),
       look: lookOf(this.uri),
       html: await vscode.commands.executeCommand<string>('markdown.api.render', document),
-      state: { uri: this.uri.toString() },
+      state: { uri: this.uri.toString(), build },
     })
+    this.built = { build, html, resends: 0 }
+    webview.html = html
   }
 
   private follow(event: vscode.TextEditorVisibleRangesChangeEvent): void {
@@ -255,14 +261,21 @@ export class ReviewPreview implements vscode.Disposable {
 
   private async handle(message: FromWebview): Promise<void> {
     if ((await this.hooks()?.onMessage(this, message)) === true) return
-    if (message.type === 'ready') await this.ready()
+    if (message.type === 'ready') await this.ready(message.build)
     if (message.type === 'showSource')
       await this.showSource({ start: message.line, end: message.line })
     if (message.type === 'openLink') await this.openLink(message.href)
   }
 
   /** A page that loads again after a hide has the HTML of the last build, so it gets the text now. */
-  private async ready(): Promise<void> {
+  private async ready(build?: number): Promise<void> {
+    // The webview can keep a page whose HTML came before the last build. The same HTML is not set again.
+    if (build !== undefined && build !== this.built.build) {
+      if (this.built.build === 0) return
+      this.built = { ...this.built, resends: this.built.resends + 1 }
+      this.panel.webview.html = `${this.built.html}<!-- ${this.built.resends} -->`
+      return
+    }
     this.pageLoaded = true
     this.page.resolve()
     if ((await vscode.workspace.openTextDocument(this.uri)).version !== this.pageVersion)

@@ -47,6 +47,13 @@ describe('the messages of the review preview page', () => {
     assert.equal(fromWebview({ type: 'delete', id: '../x' }), undefined)
   })
 
+  it('reads the build number of a ready page, and only a whole number', () => {
+    assert.deepEqual(fromWebview({ type: 'ready', build: 3 }), { type: 'ready', build: 3 })
+    ;[-1, 1.5, '3', null].forEach((build) =>
+      assert.deepEqual(fromWebview({ type: 'ready', build }), { type: 'ready' }, String(build)),
+    )
+  })
+
   it('drops unknown fields and unknown types', () => {
     assert.deepEqual(fromWebview({ type: 'ready', extra: 1 }), { type: 'ready' })
     assert.equal(fromWebview({ type: 'run', command: 'x' }), undefined)
