@@ -172,6 +172,46 @@ describe('save key with the real IntelliJ IDEA Keybindings extension', () => {
     assert.equal(await pressInEditor(), `${KEYMAP_COMMAND} from user extension ${KEYMAP_ID}`)
   })
 
+  it('the save key saves the draft editor of a commented line and keeps the keymap command in an editor', async () => {
+    const uri = fileWith('draft.md', '# Draft\n\nSome text.\n')
+    const controller = vscode.comments.createCommentController('yreview-keymap-test', 'Test')
+    await vscode.commands.executeCommand('yreview.saveLocal', {
+      thread: controller.createCommentThread(uri, new vscode.Range(2, 0, 2, 0), []),
+      text: 'The first comment.',
+    })
+    controller.dispose()
+    const box = await comments()
+    assert.ok(await until(() => box.snapshot(uri).length === 1), 'the first comment did not save')
+    const editor = await vscode.window.showTextDocument(
+      await vscode.workspace.openTextDocument(uri),
+    )
+    await focusWindow()
+    editor.selection = new vscode.Selection(2, 0, 2, 4)
+    await vscode.commands.executeCommand('yreview.addComment')
+    assert.ok(
+      await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'yreview-draft'),
+      'no draft editor opened',
+    )
+    const text = 'Saved from the draft editor.'
+    await vscode.commands.executeCommand('type', { text })
+    assert.equal(await pressAndResolve(), `yreview.draft.save from user extension ${OWN_ID}`)
+    assert.ok(
+      await until(() =>
+        box
+          .snapshot(uri)
+          .some(
+            (shown) => (shown.thread.comments[0]?.body as vscode.MarkdownString).value === text,
+          ),
+      ),
+      'the draft did not save',
+    )
+    assert.ok(
+      await until(() => vscode.window.activeTextEditor?.document.uri.toString() === uri.toString()),
+      'the focus did not go back to the source',
+    )
+    assert.equal(await pressInEditor(), `${KEYMAP_COMMAND} from user extension ${KEYMAP_ID}`)
+  })
+
   it('without the own entry the keymap wins, and the user entry of Add wins back', async () => {
     // A user removal takes away each default save entry, the own entry of the manifest too.
     writeFileSync(userKeybindings(), `[{ "key": "${SAVE_KEY}", "command": "-${SAVE_COMMAND}" }]\n`)

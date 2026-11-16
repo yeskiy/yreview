@@ -365,8 +365,11 @@ describe('save key entry of the manifest', () => {
     }
   ).contributes.keybindings
 
-  it('puts the scoped save entry last, above the keymap index with a margin', () => {
-    const last = bindings.length - 1
+  // The draft editor entries follow the save entry, so they rank above the keymap too.
+  const DRAFT_ENTRIES = 2
+
+  it('puts the scoped save entry after the padding, above the keymap index with a margin', () => {
+    const last = bindings.length - 1 - DRAFT_ENTRIES
     assert.deepEqual(bindings[last], {
       command: SAVE_COMMAND,
       key: 'ctrl+enter',
@@ -379,11 +382,28 @@ describe('save key entry of the manifest', () => {
     assert.ok(last > KEYMAP_SAVE_INDEX + MARGIN, `index ${last}`)
   })
 
+  it('puts the save and close keys of the draft editor last, scoped to the draft editor', () => {
+    const first = bindings.length - DRAFT_ENTRIES
+    assert.deepEqual(
+      bindings.slice(first).map(({ command, key, mac }) => ({ command, key, mac })),
+      [
+        { command: 'yreview.draft.save', key: 'ctrl+enter', mac: 'cmd+enter' },
+        { command: 'yreview.draft.discard', key: 'escape', mac: undefined },
+      ],
+    )
+    bindings
+      .slice(first)
+      .forEach(({ when }) =>
+        assert.match(String(when), /^resourceScheme == yreview-draft && editorTextFocus( |$)/u),
+      )
+    assert.ok(first > KEYMAP_SAVE_INDEX + MARGIN, `index ${first}`)
+  })
+
   it('each padding entry has no key and binds nothing', () => {
     const first = bindings.findIndex((binding) => Object.keys(binding).length === 1)
     assert.ok(first > 0, `${first}`)
     bindings
-      .slice(first, -1)
+      .slice(first, -1 - DRAFT_ENTRIES)
       .forEach((binding) => assert.deepEqual(binding, { command: SAVE_COMMAND }))
     bindings
       .slice(0, first)
