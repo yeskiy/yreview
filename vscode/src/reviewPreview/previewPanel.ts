@@ -7,6 +7,7 @@ import type { Log } from '../log'
 import type { LineRange } from '../preview/previewLines'
 import { wholeLines } from '../preview/wholeLines'
 import { contributionsOf } from './contributions'
+import { answerOf, NO_BUILD, resend } from './builds'
 import { linkTarget } from './links'
 import { DEFAULT_FONT, type PreviewLook, pageHtml } from './page'
 import { type FromWebview, type ToWebview, fromWebview } from './protocol'
@@ -75,7 +76,7 @@ export class ReviewPreview implements vscode.Disposable {
   private pageLoaded = false
 
   /** The number of the last page build, and its HTML. */
-  private built = { build: 0, html: '', resends: 0 }
+  private built = NO_BUILD
 
   constructor(
     readonly panel: vscode.WebviewPanel,
@@ -266,21 +267,26 @@ export class ReviewPreview implements vscode.Disposable {
 
   private async handle(message: FromWebview): Promise<void> {
     if ((await this.hooks()?.onMessage(this, message)) === true) return
-    if (message.type === 'ready') await this.ready(message.build)
+    if (message.type === 'ready' || message.type === 'stalled') await this.report(message)
     if (message.type === 'showSource')
       await this.showSource({ start: message.line, end: message.line })
     if (message.type === 'openLink') await this.openLink(message.href)
   }
 
-  /** A page that loads again after a hide has the HTML of the last build, so it gets the text now. */
-  private async ready(build?: number): Promise<void> {
-    // The webview can keep a page whose HTML came before the last build. The same HTML is not set again.
-    if (build !== undefined && build !== this.built.build) {
-      if (this.built.build === 0) return
-      this.built = { ...this.built, resends: this.built.resends + 1 }
-      this.panel.webview.html = `${this.built.html}<!-- ${this.built.resends} -->`
-      return
+  /** A page of an old build, or a page that the webview host keeps hidden, gets the last HTML again. */
+  private async report(message: FromWebview & { type: 'ready' | 'stalled' }): Promise<void> {
+    const answer = answerOf(this.built, message)
+    if (answer === 'resend') {
+      const next = resend(this.built)
+      this.built = next.built
+      this.reload()
+      this.panel.webview.html = next.html
     }
+    if (answer === 'accept') await this.ready()
+  }
+
+  /** A page that loads again after a hide has the HTML of the last build, so it gets the text now. */
+  private async ready(): Promise<void> {
     this.pageLoaded = true
     this.page.resolve()
     if ((await vscode.workspace.openTextDocument(this.uri)).version !== this.pageVersion)

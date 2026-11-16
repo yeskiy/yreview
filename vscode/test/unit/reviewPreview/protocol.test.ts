@@ -54,6 +54,11 @@ describe('the messages of the review preview page', () => {
     )
   })
 
+  it('reads the build number of a page that stays hidden', () => {
+    assert.deepEqual(fromWebview({ type: 'stalled', build: 4 }), { type: 'stalled', build: 4 })
+    assert.deepEqual(fromWebview({ type: 'stalled', build: '4' }), { type: 'stalled' })
+  })
+
   it('drops unknown fields and unknown types', () => {
     assert.deepEqual(fromWebview({ type: 'ready', extra: 1 }), { type: 'ready' })
     assert.equal(fromWebview({ type: 'run', command: 'x' }), undefined)

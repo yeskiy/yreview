@@ -27,7 +27,7 @@ export type ToWebview =
   | { readonly type: 'failed'; readonly message: string }
 
 export type FromWebview =
-  | { readonly type: 'ready'; readonly build?: number }
+  | { readonly type: 'ready' | 'stalled'; readonly build?: number }
   | {
       readonly type: 'save'
       readonly lines: Lines
@@ -65,7 +65,7 @@ const linesOf = (value: unknown): Lines | undefined => {
 export const fromWebview = (value: unknown): FromWebview | undefined => {
   const message = fieldsOf(value)
   const { type, id, text, href, line, shared } = message
-  if (type === 'ready')
+  if (type === 'ready' || type === 'stalled')
     return Number.isSafeInteger(message.build) && (message.build as number) >= 0
       ? { type, build: message.build as number }
       : { type }
