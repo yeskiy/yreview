@@ -6,6 +6,34 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-11-16
+
+### Added
+
+- Show where open comments overlap
+- Mark comment overlaps with an amber color and a count
+- Comment on both sides of a diff and in plain folders
+- Port the review channel server to TypeScript
+- Serve the four review tools on the VS Code bridge
+- Map a comment range through a git diff
+- Store the commented lines in location.text
+- Place the open comments of every commit in the working tree
+- Show comments of earlier commits at their mapped lines
+- Mark comment rows outdated or file removed
+- Comment on the selection of the Markdown preview
+
+### Fixed
+
+- Run the vector test only in the plugin module
+- Highlight only the characters of a part-of-line comment
+- Show only the kind of the agent command in the report
+- Keep the agent command text out of the session record
+- Give the model the reason of a refused report
+- Pass an id that matches no open comment to the editor
+- Link the login keychain into the temporary test home on macOS
+- Keep a commit refused only when git says it does not exist
+- Read the rows of the newest scan after a refresh
+
 ## [1.0.2] - 2026-11-13
 
 ### Added
@@ -187,7 +215,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Mark gradlew executable
 - Stop two tests from reading the platform they run on
 
-[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/yeskiy/yreview/compare/v1.0.2...v1.1.0
 [1.0.2]: https://github.com/yeskiy/yreview/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/yeskiy/yreview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yeskiy/yreview/commits/v1.0.0
