@@ -351,7 +351,8 @@ const checkResults = async (records, failure) => {
           status: 'failed',
           reason: `the bridge file stays ${BRIDGE_WAIT_S} s after the window closes`,
         }
-      return { check, name, status: 'passed', reason: '' }
+      const note = own.map((record) => /\(note: (.*)\)$/u.exec(record.title)?.[1]).find(Boolean)
+      return { check, name, status: 'passed', reason: note ?? '' }
     }),
   )
 }

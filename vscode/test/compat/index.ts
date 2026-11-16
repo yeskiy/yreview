@@ -28,7 +28,10 @@ const readWindow = async (): Promise<unknown> => ({
       focus: document.activeElement?.tagName + '.' + String(document.activeElement?.className).slice(0, 80),
       parts: [...document.querySelectorAll('.part')].filter((n) => n.getBoundingClientRect().width > 0).map((n) => n.id || n.className.slice(0, 40)),
       toasts: [...document.querySelectorAll('.notification-toast, .notifications-toasts')].map((n) => n.className.slice(0, 60)),
-      menus: document.querySelectorAll('.monaco-menu, .context-view').length,
+      notices: [...document.querySelectorAll('.notification-list-item')].map((n) => n.textContent.slice(0, 80)),
+      menus: [...document.querySelectorAll('.monaco-menu, .context-view')].map((n) => n.className.slice(0, 40) + ':' + n.textContent.slice(0, 120)),
+      titleActions: [...document.querySelectorAll('.editor-actions .action-item')].map((n) => (n.querySelector('.action-label')?.getAttribute('aria-label') ?? '').slice(0, 40)),
+      output: document.querySelector('.output-view') !== null,
       frames: document.querySelectorAll('iframe').length })`,
   ).catch((error: unknown) => String(error)),
 })

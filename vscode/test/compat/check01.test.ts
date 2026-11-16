@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict'
+import path from 'node:path'
 
 import * as vscode from 'vscode'
 
 import { evaluate, workbench } from '../integration/keymap/devtools'
 import { api } from '../integration/previewKit'
-import { config, eventually } from './kit'
+import { config, eventually, fileOf } from './kit'
 
 /** The text of the output channel of Yreview, from its document or from the visible panel. */
 const shownLog = async (): Promise<string> => {
@@ -25,6 +26,7 @@ const shownLog = async (): Promise<string> => {
 describe('check 1', () => {
   it('Show Log shows the start and the host', async () => {
     await api()
+    await vscode.window.showTextDocument(fileOf(path.join('src', 'a.txt')))
     await vscode.commands.executeCommand('yreview.showLog')
     await vscode.commands.executeCommand('workbench.action.toggleMaximizedPanel')
     const host = new RegExp(`host +${config().expectedHost}\\b`)

@@ -36,7 +36,8 @@ const editorOf = (outcome) => `${outcome.editor.name} ${outcome.editor.version}`
 
 const cellOf = (outcome, result) => {
   if (result === undefined) return 'not checked yet'
-  if (result.status === 'passed') return `passed (CI, ${outcome.date}, ${editorOf(outcome)})`
+  if (result.status === 'passed')
+    return `passed (CI, ${outcome.date}, ${editorOf(outcome)}${result.reason ? `, ${clean(result.reason)}` : ''})`
   if (result.status === 'not checked yet') return 'not checked yet'
   return `${result.status}: ${clean(result.reason)}`
 }
