@@ -222,7 +222,7 @@ describe('the review preview', () => {
           REVIEW_PAGE,
           `return doc.querySelector('p[data-line="2"] br') !== null`,
         ),
-        `the page has no line break: ${JSON.stringify(
+        `the page has no line break, last build ${shown.lastBuild}: ${JSON.stringify(
           await inWebview(
             REVIEW_PAGE,
             `return [doc.body.dataset.yreviewPreview, doc.querySelector('p[data-line="2"]')?.outerHTML]`,

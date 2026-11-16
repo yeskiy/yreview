@@ -119,6 +119,11 @@ export class ReviewPreview implements vscode.Disposable {
     return this.page.promise
   }
 
+  /** The number of the last page build. Tests read it. */
+  get lastBuild(): number {
+    return this.built.build
+  }
+
   /** Waits for the render and the page build that run now. Tests call it. */
   settled(): Promise<void> {
     return this.work
