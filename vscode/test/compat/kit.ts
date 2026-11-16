@@ -53,13 +53,25 @@ export const pointOf = async (
     })()`,
   )) as { x: number; y: number } | null
 
+/** The visible dialogs, notifications and buttons of the workbench, for a failure message. */
+const shownParts = async (): Promise<string> =>
+  JSON.stringify(
+    await evaluate(
+      await workbench(),
+      `[...document.querySelectorAll('.monaco-dialog-box, .notification-toast, .monaco-button, .editor-actions .action-label')]
+        .filter((node) => node.getBoundingClientRect().width > 0)
+        .map((node) => node.className.split(' ')[0] + ': ' + (node.textContent || node.getAttribute('aria-label') || '').slice(0, 60))
+        .slice(0, 30)`,
+    ),
+  )
+
 /** Clicks the element with a real mouse, after it shows. */
 export const clickElement = async (selector: string, text = ''): Promise<void> => {
   const found = async (tries: number): Promise<{ x: number; y: number }> =>
     (await pointOf(selector, text)) ??
     (tries > 0
       ? wait(250).then(() => found(tries - 1))
-      : assert.fail(`no visible element ${selector} with "${text}"`))
+      : assert.fail(`no visible element ${selector} with "${text}": ${await shownParts()}`))
   const { x, y } = await found(60)
   await clickAt(x, y)
 }

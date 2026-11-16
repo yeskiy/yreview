@@ -63,7 +63,7 @@ const fail = (message) => {
 /** The executable, the CLI and the product facts of an editor folder. */
 const editorIn = (folder) => {
   const productFile =
-    filesUnder(folder, 5).find((file) =>
+    filesUnder(folder, 8).find((file) =>
       file.endsWith(path.join('resources', 'app', 'product.json')),
     ) ?? fail(`no product.json under ${folder}`)
   const product = JSON.parse(readFileSync(productFile, 'utf8'))
@@ -87,6 +87,8 @@ const editorIn = (folder) => {
       product.cursorVersion ?? product.windsurfVersion ?? product.devinVersion ?? own.version,
     vscodeVersion: product.vscodeVersion ?? own.version,
     commit: product.commit,
+    // Cursor 3 opens its agent window first. The flag opens the classic editor window.
+    launch: /cursor/iu.test(product.nameShort ?? '') ? ['--classic'] : [],
   }
 }
 
@@ -321,7 +323,12 @@ const checkResults = async (records, failure) => {
       const skipped = own.find((record) => record.state === 'skipped')
       if (failed !== undefined) return { check, name, status: 'failed', reason: failed.error }
       if (skipped !== undefined)
-        return { check, name, status: 'not automated', reason: skipped.title }
+        return {
+          check,
+          name,
+          status: 'not automated',
+          reason: /\((?:not automated|skipped): (.*)\)$/u.exec(skipped.title)?.[1] ?? skipped.title,
+        }
       if (!own.some((record) => record.state === 'passed'))
         return {
           check,
@@ -356,6 +363,7 @@ const installCheck = async (editor) => {
       extensionDevelopmentPath: stub,
       extensionTestsPath: path.join(bundle, 'index.js'),
       launchArgs: [
+        ...editor.launch,
         `--user-data-dir=${userData}`,
         `--extensions-dir=${extensions}`,
         '--remote-debugging-port=0',
@@ -401,6 +409,8 @@ const buildBundle = async () => {
     sourcemap: true,
     keepNames: true,
     logLevel: 'warning',
+    // Mocha runs in serial, so its parallel worker files stay out of the bundle.
+    logOverride: { 'require-resolve-not-external': 'silent' },
     entryPoints: [
       'test/compat/index.ts',
       ...readdirSync('test/compat')
@@ -444,6 +454,7 @@ const main = async () => {
       ? remoteUri(work, path.join(bundle, 'index.js'))
       : path.join(bundle, 'index.js'),
     launchArgs: [
+      ...editor.launch,
       remote ? `--folder-uri=${remoteUri(work, work)}` : work,
       `--user-data-dir=${userData}`,
       `--extensions-dir=${extensions}`,

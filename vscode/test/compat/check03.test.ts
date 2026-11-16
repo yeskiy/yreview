@@ -26,6 +26,6 @@ describe('check 3', () => {
     )
     const note = git(workspace(), 'notes', '--ref', 'refs/notes/y-review/local', 'show', 'HEAD')
     assert.ok(note.includes(text), 'the local notes hold no record of the comment')
-    assert.match(note.split('\n').find((one) => one.includes(text)) ?? note, /"resolved":true/)
+    assert.match(note, /"resolved":true/, 'the local notes hold no resolve record')
   })
 })

@@ -211,7 +211,7 @@ jobs:
           $tag = (Invoke-WebRequest -UseBasicParsing https://github.com/VSCodium/vscodium/releases/latest).BaseResponse.RequestMessage.RequestUri.Segments[-1]
           $file = "VSCodium-win32-x64-$tag.zip"
           Invoke-WebRequest -UseBasicParsing -OutFile $file "https://github.com/VSCodium/vscodium/releases/download/$tag/$file"
-          $expected = ((Invoke-WebRequest -UseBasicParsing "https://github.com/VSCodium/vscodium/releases/download/$tag/$file.sha256").Content -split '\s+')[0]
+          $expected = ((curl.exe -fsSL "https://github.com/VSCodium/vscodium/releases/download/$tag/$file.sha256") -split '\s+')[0]
           if ((Get-FileHash -Algorithm SHA256 $file).Hash -ne $expected.ToUpper()) { throw "The SHA-256 of $file does not match." }
           Expand-Archive $file -DestinationPath "$env:RUNNER_TEMP\editor"
 
