@@ -80,7 +80,9 @@ const typeText = (text: string): string => xdo('type', '--delay', '55', text)
 
 // --- Recording ---
 
-const grabArgs = ['-f', 'x11grab', '-video_size', `${width}x${height}`]
+// The capture starts below the native menu bar, so the media show the workbench only.
+const grabArgs = (): string[] => ['-f', 'x11grab', '-video_size', `${width}x${height - page.top}`]
+const grabInput = (): string => `${display}+0,${page.top}`
 
 const record = (name: string): ChildProcess => {
   say(`record ${name}`)
@@ -90,13 +92,13 @@ const record = (name: string): ChildProcess => {
       '-y',
       '-loglevel',
       'error',
-      ...grabArgs,
+      ...grabArgs(),
       '-framerate',
       '15',
       '-draw_mouse',
       '1',
       '-i',
-      `${display}+0,0`,
+      grabInput(),
       '-c:v',
       'libx264rgb',
       '-preset',
@@ -122,11 +124,11 @@ const still = (name: string): void => {
     '-y',
     '-loglevel',
     'error',
-    ...grabArgs,
+    ...grabArgs(),
     '-draw_mouse',
     '0',
     '-i',
-    `${display}+0,0`,
+    grabInput(),
     '-frames:v',
     '1',
     path.join(out, `${name}.png`),
@@ -210,6 +212,23 @@ const selectLines = async (first: number, last: number): Promise<void> => {
   await drag({ x: start.left + 2, y: start.y }, { x: end.right + 4, y: end.y })
 }
 
+/** Clicks the comment glyph of a line, so its saved thread opens. */
+const openThread = async (line: number, text: string, ms = 650): Promise<void> => {
+  const { y } = await lineOf(line)
+  const glyph = await boxOf(
+    visible(
+      '.margin-view-overlays [class*="comment-thread"], .margin-view-overlays .comment-range-glyph',
+      `Math.abs(node.getBoundingClientRect().top + node.getBoundingClientRect().height / 2 + ${page.top} - ${y}) < 6`,
+    ),
+    `comment glyph of line ${line}`,
+  )
+  await click(center(glyph), ms)
+  await pageIs(
+    `[...document.querySelectorAll('.review-widget .comment-body')].some((node) => node.textContent.includes(${JSON.stringify(text)}))`,
+    `open thread of line ${line}`,
+  )
+}
+
 // --- Setup ---
 
 const yreview = async (): Promise<YreviewApi> =>
@@ -291,10 +310,8 @@ const commentScene = async (): Promise<void> => {
       ),
     ),
   )
-  await pageIs(
-    `[...document.querySelectorAll('.review-widget .comment-body')].some((node) => node.textContent.includes('is empty'))`,
-    'saved thread',
-  )
+  await wait(1200)
+  await openThread(36, 'is empty')
   await wait(400)
   rest()
   await wait(2600)
@@ -418,10 +435,8 @@ const diffScene = async (): Promise<void> => {
     ),
     200,
   )
-  await pageIs(
-    `[...document.querySelectorAll('.review-widget .comment-body')].some((node) => node.textContent.includes('seeded'))`,
-    'saved diff thread',
-  )
+  await wait(800)
+  await openThread(17, 'seeded', 200)
   rest()
   await quiet()
   await wait(1200)
