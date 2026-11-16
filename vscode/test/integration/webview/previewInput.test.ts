@@ -149,14 +149,18 @@ describe('real input in the Markdown preview', () => {
     await focusPreview()
     assert.equal(await selectInPreview(2, 4, 6), 'First paragraph.\n\nSecond')
     await rightClickInPreview(2)
+    const menu = await inPreview(`return {
+      context: doc.documentElement.getAttribute('data-vscode-context'),
+      selected: doc.getSelection().toString() }`)
     await chooseMenuItem('Add Review Comment')
     assert.ok(
       await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment'),
       'the comment box did not get the focus',
     )
+    const selection = sourceBeside('panel')?.selection
     assert.ok(
-      sourceBeside('panel')?.selection.isEqual(new vscode.Selection(2, 0, 4, 17)),
-      'the source is not on the selected lines',
+      selection?.isEqual(new vscode.Selection(2, 0, 4, 17)),
+      `the source is not on the selected lines: ${JSON.stringify({ selection, menu })}`,
     )
     assert.ok(stillShown('panel'), 'the preview left the view')
     assert.deepEqual(await saveBox('On the preview selection.'), [2, 4])
