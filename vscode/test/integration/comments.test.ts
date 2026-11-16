@@ -157,6 +157,23 @@ describe('comments in the editor', () => {
     assert.deepEqual(whole.range, new vscode.Range(1, 0, 2, 5))
   })
 
+  it('keeps a resolved comment resolved when a reload runs during the resolve', async () => {
+    const comments = await reviewComments()
+    const thread = await saveDraft(new vscode.Range(1, 0, 2, 0), 'Resolved during a reload.')
+    await Promise.all([
+      vscode.commands.executeCommand('yreview.resolve', thread),
+      comments.reload(file()),
+    ])
+    assert.deepEqual(
+      comments
+        .snapshot(file())
+        .filter((shown) => textOf(shown) === 'Resolved during a reload.')
+        .map((shown) => shown.thread.state),
+      [],
+      'the reload drew the resolved comment as open again',
+    )
+  })
+
   it('marks the text of two overlapping comments with depth 2', async () => {
     await saveDraft(new vscode.Range(0, 0, 1, 3), 'Outer.')
     await saveDraft(new vscode.Range(1, 1, 1, 2), 'Inner.')

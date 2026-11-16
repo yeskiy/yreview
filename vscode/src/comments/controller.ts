@@ -335,6 +335,9 @@ export class ReviewComments implements vscode.Disposable {
   /** The writes of this window that run now. A note watcher waits for them. */
   private readonly writes = new Set<Promise<unknown>>()
 
+  /** The count of finished writes of this window. A load that sees it change reads again. */
+  private writesDone = 0
+
   /** The content of each note ref file or folder store file after the last write of this window. */
   private readonly ownTips = new Map<string, string | undefined>()
 
@@ -505,6 +508,7 @@ export class ReviewComments implements vscode.Disposable {
   private async load(uri: vscode.Uri): Promise<void> {
     if (!canComment(uri)) return
     this.stale.delete(uri.toString())
+    const { writesDone } = this
     const known = new Set(this.snapshot(uri).map((entry) => entry.stored.id))
     const found = await this.anchorFor(uri)
     if (found.kind !== 'found') {
@@ -528,6 +532,12 @@ export class ReviewComments implements vscode.Disposable {
       placed.some((entry) => entry.stored.commit !== found.anchor.head) ? 'add' : 'delete'
     ](uri.toString())
     const document = await vscode.workspace.openTextDocument(uri)
+    // A write during the read, for example a resolve, makes the read old.
+    if (this.writes.size > 0 || this.writesDone !== writesDone) {
+      await Promise.allSettled([...this.writes])
+      await this.load(uri)
+      return
+    }
     const ids = new Set(placed.map((entry) => entry.stored.id))
     const before = this.snapshot(uri)
     const expanded = !this.shown.has(uri.toString()) && readSettings(scopeOf(uri)).editorMarks
@@ -889,6 +899,7 @@ export class ReviewComments implements vscode.Disposable {
       return await done
     } finally {
       this.writes.delete(done)
+      this.writesDone += 1
     }
   }
 
