@@ -322,6 +322,20 @@ const checkResults = async (records, failure) => {
     : undefined
   const gone = bridge === undefined ? undefined : await bridgeGone(bridge)
   if (bridge !== undefined) say(`the bridge file went after ${gone ?? 'more than 120'} s`)
+  // The processes that still run show which host keeps the file.
+  if (bridge !== undefined && gone === undefined && process.platform !== 'win32')
+    say(
+      spawnSync(
+        'sh',
+        [
+          '-c',
+          'ps -eo pid,etimes,args | grep -i -e extensionHost -e server-main | grep -v grep | cut -c1-220',
+        ],
+        {
+          encoding: 'utf8',
+        },
+      ).stdout,
+    )
   return Promise.all(
     CHECKS.map(async ([check, name]) => {
       if (SKIPPED.has(check)) return { check, name, status: 'not checked yet', reason: '' }

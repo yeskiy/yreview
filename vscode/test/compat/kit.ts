@@ -65,14 +65,18 @@ const shownParts = async (): Promise<string> =>
     ),
   )
 
-/** Clicks the element with a real mouse, after it shows. */
+/** Clicks the element with a real mouse, after it shows and stops to move, as a toast does. */
 export const clickElement = async (selector: string, text = ''): Promise<void> => {
-  const found = async (tries: number): Promise<{ x: number; y: number }> =>
-    (await pointOf(selector, text)) ??
-    (tries > 0
+  const found = async (tries: number): Promise<{ x: number; y: number }> => {
+    const first = await pointOf(selector, text)
+    const second = first === null ? null : await wait(300).then(() => pointOf(selector, text))
+    if (first !== null && second !== null && first.x === second.x && first.y === second.y)
+      return second
+    return tries > 0
       ? wait(250).then(() => found(tries - 1))
-      : assert.fail(`no visible element ${selector} with "${text}": ${await shownParts()}`))
-  const { x, y } = await found(60)
+      : assert.fail(`no still element ${selector} with "${text}": ${await shownParts()}`)
+  }
+  const { x, y } = await found(40)
   await clickAt(x, y)
 }
 
