@@ -80,15 +80,19 @@ const RETRY = `export interface RetryOptions {
 const sleep = (ms: number): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, ms))
 
-export async function withRetry<T>(call: () => Promise<T>, options: RetryOptions): Promise<T> {
-  // TODO: Stop on a 4xx response. A retry does not fix a bad request.
+export async function withRetry<T>(
+  call: () => Promise<T>,
+  options: RetryOptions,
+): Promise<T> {
+  // TODO: Stop on a 4xx response.
   const attempt = async (count: number): Promise<T> => {
     try {
       return await call()
     } catch (error) {
       if (count + 1 >= options.attempts) throw error
       // TODO: Cap the delay at 30 seconds.
-      await sleep(options.baseDelayMs * 2 ** count)
+      const delay = options.baseDelayMs * 2 ** count
+      await sleep(delay)
       return attempt(count + 1)
     }
   }
@@ -97,8 +101,8 @@ export async function withRetry<T>(call: () => Promise<T>, options: RetryOptions
 `
 
 const RETRY_CHANGED = RETRY.replace(
-  '      await sleep(options.baseDelayMs * 2 ** count)\n',
-  '      const jitter = Math.random() * options.baseDelayMs\n      await sleep(options.baseDelayMs * 2 ** count + jitter)\n',
+  '      await sleep(delay)\n',
+  '      const jitter = Math.random() * options.baseDelayMs\n      await sleep(delay + jitter)\n',
 )
 
 const RELEASE = `# Release process

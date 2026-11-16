@@ -361,7 +361,8 @@ const textEnds = async (text: string): Promise<{ from: Point; to: Point }> => {
 
 const previewScene = async (): Promise<void> => {
   await resetLayout()
-  await openFile('docs/release-process.md')
+  await vscode.commands.executeCommand('workbench.action.closeSidebar')
+  await openFile('docs/release-process.md', 8)
   await wait(1500)
   rest()
   const video = record('preview')
@@ -421,7 +422,7 @@ const diffScene = async (): Promise<void> => {
   await wait(2000)
   const editor = vscode.window.activeTextEditor ?? assert.fail('no diff editor')
   say(`diff side ${editor.document.uri.toString()}`)
-  editor.selection = new vscode.Selection(16, 0, 17, 60)
+  editor.selection = new vscode.Selection(20, 0, 21, 60)
   await wait(500)
   press('ctrl+alt+g')
   await pageIs(
@@ -439,8 +440,8 @@ const diffScene = async (): Promise<void> => {
     200,
   )
   await wait(800)
-  editor.selection = new vscode.Selection(20, 0, 20, 0)
-  await openThread(17, 'seeded', 200)
+  editor.selection = new vscode.Selection(24, 0, 24, 0)
+  await openThread(21, 'seeded', 200)
   rest()
   await quiet()
   await wait(1200)
@@ -453,6 +454,9 @@ const rowOf = (text: string): string =>
     `(node.getAttribute('aria-label') ?? '').includes(${JSON.stringify(text)})`,
   )
 
+const CHECKBOX =
+  '.custom-view-tree-node-item-checkbox, .monaco-custom-toggle, input[type="checkbox"], [role="checkbox"]'
+
 const tasksScene = async (): Promise<void> => {
   const { comments } = await yreview()
   await comments?.addAt(
@@ -463,6 +467,9 @@ const tasksScene = async (): Promise<void> => {
   )
   await resetLayout()
   await openFile('src/orders.ts', 19)
+  await vscode.commands.executeCommand('workbench.action.increaseViewWidth')
+  await vscode.commands.executeCommand('workbench.action.increaseViewWidth')
+  say(`sidebar ${JSON.stringify(await boxIn(visible('.part.sidebar')))}`)
   await vscode.commands.executeCommand('yreview.startSession')
   await wait(1500)
   await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
@@ -483,13 +490,20 @@ const tasksScene = async (): Promise<void> => {
   await wait(1800)
   await click(center(await boxOf(rowOf('Cap the delay'), 'TODO row')))
   await wait(2000)
-  await click(
-    center(
-      await boxOf(
-        `(${rowOf('orders-service')})?.querySelector('.custom-view-tree-node-item-checkbox, [role="checkbox"]')`,
-        'folder checkbox',
-      ),
-    ),
+  await ['release-process.md', 'src/orders.ts', 'src/retry.ts'].reduce<Promise<void>>(
+    async (done, name) => {
+      await done
+      await click(
+        center(
+          await boxOf(
+            `(${rowOf(name)})?.querySelector(${JSON.stringify(CHECKBOX)})`,
+            `checkbox of ${name}`,
+          ),
+        ),
+      )
+      await wait(500)
+    },
+    Promise.resolve(),
   )
   await wait(1000)
   await click(
