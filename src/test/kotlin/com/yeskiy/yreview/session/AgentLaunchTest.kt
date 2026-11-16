@@ -26,6 +26,18 @@ class AgentLaunchTest {
     }
 
     @Test
+    fun `a command with arguments runs as words, and the flags of the plugin follow them`() {
+        assertEquals(
+            listOf("claude", "--model", "opus", "--mcp-config", config, "--dangerously-load-development-channels", "server:y-review"),
+            AgentLaunch.arguments(claude, "claude --model opus", config),
+        )
+        assertEquals(
+            listOf("C:/Program Files/Agent/agent.exe", "--flag"),
+            AgentLaunch.arguments(AgentCatalog.of(AgentId.CUSTOM), "\"C:/Program Files/Agent/agent.exe\" --flag"),
+        )
+    }
+
+    @Test
     fun `claude code gets the two flags of the channel`() {
         assertEquals(
             listOf("claude", "--mcp-config", config, "--dangerously-load-development-channels", "server:y-review"),

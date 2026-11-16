@@ -1,6 +1,7 @@
 import { isKotlinBlank } from '../core/kotlinText'
 import { noPush } from './agentRows'
 import type { AgentSpec } from './catalog'
+import { commandWords } from './commandWords'
 import { NO_REACH, type SessionReach } from './sessionReach'
 import {
   type SecretVariable,
@@ -44,6 +45,8 @@ export interface PlanInput {
   readonly projectPath: string
   readonly agent: AgentSpec
   readonly command: string
+  /** True when the whole command is the path of one existing file. */
+  readonly commandIsFile?: boolean
   readonly extras: SessionExtras
   readonly windows?: boolean
   readonly shell?: string
@@ -61,7 +64,7 @@ export const sessionStatus = (agent: AgentSpec, command: string, extras: Session
 export const planSession = (input: PlanInput): SessionPlan => {
   const windows = input.windows ?? onWindows()
   const [shellPath = '', ...shellArgs] = shellCommand(
-    [input.command, ...input.extras.args],
+    [...commandWords(input.command, () => input.commandIsFile === true), ...input.extras.args],
     input.extras.secret,
     windows,
     input.shell ?? loginShell(),

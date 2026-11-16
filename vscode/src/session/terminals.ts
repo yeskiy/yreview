@@ -6,6 +6,7 @@ import { commandKind } from '../diagnostic/report'
 import { sessionRecord } from '../diagnostic/sessionRecord'
 import type { Log } from '../log'
 import { commandOf } from './agentCommands'
+import { isFile } from './commandWords'
 import { NO_AGENT } from './agentRows'
 import { readAgentSettings } from './agentSettings'
 import type { AgentSpec } from './catalog'
@@ -13,9 +14,8 @@ import { newSessionKey } from './sessionKey'
 import { HINT, PROMPT, TITLE, cleanName } from './sessionNaming'
 import { NO_COMMAND, type SessionPreparer, planSession } from './sessionPlan'
 import { SessionRegistry } from './sessionRegistry'
-import { MAX_SESSIONS, canOpen, freeNumber, sessionName } from './sessionRules'
+import { MAX_SESSIONS, canOpen, endWarning, freeNumber, sessionName } from './sessionRules'
 
-export const QUICK_MS = 2_000
 export const SWEEP_MS = 3_000
 const ACTIVE_WAIT_MS = 2_000
 const STATUS_MS = 15_000
@@ -23,8 +23,6 @@ const SET_COMMAND = 'Set Agent Command'
 
 export const FULL = `Yreview runs ${MAX_SESSIONS} review sessions at once. Stop one session first.`
 export const NO_FOLDER = 'Open a folder first. A review session runs in the folder of this window.'
-export const quickEnd = (code: number): string =>
-  `The review session ended at once with exit code ${code}. A command that the shell cannot find ends a session this way.`
 
 export interface ReviewSession {
   readonly key: string
@@ -133,6 +131,7 @@ export class ReviewSessions implements vscode.Disposable {
       return undefined
     }
     const key = newSessionKey()
+    const commandIsFile = await isFile(command)
     const extras = await this.preparer(agent, key)
     // A second start can finish during the wait, so the cap and the number are read again here.
     if (!canOpen(this.sessions.size)) {
@@ -141,7 +140,13 @@ export class ReviewSessions implements vscode.Disposable {
       return undefined
     }
     const number = freeNumber(new Set([...this.sessions.values()].map((open) => open.number)))
-    const plan = planSession({ projectPath: folder, agent, command, extras })
+    const plan = planSession({
+      projectPath: folder,
+      agent,
+      command,
+      commandIsFile,
+      extras,
+    })
     const session: ReviewSession = {
       key,
       number,
@@ -252,10 +257,8 @@ export class ReviewSessions implements vscode.Disposable {
       clearInterval(this.sweeper)
       this.sweeper = undefined
     }
-    const code = session.terminal.exitStatus?.code
-    if (code !== undefined && code !== 0 && Date.now() - session.startedAt < QUICK_MS) {
-      askCommand(quickEnd(code))
-    }
+    const warning = endWarning(session.terminal.exitStatus?.code, Date.now() - session.startedAt)
+    if (warning !== undefined) askCommand(warning)
     this.log.info(`Review session ${session.number} ended.`)
     this.changed.fire()
   }

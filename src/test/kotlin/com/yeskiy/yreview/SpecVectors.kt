@@ -4,6 +4,7 @@ import com.yeskiy.yreview.bridge.DiscoveryFile
 import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.handoff.HandoffPlace
 import com.yeskiy.yreview.session.AgentCatalog
+import com.yeskiy.yreview.session.CommandWords
 import com.yeskiy.yreview.session.McpRoute
 import com.yeskiy.yreview.session.Naming
 import com.yeskiy.yreview.store.Carry
@@ -161,6 +162,15 @@ internal object SpecVectors {
             put("repositories", strings(repositories))
             put("output", Redact.text(input, homes, projects, repositories))
         }
+
+    // --- commands.json ---
+
+    fun words(name: String, value: String, files: List<String>) = buildJsonObject {
+        put("name", name)
+        put("value", value)
+        put("files", strings(files))
+        put("words", strings(CommandWords.of(value) { it in files }))
+    }
 
     // --- agents.json ---
 

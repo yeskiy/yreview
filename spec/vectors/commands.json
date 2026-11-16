@@ -1,0 +1,88 @@
+[
+  { "name": "one-word", "value": "claude", "files": [], "words": ["claude"] },
+  {
+    "name": "arguments",
+    "value": "claude --model opus",
+    "files": [],
+    "words": ["claude", "--model", "opus"]
+  },
+  {
+    "name": "script",
+    "value": "bash /path/script.sh",
+    "files": [],
+    "words": ["bash", "/path/script.sh"]
+  },
+  {
+    "name": "double-quoted-path",
+    "value": "\"C:/Program Files/Agent/agent.exe\" --flag",
+    "files": [],
+    "words": ["C:/Program Files/Agent/agent.exe", "--flag"]
+  },
+  {
+    "name": "single-quoted-word",
+    "value": "agent --name 'a b'",
+    "files": [],
+    "words": ["agent", "--name", "a b"]
+  },
+  {
+    "name": "existing-file-with-spaces",
+    "value": "C:/Program Files/Agent/agent.exe",
+    "files": ["C:/Program Files/Agent/agent.exe"],
+    "words": ["C:/Program Files/Agent/agent.exe"]
+  },
+  {
+    "name": "existing-file-after-trim",
+    "value": "  /opt/my agent/run  ",
+    "files": ["/opt/my agent/run"],
+    "words": ["/opt/my agent/run"]
+  },
+  {
+    "name": "missing-file-with-spaces",
+    "value": "C:/Program Files/Agent/agent.exe",
+    "files": [],
+    "words": ["C:/Program", "Files/Agent/agent.exe"]
+  },
+  {
+    "name": "extra-whitespace",
+    "value": "  agent \t --a   b\r\n",
+    "files": [],
+    "words": ["agent", "--a", "b"]
+  },
+  {
+    "name": "quote-inside-word",
+    "value": "agent --name=\"a b\"c",
+    "files": [],
+    "words": ["agent", "--name=a bc"]
+  },
+  {
+    "name": "empty-quotes",
+    "value": "agent \"\" ''",
+    "files": [],
+    "words": ["agent", "", ""]
+  },
+  {
+    "name": "other-quote-inside",
+    "value": "agent \"it's\" 'say \"hi\"'",
+    "files": [],
+    "words": ["agent", "it's", "say \"hi\""]
+  },
+  {
+    "name": "backslash-is-text",
+    "value": "C:\\tools\\agent.exe --dir \"C:\\a b\\\"",
+    "files": [],
+    "words": ["C:\\tools\\agent.exe", "--dir", "C:\\a b\\"]
+  },
+  {
+    "name": "unclosed-quote",
+    "value": "agent \"a  b",
+    "files": [],
+    "words": ["agent", "a  b"]
+  },
+  {
+    "name": "shell-syntax-stays-text",
+    "value": "agent; rm -rf ~ $(id) `id` | x && y",
+    "files": [],
+    "words": ["agent;", "rm", "-rf", "~", "$(id)", "`id`", "|", "x", "&&", "y"]
+  },
+  { "name": "blank", "value": "  \t ", "files": [], "words": [] }
+]

@@ -1774,7 +1774,7 @@
           },
           "default": {},
           "scope": "machine",
-          "markdownDescription": "The command of each agent, by agent id, for example `{ \"claude\": \"C:/tools/claude.exe\" }`. An agent without a value runs its default command. A repository cannot set this value."
+          "markdownDescription": "The command of each agent and its arguments, by agent id, for example `{ \"claude\": \"claude --model opus\" }`. Blanks divide the words, and quotes group a word that holds a space, for example `\"C:/Program Files/Agent/agent.exe\" --flag`. A value that is the path of one existing file is one word. Yreview adds its own flags after these words. An agent without a value runs its default command. A repository cannot set this value."
         },
         "yreview.autoStartSession": {
           "type": "boolean",

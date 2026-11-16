@@ -3,9 +3,13 @@ import assert from 'node:assert/strict'
 import { cleanName } from '../../../src/session/sessionNaming'
 import {
   MAX_SESSIONS,
+  QUICK_MS,
   apart,
   canOpen,
+  endWarning,
   freeNumber,
+  notStarted,
+  quickEnd,
   sessionName,
 } from '../../../src/session/sessionRules'
 
@@ -109,5 +113,18 @@ describe('session rules', () => {
       sessionName({ number: 1, agent: 'Aider', byAgent: 'fix the parser', byUser: 'my notes' }),
       'fix the parser',
     )
+  })
+
+  it('a command that did not start gets a warning, however long the shell took', () => {
+    assert.equal(endWarning(127, 9_000), notStarted(127))
+    assert.equal(endWarning(126, 9_000), notStarted(126))
+    assert.equal(endWarning(127, 100), notStarted(127))
+  })
+
+  it('another failure gets a warning only when the session ends at once', () => {
+    assert.equal(endWarning(1, QUICK_MS - 1), quickEnd(1))
+    assert.equal(endWarning(1, QUICK_MS), undefined)
+    assert.equal(endWarning(0, 10), undefined)
+    assert.equal(endWarning(undefined, 10), undefined)
   })
 })

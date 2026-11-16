@@ -8,6 +8,7 @@ import {
   planSession,
 } from '../../../src/session/sessionPlan'
 import { NO_REACH } from '../../../src/session/sessionReach'
+import { shellLine } from '../../../src/session/shellCommand'
 
 const plain: SessionExtras = { args: [], env: {}, reach: NO_REACH }
 const plan = (id: AgentId, command: string, extras = plain, windows = false) =>
@@ -26,7 +27,36 @@ describe('session plan', () => {
   })
 
   it('the plan runs the command of the settings', () => {
-    assert.equal(plan('claude', '/opt/claude').shellArgs.at(-1), "'/opt/claude'")
+    assert.equal(
+      plan('claude', '/opt/claude').shellArgs.at(-1),
+      shellLine(['/opt/claude'], undefined, false),
+    )
+  })
+
+  it('a command with arguments runs as words, and the flags of Yreview follow them', () => {
+    const extras: SessionExtras = { ...plain, args: ['--mcp-config', '/tmp/a b.json'] }
+    assert.equal(
+      plan('claude', `claude --model opus "--name=a b"`, extras).shellArgs.at(-1),
+      shellLine(
+        ['claude', '--model', 'opus', '--name=a b', '--mcp-config', '/tmp/a b.json'],
+        undefined,
+        false,
+      ),
+    )
+    const whole = planSession({
+      projectPath: '/work',
+      agent: agentOf('custom'),
+      command: '/opt/my agent/run',
+      commandIsFile: true,
+      extras: plain,
+      windows: false,
+      shell: '/bin/sh',
+    })
+    assert.equal(whole.shellArgs.at(-1), shellLine(['/opt/my agent/run'], undefined, false))
+    assert.equal(
+      plan('custom', 'bash /path/script.sh', plain, true).shellArgs.at(-1),
+      shellLine(['bash', '/path/script.sh'], undefined, true),
+    )
   })
 
   it('the plan converts a wsl project path on windows', () => {
@@ -56,7 +86,11 @@ describe('session plan', () => {
   })
 
   it('an agent without a channel runs plain', () => {
-    assert.deepEqual(plan('gemini', 'gemini').shellArgs, ['-l', '-c', "'gemini'"])
+    assert.deepEqual(plan('gemini', 'gemini').shellArgs, [
+      '-l',
+      '-c',
+      shellLine(['gemini'], undefined, false),
+    ])
     assert.deepEqual(plan('gemini', 'gemini').environment, {})
   })
 
@@ -100,7 +134,7 @@ describe('session plan', () => {
       reach: NO_REACH,
     }
     const full = plan('claude', 'claude', extras)
-    assert.ok(full.shellArgs.at(-1)?.endsWith("'claude' '--mcp-config' '/tmp/a b.json'"))
+    assert.ok(full.shellArgs.at(-1)?.includes("'claude' '--mcp-config' '/tmp/a b.json';"))
     assert.ok(full.shellArgs.at(-1)?.startsWith('OPENCODE_SERVER_PASSWORD="$(cat'))
     assert.deepEqual(full.environment, { Y_REVIEW_BRIDGE_FILE: '/tmp/bridge.json' })
     assert.equal(full.status, 'The review bridge is ready.')

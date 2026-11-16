@@ -16,6 +16,29 @@ class ShellCommandTest {
 
     private val secret = SecretVariable(OpenCodeClient.PASSWORD_VARIABLE, secretPath)
 
+    private fun win(run: String) =
+        "try { $run } catch [System.Management.Automation.CommandNotFoundException] " +
+            "{ Write-Host \$_.Exception.Message; Write-Host '${ShellCommand.NOT_STARTED}'; exit 127 }"
+
+    private fun posix(run: String) =
+        "$run; yreview_exit=\$?; " +
+            "if [ \"\$yreview_exit\" -eq 126 ] || [ \"\$yreview_exit\" -eq 127 ]; " +
+            "then echo '${ShellCommand.NOT_STARTED}' >&2; fi; exit \"\$yreview_exit\""
+
+    /** Runs one line in the shell of this machine, without a profile, and answers the code and the output. */
+    private fun run(line: String): Pair<Int, String> {
+        val windows = ShellCommand.onWindows()
+        val command = if (windows) {
+            listOf("powershell.exe", "-NoLogo", "-NoProfile", "-NonInteractive", "-Command", line)
+        } else {
+            listOf("/bin/sh", "-c", line)
+        }
+        val process = ProcessBuilder(command).redirectErrorStream(true).start()
+        process.outputStream.close()
+        val output = process.inputStream.bufferedReader().readText()
+        return process.waitFor() to output
+    }
+
     @Test
     fun `a windows path keeps its drive letter and loses its backslashes`() {
         assertEquals(project, ShellCommand.windowsPath("E:\\work\\demo-repo"))
@@ -55,21 +78,23 @@ class ShellCommandTest {
     fun `windows runs powershell with the profile of the user`() {
         val command = ShellCommand.shellCommand(listOf("claude"), windows = true)
 
-        assertEquals(listOf("powershell.exe", "-NoLogo", "-Command", "& 'claude'"), command)
+        assertEquals(listOf("powershell.exe", "-NoLogo", "-Command", win("& 'claude'")), command)
     }
 
     @Test
     fun `another system runs a login shell`() {
         val command = ShellCommand.shellCommand(listOf("opencode"), windows = false, shell = "/bin/zsh")
 
-        assertEquals(listOf("/bin/zsh", "-l", "-c", "'opencode'"), command)
+        assertEquals(listOf("/bin/zsh", "-l", "-c", posix("'opencode'")), command)
     }
 
     @Test
     fun `the windows line quotes every part of the command`() {
         assertEquals(
-            "& 'claude' '--mcp-config' '$config' " +
-                "'--dangerously-load-development-channels' 'server:y-review'",
+            win(
+                "& 'claude' '--mcp-config' '$config' " +
+                    "'--dangerously-load-development-channels' 'server:y-review'",
+            ),
             ShellCommand.shellLine(
                 listOf(
                     "claude",
@@ -86,15 +111,15 @@ class ShellCommandTest {
     @Test
     fun `the posix line quotes every part of the command`() {
         assertEquals(
-            "'opencode' '--port' '52431'",
+            posix("'opencode' '--port' '52431'"),
             ShellCommand.shellLine(listOf("opencode", "--port", "52431"), windows = false),
         )
     }
 
     @Test
     fun `a single quote inside an argument stays inside the literal`() {
-        assertEquals("& 'it''s'", ShellCommand.shellLine(listOf("it's"), windows = true))
-        assertEquals("'it'\\''s'", ShellCommand.shellLine(listOf("it's"), windows = false))
+        assertEquals(win("& 'it''s'"), ShellCommand.shellLine(listOf("it's"), windows = true))
+        assertEquals(posix("'it'\\''s'"), ShellCommand.shellLine(listOf("it's"), windows = false))
     }
 
     @Test
@@ -127,7 +152,7 @@ class ShellCommandTest {
                 "Remove-Item -LiteralPath '$secretPath' -Force; " +
                 "if ([string]::IsNullOrEmpty(\$env:OPENCODE_SERVER_PASSWORD)) " +
                 "{ Write-Error '${ShellCommand.NO_SECRET}'; exit 1 }; " +
-                "& 'opencode' '--port' '52431'",
+                win("& 'opencode' '--port' '52431'"),
             ShellCommand.shellLine(listOf("opencode", "--port", "52431"), secret, windows = true),
         )
     }
@@ -139,7 +164,7 @@ class ShellCommandTest {
                 "if [ -z \"\$OPENCODE_SERVER_PASSWORD\" ]; " +
                 "then echo '${ShellCommand.NO_SECRET}' >&2; exit 1; fi; " +
                 "export OPENCODE_SERVER_PASSWORD; " +
-                "'opencode' '--port' '52431'",
+                posix("'opencode' '--port' '52431'"),
             ShellCommand.shellLine(listOf("opencode", "--port", "52431"), secret, windows = false),
         )
     }
@@ -174,9 +199,27 @@ class ShellCommandTest {
     }
 
     @Test
-    fun `a line without a password keeps the shape it always had`() {
-        assertEquals("& 'opencode'", ShellCommand.shellLine(listOf("opencode"), windows = true))
-        assertEquals("'opencode'", ShellCommand.shellLine(listOf("opencode"), windows = false))
+    fun `a line without a password holds the agent and its guard alone`() {
+        assertEquals(win("& 'opencode'"), ShellCommand.shellLine(listOf("opencode"), windows = true))
+        assertEquals(posix("'opencode'"), ShellCommand.shellLine(listOf("opencode"), windows = false))
+    }
+
+    @Test
+    fun `a command that the shell cannot find ends with code 127 and a message`() {
+        val (code, output) = run(ShellCommand.shellLine(listOf("yreview-no-such-agent-4f1c", "--flag")))
+
+        assertEquals(127, code, output)
+        assertTrue(output.contains(ShellCommand.NOT_STARTED), output)
+    }
+
+    @Test
+    fun `the guard stays silent for an agent that starts`() {
+        val windows = ShellCommand.onWindows()
+        val parts = if (windows) listOf("cmd.exe", "/c", "exit 0") else listOf("/bin/sh", "-c", "exit 3")
+        val (code, output) = run(ShellCommand.shellLine(parts))
+
+        assertEquals(if (windows) 0 else 3, code, output)
+        assertFalse(output.contains(ShellCommand.NOT_STARTED), output)
     }
 
     @Test

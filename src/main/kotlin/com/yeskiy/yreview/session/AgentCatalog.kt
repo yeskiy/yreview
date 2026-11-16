@@ -252,7 +252,7 @@ object AgentCatalog {
             PushKind.NONE,
             McpRoute.None,
             Naming.User,
-            "Name the command yourself. A shell function works, because a shell runs the command.",
+            "Name the command and its arguments, and quote a word that holds a space. A shell function works.",
         ),
         AgentSpec(
             AgentId.NONE,

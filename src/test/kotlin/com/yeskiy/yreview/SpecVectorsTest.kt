@@ -93,6 +93,11 @@ class SpecVectorsTest {
     @Test
     fun `the agent table matches the catalog`() = assertEquals(read("agents.json"), SpecVectors.agents())
 
+    @Test
+    fun `every command split matches`() = cases("commands.json").forEach {
+        assertEquals(it, SpecVectors.words(it.text("name"), it.text("value"), it.texts("files")))
+    }
+
     private fun JsonElement.range(key: String): Range? = (jsonObject.getValue(key) as? JsonObject)?.let {
         Range(
             startLine = it.getValue("startLine").jsonPrimitive.int,

@@ -8,6 +8,8 @@ export interface SecretVariable {
 
 export const FALLBACK_SHELL = '/bin/sh'
 export const NO_SECRET = 'The extension wrote no secret for this session, so the session stops.'
+export const NOT_STARTED =
+  'Yreview could not start the agent. Make sure that the agent command names a program, a path, or a shell function.'
 
 const WSL_PATH = /^\/mnt\/([a-zA-Z])(\/.*)?$/
 
@@ -43,6 +45,15 @@ const secretPrefix = (secret: SecretVariable | undefined, windows: boolean): str
         `export ${secret.name}; `
 }
 
+/** When the shell finds no agent program, it prints this text and ends with code 127. */
+const notFound = (run: string, windows: boolean): string =>
+  windows
+    ? `try { ${run} } catch [System.Management.Automation.CommandNotFoundException] ` +
+      `{ Write-Host $_.Exception.Message; Write-Host ${powerShellQuote(NOT_STARTED)}; exit 127 }`
+    : `${run}; yreview_exit=$?; ` +
+      'if [ "$yreview_exit" -eq 126 ] || [ "$yreview_exit" -eq 127 ]; ' +
+      `then echo ${posixQuote(NOT_STARTED)} >&2; fi; exit "$yreview_exit"`
+
 /** One shell line. Every part is a literal, so a space or a leading `--` reaches the agent unchanged. */
 export const shellLine = (
   parts: readonly string[],
@@ -50,8 +61,8 @@ export const shellLine = (
   windows = onWindows(),
 ): string =>
   windows
-    ? `${secretPrefix(secret, true)}& ${parts.map(powerShellQuote).join(' ')}`
-    : `${secretPrefix(secret, false)}${parts.map(posixQuote).join(' ')}`
+    ? `${secretPrefix(secret, true)}${notFound(`& ${parts.map(powerShellQuote).join(' ')}`, true)}`
+    : `${secretPrefix(secret, false)}${notFound(parts.map(posixQuote).join(' '), false)}`
 
 export const loginShell = (env: NodeJS.ProcessEnv = process.env): string =>
   env.SHELL === undefined || isKotlinBlank(env.SHELL) ? FALLBACK_SHELL : env.SHELL

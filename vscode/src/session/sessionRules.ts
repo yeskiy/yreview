@@ -21,6 +21,20 @@ export const freeNumber = (taken: ReadonlySet<number>): number =>
 
 export const canOpen = (open: number): boolean => open < MAX_SESSIONS
 
+export const QUICK_MS = 2_000
+
+export const quickEnd = (code: number): string =>
+  `The review session ended at once with exit code ${code}. A command that the shell cannot find ends a session this way.`
+
+export const notStarted = (code: number): string =>
+  `The agent of the review session did not start (exit code ${code}). Make sure that the agent command names a program, a path, or a shell function.`
+
+/** The shell ends with 126 or 127 when it cannot run the agent, and a slow profile changes nothing. */
+export const endWarning = (code: number | undefined, elapsedMs: number): string | undefined => {
+  if (code === 126 || code === 127) return notStarted(code)
+  return code !== undefined && code !== 0 && elapsedMs < QUICK_MS ? quickEnd(code) : undefined
+}
+
 const given = (text: string | undefined): string | undefined => {
   const name = kotlinTrim(text ?? '')
   return name === '' ? undefined : name

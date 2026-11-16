@@ -28,6 +28,10 @@ object ShellCommand {
     /** What the shell prints before it stops a session that has no secret to hand on. */
     const val NO_SECRET = "The plugin wrote no secret for this session, so the session stops."
 
+    /** What the shell prints when it cannot find or run the agent program. */
+    const val NOT_STARTED =
+        "Yreview could not start the agent. Make sure that the agent command names a program, a path, or a shell function."
+
     private val WSL_PATH = Regex("^/mnt/([a-zA-Z])(/.*)?$")
 
     /** The form the IDE server accepts. A WSL path is refused there, so it is converted. */
@@ -62,9 +66,21 @@ object ShellCommand {
         windows: Boolean = onWindows(),
     ): String =
         if (windows) {
-            secretPrefix(secret, windows = true) + parts.joinToString(" ", prefix = "& ") { powerShellQuote(it) }
+            secretPrefix(secret, windows = true) +
+                notFound(parts.joinToString(" ", prefix = "& ") { powerShellQuote(it) }, windows = true)
         } else {
-            secretPrefix(secret, windows = false) + parts.joinToString(" ") { posixQuote(it) }
+            secretPrefix(secret, windows = false) + notFound(parts.joinToString(" ") { posixQuote(it) }, windows = false)
+        }
+
+    /** When the shell finds no agent program, it prints [NOT_STARTED] and ends with code 127. */
+    private fun notFound(run: String, windows: Boolean): String =
+        if (windows) {
+            "try { $run } catch [System.Management.Automation.CommandNotFoundException] " +
+                "{ Write-Host \$_.Exception.Message; Write-Host ${powerShellQuote(NOT_STARTED)}; exit 127 }"
+        } else {
+            "$run; yreview_exit=\$?; " +
+                "if [ \"\$yreview_exit\" -eq 126 ] || [ \"\$yreview_exit\" -eq 127 ]; " +
+                "then echo ${posixQuote(NOT_STARTED)} >&2; fi; exit \"\$yreview_exit\""
         }
 
     /**

@@ -33,7 +33,7 @@ object AgentLaunch {
     const val NO_ARGUMENTS = "The plugin appends no argument for this agent."
 
     /**
-     * The command, then the registration of the review server, then the flags of the agent
+     * The words of the command, then the registration of the review server, then the flags of the agent
      * itself. Without a configuration file a session of Claude Code starts plain, and it
      * carries no channel. The plugin must name the port of OpenCode, because OpenCode
      * prints none and writes no file that names a running instance.
@@ -51,7 +51,7 @@ object AgentLaunch {
             agent.id == AgentId.OPENCODE && port != null -> listOf(HOST_FLAG, LOOPBACK, PORT_FLAG, port.toString())
             else -> emptyList()
         }
-        return listOf(command) + AgentMcp.arguments(agent, javaPath, serverPath, configFile) + own
+        return CommandWords.of(command) + AgentMcp.arguments(agent, javaPath, serverPath, configFile) + own
     }
 
     /** The variables of the registration. The bridge variables come from [SessionPlan]. */

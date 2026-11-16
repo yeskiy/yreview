@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 
 import {
   FALLBACK_SHELL,
+  NOT_STARTED,
   NO_SECRET,
   type SecretVariable,
   loginShell,
@@ -15,6 +17,14 @@ const project = 'E:/work/demo-repo'
 const config = 'C:\\Users\\dev\\AppData\\Local\\Temp\\y-review-mcp-1.json'
 const secretPath = 'C:/Users/dev/.y-review/secret/a1b2.txt'
 const secret: SecretVariable = { name: 'OPENCODE_SERVER_PASSWORD', path: secretPath }
+const win = (run: string): string =>
+  `try { ${run} } catch [System.Management.Automation.CommandNotFoundException] ` +
+  `{ Write-Host $_.Exception.Message; Write-Host '${NOT_STARTED}'; exit 127 }`
+const posix = (run: string): string =>
+  `${run}; yreview_exit=$?; ` +
+  'if [ "$yreview_exit" -eq 126 ] || [ "$yreview_exit" -eq 127 ]; ' +
+  `then echo '${NOT_STARTED}' >&2; fi; exit "$yreview_exit"`
+const missing = 'yreview-no-such-agent-4f1c'
 
 describe('shell command', () => {
   it('a windows path keeps its drive letter and loses its backslashes', () => {
@@ -47,7 +57,7 @@ describe('shell command', () => {
       'powershell.exe',
       '-NoLogo',
       '-Command',
-      "& 'claude'",
+      win("& 'claude'"),
     ])
   })
 
@@ -56,7 +66,7 @@ describe('shell command', () => {
       '/bin/zsh',
       '-l',
       '-c',
-      "'opencode'",
+      posix("'opencode'"),
     ])
   })
 
@@ -73,21 +83,23 @@ describe('shell command', () => {
         undefined,
         true,
       ),
-      `& 'claude' '--mcp-config' '${config}' ` +
-        "'--dangerously-load-development-channels' 'server:y-review'",
+      win(
+        `& 'claude' '--mcp-config' '${config}' ` +
+          "'--dangerously-load-development-channels' 'server:y-review'",
+      ),
     )
   })
 
   it('the posix line quotes every part of the command', () => {
     assert.equal(
       shellLine(['opencode', '--port', '52431'], undefined, false),
-      "'opencode' '--port' '52431'",
+      posix("'opencode' '--port' '52431'"),
     )
   })
 
   it('a single quote inside an argument stays inside the literal', () => {
-    assert.equal(shellLine(["it's"], undefined, true), "& 'it''s'")
-    assert.equal(shellLine(["it's"], undefined, false), "'it'\\''s'")
+    assert.equal(shellLine(["it's"], undefined, true), win("& 'it''s'"))
+    assert.equal(shellLine(["it's"], undefined, false), posix("'it'\\''s'"))
   })
 
   it('a path with a space reaches the agent whole', () => {
@@ -109,9 +121,8 @@ describe('shell command', () => {
       shellLine(['opencode', '--port', '52431'], secret, true),
       `$env:OPENCODE_SERVER_PASSWORD = (Get-Content -LiteralPath '${secretPath}'); ` +
         `Remove-Item -LiteralPath '${secretPath}' -Force; ` +
-        'if ([string]::IsNullOrEmpty($env:OPENCODE_SERVER_PASSWORD)) ' +
-        `{ Write-Error '${NO_SECRET}'; exit 1 }; ` +
-        "& 'opencode' '--port' '52431'",
+        `if ([string]::IsNullOrEmpty($env:OPENCODE_SERVER_PASSWORD)) ` +
+        `{ Write-Error '${NO_SECRET}'; exit 1 }; ${win("& 'opencode' '--port' '52431'")}`,
     )
   })
 
@@ -119,10 +130,9 @@ describe('shell command', () => {
     assert.equal(
       shellLine(['opencode', '--port', '52431'], secret, false),
       `OPENCODE_SERVER_PASSWORD="$(cat '${secretPath}' && rm -f '${secretPath}')"; ` +
-        'if [ -z "$OPENCODE_SERVER_PASSWORD" ]; ' +
+        `if [ -z "$OPENCODE_SERVER_PASSWORD" ]; ` +
         `then echo '${NO_SECRET}' >&2; exit 1; fi; ` +
-        'export OPENCODE_SERVER_PASSWORD; ' +
-        "'opencode' '--port' '52431'",
+        `export OPENCODE_SERVER_PASSWORD; ${posix("'opencode' '--port' '52431'")}`,
     )
   })
 
@@ -151,9 +161,45 @@ describe('shell command', () => {
     )
   })
 
-  it('a line without a password keeps the shape it always had', () => {
-    assert.equal(shellLine(['opencode'], undefined, true), "& 'opencode'")
-    assert.equal(shellLine(['opencode'], undefined, false), "'opencode'")
+  it('a line without a password holds the agent and its guard alone', () => {
+    assert.equal(shellLine(['opencode'], undefined, true), win("& 'opencode'"))
+    assert.equal(shellLine(['opencode'], undefined, false), posix("'opencode'"))
+  })
+
+  it('a command that the shell cannot find ends with code 127 and a message', () => {
+    const line = shellLine([missing, '--flag'], undefined, process.platform === 'win32')
+    const run =
+      process.platform === 'win32'
+        ? spawnSync(
+            'powershell.exe',
+            ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', line],
+            {
+              encoding: 'utf8',
+              windowsHide: true,
+            },
+          )
+        : spawnSync('/bin/sh', ['-c', line], { encoding: 'utf8' })
+    assert.equal(run.status, 127, `${run.stdout}${run.stderr}`)
+    assert.ok(`${run.stdout}${run.stderr}`.includes(NOT_STARTED), `${run.stdout}${run.stderr}`)
+  })
+
+  it('the exit code of an agent that starts reaches the terminal', () => {
+    const windows = process.platform === 'win32'
+    const line = windows
+      ? shellLine(['cmd.exe', '/c', 'exit 0'], undefined, true)
+      : shellLine(['/bin/sh', '-c', 'exit 3'], undefined, false)
+    const run = windows
+      ? spawnSync(
+          'powershell.exe',
+          ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', line],
+          {
+            encoding: 'utf8',
+            windowsHide: true,
+          },
+        )
+      : spawnSync('/bin/sh', ['-c', line], { encoding: 'utf8' })
+    assert.equal(run.status, windows ? 0 : 3, `${run.stdout}${run.stderr}`)
+    assert.ok(!`${run.stdout}${run.stderr}`.includes(NOT_STARTED))
   })
 
   it('a single quote in the path of the password stays inside the literal', () => {

@@ -382,7 +382,8 @@ class ReviewConfigurable(private val project: Project) : Configurable {
 
     /** One line about the search, and it never says that an agent is not installed. */
     private fun commandHelp(spec: AgentSpec): String =
-        "A shell runs this one command, and the shell loads the profile of the user. " +
+        "A shell runs this command, and the shell loads the profile of the user. " +
+            "Add arguments after the command, and quote a word that holds a space. " +
             "Paste a full path when the command is not on the PATH. A shell function works too. " +
             AgentRows.place(spec, AgentScan.getInstance().latest())
 

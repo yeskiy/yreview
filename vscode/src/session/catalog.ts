@@ -181,7 +181,7 @@ export const AGENTS: readonly AgentSpec[] = [
     push: 'none',
     mcp: NO_ROUTE,
     naming: USER,
-    hint: 'Name the command yourself. A shell function works, because a shell runs the command.',
+    hint: 'Name the command and its arguments, and quote a word that holds a space. A shell function works.',
     desktop: null,
   },
   {
