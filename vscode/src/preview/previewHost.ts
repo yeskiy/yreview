@@ -10,6 +10,9 @@ import type { LineSpan, PreviewSource } from './markdownPlugin'
 import { linesOfSelection, rangeOfContext } from './previewLines'
 import { wholeLines } from './wholeLines'
 
+/** The longest wait for the source group to become the active group. */
+const FOCUS_LIMIT_MS = 2000
+
 /** The rich Markdown editor. VS Code keeps its selection for the editor that replaces it. */
 const RICH_EDITOR = 'vscode.markdown.editor'
 
@@ -96,6 +99,34 @@ const besideRich = async (
   return { editor, selection }
 }
 
+/** True when the editor is the active text editor and its group is the active group. */
+const isFocused = (editor: vscode.TextEditor): boolean =>
+  vscode.window.activeTextEditor?.document === editor.document &&
+  vscode.window.activeTextEditor.viewColumn === editor.viewColumn &&
+  vscode.window.tabGroups.activeTabGroup.viewColumn === editor.viewColumn
+
+/** Gives the source the focus again when the rich editor group took it, and waits for that state. */
+const focusSource = async (editor: vscode.TextEditor): Promise<void> => {
+  if (isFocused(editor)) return
+  const focused = Promise.withResolvers<void>()
+  const check = (): void => {
+    if (isFocused(editor)) focused.resolve()
+  }
+  const listeners = [
+    vscode.window.onDidChangeActiveTextEditor(check),
+    vscode.window.tabGroups.onDidChangeTabGroups(check),
+  ]
+  const timer = setTimeout(focused.resolve, FOCUS_LIMIT_MS)
+  await vscode.window.showTextDocument(editor.document, {
+    viewColumn: editor.viewColumn,
+    preserveFocus: false,
+  })
+  check()
+  await focused.promise
+  clearTimeout(timer)
+  listeners.forEach((listener) => listener.dispose())
+}
+
 /** Opens the comment box in the source, on the whole lines of the menu or the rich editor selection, else at the caret. */
 const fromPreview =
   (asked: RangeAsk) =>
@@ -118,6 +149,8 @@ const fromPreview =
       editor.selection = selection
       editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
     }
+    // The native add opens the box in the active group, so the rich editor group must not have it.
+    if (rich !== undefined) await focusSource(editor)
     await vscode.commands.executeCommand('yreview.addComment')
   }
 

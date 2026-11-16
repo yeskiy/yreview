@@ -71,9 +71,24 @@ const hasRichEditor = (): boolean =>
     )?.contributes?.customEditors ?? []
   ).some((editor) => editor.viewType === 'vscode.markdown.editor')
 
+/** The changes of the active group and the active text editor in this test, with their times in ms. */
+const timeline = { start: Date.now(), events: [] as string[] }
+const note = (event: string): void => {
+  timeline.events.push(`${Date.now() - timeline.start} ${event}`)
+}
+const watchers = [
+  vscode.window.tabGroups.onDidChangeTabGroups(() =>
+    note(`group ${vscode.window.tabGroups.activeTabGroup.viewColumn}`),
+  ),
+  vscode.window.onDidChangeActiveTextEditor((editor) =>
+    note(`editor ${editor?.document.uri.scheme ?? 'none'} ${editor?.viewColumn ?? ''}`),
+  ),
+]
+
 /** Where the focus is, for the message of a failed focus check. */
 const focusState = (): string =>
   JSON.stringify({
+    timeline: timeline.events,
     group: vscode.window.tabGroups.activeTabGroup.viewColumn,
     tabs: vscode.window.tabGroups.all.map((group) =>
       group.tabs.map(
@@ -88,7 +103,10 @@ describe('comments from the Markdown preview', () => {
   beforeEach(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
     await focusWindow()
+    Object.assign(timeline, { start: Date.now(), events: [] })
   })
+
+  after(() => watchers.forEach((watcher) => watcher.dispose()))
 
   afterEach(deleteNotesComments)
 
@@ -205,7 +223,9 @@ describe('comments from the Markdown preview', () => {
       (done, command) => done.then(() => vscode.commands.executeCommand(command)),
       Promise.resolve(),
     )
+    note('add')
     await vscode.commands.executeCommand('yreview.addCommentFromPreview')
+    note('added')
     if (!(await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment')))
       assert.fail(`the comment box did not get the focus: ${focusState()}`)
     assert.ok(
@@ -223,7 +243,9 @@ describe('comments from the Markdown preview', () => {
     await wait(1000)
     await vscode.commands.executeCommand('markdown.editor.cursorDocumentStart')
     await vscode.commands.executeCommand('markdown.editor.cursorWordRightSelect')
+    note('add')
     await vscode.commands.executeCommand('yreview.addCommentFromPreview')
+    note('added')
     if (!(await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment')))
       assert.fail(`the comment box did not get the focus: ${focusState()}`)
     const selection = sourceBeside('vscode.markdown.editor')?.selection
