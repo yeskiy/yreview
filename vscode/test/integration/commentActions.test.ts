@@ -125,10 +125,13 @@ describe('comment box actions', () => {
   })
 
   it('closes our box with the command that Escape runs in the box', async () => {
-    const ourInputs = (): number =>
-      vscode.workspace.textDocuments.filter(
-        (document) => document.uri.scheme === 'comment' && document.uri.authority === 'yreview',
-      ).length
+    // The box of an earlier test closes when its editor hides, so the check looks for a new input.
+    const ourInputs = (): string[] =>
+      vscode.workspace.textDocuments
+        .filter(
+          (document) => document.uri.scheme === 'comment' && document.uri.authority === 'yreview',
+        )
+        .map((document) => document.uri.toString())
     // A line with a thread opens the box through the fallback path, so this file has no thread.
     const plainFile = path.join(mkdtempSync(path.join(tmpdir(), 'yreview-esc-')), 'esc.txt')
     writeFileSync(plainFile, 'one\ntwo\n')
@@ -140,7 +143,10 @@ describe('comment box actions', () => {
     // The close command acts on the focused editor, so the window must have the focus.
     await focusWindow()
     await vscode.commands.executeCommand('yreview.addComment')
-    assert.ok(await until(() => ourInputs() > before), 'the comment box did not open')
+    assert.ok(
+      await until(() => ourInputs().some((input) => !before.includes(input))),
+      'the comment box did not open',
+    )
     await wait(1000)
     // The text goes into the box only while the box has the focus. Undo empties the box again.
     await vscode.commands.executeCommand('type', { text: 'y' })
