@@ -81,14 +81,15 @@ const besideRich = async (
     text?.document.uri.toString() === input.uri.toString() ? text.selection : undefined
   const temporary = vscode.window.tabGroups.activeTabGroup.activeTab
   await read
-  const editor = await showBeside(asked, input.uri, viewColumn)
-  // The rich editor comes back after the focus left its group. A focused webview takes the focus late.
+  // A webview that opens with the focus takes it late, also from the comment box.
   await vscode.commands.executeCommand('vscode.openWith', input.uri, RICH_EDITOR, {
     viewColumn,
     preserveFocus: true,
     preview: activeTab?.isPreview,
     selection,
   } satisfies vscode.TextDocumentShowOptions)
+  const editor = await showBeside(asked, input.uri, viewColumn)
+  // The tab closes after the focus left its group, so the group gives the focus to no editor.
   if (temporary?.input instanceof vscode.TabInputText)
     await vscode.window.tabGroups.close(temporary, true)
   return { editor, selection }
