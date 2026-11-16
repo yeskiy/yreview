@@ -74,35 +74,35 @@ export const formatMoney = (cents: number): string => euro.format(cents / 100)
 
 const RETRY = `export interface RetryOptions {
   readonly attempts: number
-  readonly baseDelayMs: number
+  readonly delayMs: number
 }
 
 const sleep = (ms: number): Promise<void> =>
-  new Promise((resolve) => setTimeout(resolve, ms))
+  new Promise((done) => setTimeout(done, ms))
 
 export async function withRetry<T>(
   call: () => Promise<T>,
-  options: RetryOptions,
+  { attempts, delayMs }: RetryOptions,
 ): Promise<T> {
   // TODO: Stop on a 4xx response.
-  const attempt = async (count: number): Promise<T> => {
+  const run = async (n: number): Promise<T> => {
     try {
       return await call()
     } catch (error) {
-      if (count + 1 >= options.attempts) throw error
+      if (n + 1 >= attempts) throw error
       // TODO: Cap the delay at 30 seconds.
-      const delay = options.baseDelayMs * 2 ** count
+      const delay = delayMs * 2 ** n
       await sleep(delay)
-      return attempt(count + 1)
+      return run(n + 1)
     }
   }
-  return attempt(0)
+  return run(0)
 }
 `
 
 const RETRY_CHANGED = RETRY.replace(
   '      await sleep(delay)\n',
-  '      const jitter = Math.random() * options.baseDelayMs\n      await sleep(delay + jitter)\n',
+  '      const jitter = Math.random() * delayMs\n      await sleep(delay + jitter)\n',
 )
 
 const RELEASE = `# Release process
