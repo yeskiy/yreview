@@ -218,6 +218,7 @@ writeFileSync(
       'editor.guides.indentation': false,
       'editor.renderLineHighlight': 'none',
       'editor.renderWhitespace': 'none',
+      'editor.showFoldingControls': 'never',
       'editor.cursorBlinking': 'solid',
       'breadcrumbs.enabled': false,
       'git.openRepositoryInParentFolders': 'never',

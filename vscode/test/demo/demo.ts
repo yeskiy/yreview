@@ -215,9 +215,17 @@ const selectLines = async (first: number, last: number): Promise<void> => {
 /** Clicks the comment glyph of a line, so its saved thread opens. */
 const openThread = async (line: number, text: string, ms = 650): Promise<void> => {
   const { y } = await lineOf(line)
+  say(
+    `margin ${JSON.stringify(
+      await evaluate(
+        await workbench(),
+        `[...document.querySelectorAll('.editor-group-container.active .monaco-editor .margin [class*="comment"]')].map((node) => node.className + ' @' + Math.round(node.getBoundingClientRect().top))`,
+      ),
+    )} line y ${y}`,
+  )
   const glyph = await boxOf(
     visible(
-      '.margin-view-overlays [class*="comment-thread"], .margin-view-overlays .comment-range-glyph',
+      '.editor-group-container.active .monaco-editor .margin [class*="comment-thread"]',
       `Math.abs(node.getBoundingClientRect().top + node.getBoundingClientRect().height / 2 + ${page.top} - ${y}) < 6`,
     ),
     `comment glyph of line ${line}`,
