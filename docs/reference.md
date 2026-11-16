@@ -65,8 +65,6 @@ character of the comment.
 
 A field with no value is left out. A reader that meets an unknown field keeps the record.
 
-The full rules, for a tool that reads or writes these records, are in [spec/format.md](../spec/format.md).
-
 The identifier of a comment is the SHA-1 digest of the canonical encoding of that comment. The
 record above has the identifier `b1e2ffb6cbad1181ddfde2543019227ce316a288`.
 

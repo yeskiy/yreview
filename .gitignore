@@ -11,3 +11,18 @@ docs/superpowers/
 *.pem
 *.crt
 *.jks
+
+# The format notes stay local.
+/spec/format.md
+
+# Commit only the Markdown files listed here. Add a new one to this list on purpose.
+*.md
+!/README.md
+!/CHANGELOG.md
+!/CODE_OF_CONDUCT.md
+!/CONTRIBUTING.md
+!/SECURITY.md
+!/.github/PULL_REQUEST_TEMPLATE.md
+!/docs/reference.md
+!/vscode/README.md
+!/vscode/CHANGELOG.md
