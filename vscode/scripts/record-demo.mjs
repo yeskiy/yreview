@@ -236,7 +236,7 @@ writeFileSync(
       'terminal.integrated.shellIntegration.enabled': false,
       'terminal.integrated.enablePersistentSessions': false,
       'yreview.agent': 'custom',
-      'yreview.agentCommands': { custom: `bash ${agentScript}` },
+      'yreview.agentCommands': { custom: agentScript },
       'yreview.autoStartSession': false,
     },
     null,

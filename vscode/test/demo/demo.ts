@@ -471,7 +471,6 @@ const tasksScene = async (): Promise<void> => {
   await vscode.commands.executeCommand('workbench.action.focusActiveEditorGroup')
   await vscode.commands.executeCommand('workbench.action.decreaseViewWidth')
   await vscode.commands.executeCommand('workbench.action.decreaseViewWidth')
-  await vscode.commands.executeCommand('workbench.action.decreaseViewWidth')
   say(`sidebar ${JSON.stringify(await boxIn(visible('.part.sidebar')))}`)
   await vscode.commands.executeCommand('yreview.startSession')
   await wait(1500)
@@ -531,6 +530,9 @@ const tasksScene = async (): Promise<void> => {
 }
 
 const scenes = async (): Promise<void> => {
+  vscode.window.onDidCloseTerminal((terminal) =>
+    say(`terminal ${terminal.name} closed ${JSON.stringify(terminal.exitStatus)}`),
+  )
   await yreview()
   await gitReady()
   await placeWindow()
