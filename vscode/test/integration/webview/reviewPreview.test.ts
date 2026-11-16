@@ -212,11 +212,22 @@ describe('the review preview', () => {
           `return doc.documentElement.style.getPropertyValue('--markdown-font-size') === '20px'`,
         ),
       )
+      const rendered = await vscode.commands.executeCommand<string>(
+        'markdown.api.render',
+        await vscode.workspace.openTextDocument(review()),
+      )
+      assert.match(rendered, /paragraph\.<br>/, 'the Markdown render has no line break')
       assert.ok(
         await untilInWebview(
           REVIEW_PAGE,
           `return doc.querySelector('p[data-line="2"] br') !== null`,
         ),
+        `the page has no line break: ${JSON.stringify(
+          await inWebview(
+            REVIEW_PAGE,
+            `return [doc.body.dataset.yreviewPreview, doc.querySelector('p[data-line="2"]')?.outerHTML]`,
+          ),
+        )}`,
       )
       await setting('workbench', 'colorTheme', 'Default Light Modern')
       assert.ok(
