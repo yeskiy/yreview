@@ -209,7 +209,11 @@ const resolvedView = {
   collapsibleState: vscode.CommentThreadCollapsibleState.Collapsed,
 }
 
-/** Sets only the parts that changed, so VS Code does not redraw a thread that is the same. */
+/** VS Code moves a glyph with text edits but keeps the old range here, so the range goes again. */
+const place = (thread: vscode.CommentThread, range: vscode.Range): vscode.CommentThread =>
+  Object.assign(thread, { range: undefined }, { range: firstLine(range) })
+
+/** Sets the comments and the label only when they changed, and the range each time. */
 const refresh = (
   old: Shown,
   stored: StoredComment,
@@ -217,15 +221,17 @@ const refresh = (
   range: vscode.Range,
   revision: string | undefined,
 ): vscode.CommentThread =>
-  Object.assign(old.thread, {
-    ...(commentKey(old.stored, old.carry) === commentKey(stored, carry)
-      ? {}
-      : { comments: [commentOf(stored, carry)] }),
-    ...(old.thread.label === labelOf(stored, carry, revision)
-      ? {}
-      : { label: labelOf(stored, carry, revision) }),
-    ...(old.thread.range?.isEqual(firstLine(range)) ? {} : { range: firstLine(range) }),
-  })
+  place(
+    Object.assign(old.thread, {
+      ...(commentKey(old.stored, old.carry) === commentKey(stored, carry)
+        ? {}
+        : { comments: [commentOf(stored, carry)] }),
+      ...(old.thread.label === labelOf(stored, carry, revision)
+        ? {}
+        : { label: labelOf(stored, carry, revision) }),
+    }),
+    range,
+  )
 
 const plain = (position: vscode.Position) => ({
   line: position.line,
@@ -757,6 +763,12 @@ export class ReviewComments implements vscode.Disposable {
     })
   }
 
+  /** A new editor of the file can get glyphs that an edit moved, so each thread gets its range again. */
+  private placeAgain(uri: vscode.Uri): void {
+    this.snapshot(uri).forEach((entry) => place(entry.thread, entry.range))
+    this.decorate(uri)
+  }
+
   private clear(uri: vscode.Uri): void {
     this.snapshot(uri).forEach((entry) => entry.thread.dispose())
     this.shown.delete(uri.toString())
@@ -776,7 +788,7 @@ export class ReviewComments implements vscode.Disposable {
   private showVisible(): void {
     visibleUris().forEach((uri) =>
       this.shown.has(uri.toString()) && !this.stale.has(uri.toString())
-        ? this.decorate(uri)
+        ? this.placeAgain(uri)
         : this.reloadSafely(uri),
     )
   }
