@@ -1,0 +1,91 @@
+# Records the demo media of the VS Code extension inside Xvfb. It holds no secret and writes nothing.
+name: Record the VS Code demo media
+
+on:
+  push:
+    branches:
+      - "media/**"
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  record:
+    name: Record the demo media
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: vscode
+    env:
+      DISPLAY: ":99"
+      DEMO_WIDTH: "1120"
+      DEMO_HEIGHT: "700"
+      DEMO_OUT: ${{ github.workspace }}/media/raw
+    steps:
+      - name: Check out the sources
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vscode/package-lock.json
+
+      - name: Install the recording tools and fonts
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q --no-install-recommends xvfb xdotool ffmpeg jq fonts-jetbrains-mono fonts-ubuntu
+
+      - name: Install the exact dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build the extension
+        run: npm run build
+
+      - name: Start the virtual display
+        working-directory: .
+        run: |
+          Xvfb "$DISPLAY" -screen 0 "${DEMO_WIDTH}x${DEMO_HEIGHT}x24" -nolisten tcp &
+          for _ in $(seq 50); do xdotool getdisplaygeometry >/dev/null 2>&1 && break; sleep 0.2; done
+
+      - name: Record the scenes
+        timeout-minutes: 15
+        run: node scripts/record-demo.mjs
+
+      - name: Convert the videos to GIF files
+        if: always()
+        working-directory: media
+        run: |
+          mkdir -p final sheets
+          cp raw/*.png final/ 2>/dev/null || true
+          for video in raw/*.mkv; do
+            [ -e "$video" ] || continue
+            name=$(basename "$video" .mkv)
+            filters="fps=15,scale=960:-1:flags=lanczos"
+            ffmpeg -y -loglevel error -i "$video" -vf "$filters,palettegen=max_colors=256:stats_mode=full" "raw/$name-palette.png"
+            ffmpeg -y -loglevel error -i "$video" -i "raw/$name-palette.png" \
+              -lavfi "$filters[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle" "final/$name.gif"
+            ffmpeg -y -loglevel error -i "final/$name.gif" -vf "fps=1,scale=480:-1,tile=4x5:padding=4" -frames:v 1 "sheets/$name-sheet.png"
+            seconds=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$video")
+            echo "$name.gif: $(stat -c %s "final/$name.gif") bytes, $seconds s"
+          done
+          ls -l final
+
+      - name: Keep the media
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: demo-media
+          path: |
+            media/final
+            media/sheets
+          if-no-files-found: warn
