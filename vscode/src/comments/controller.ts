@@ -205,6 +205,11 @@ const openView = (
   range: firstLine(range),
 })
 
+const stateOf = (expanded: boolean): vscode.CommentThreadCollapsibleState =>
+  expanded
+    ? vscode.CommentThreadCollapsibleState.Expanded
+    : vscode.CommentThreadCollapsibleState.Collapsed
+
 const resolvedView = {
   state: vscode.CommentThreadState.Resolved,
   contextValue: RESOLVED,
@@ -331,6 +336,9 @@ export class ReviewComments implements vscode.Disposable {
 
   /** The ids that a delete removes now, so a reload in the meantime does not draw them again. */
   private readonly deleting = new Set<string>()
+
+  /** The ids that a save of this window wrote, so the next load draws them as the setting says. */
+  private readonly saved = new Set<string>()
 
   /** The writes of this window that run now. A note watcher waits for them. */
   private readonly writes = new Set<Promise<unknown>>()
@@ -540,7 +548,8 @@ export class ReviewComments implements vscode.Disposable {
     }
     const ids = new Set(placed.map((entry) => entry.stored.id))
     const before = this.snapshot(uri)
-    const expanded = !this.shown.has(uri.toString()) && readSettings(scopeOf(uri)).editorMarks
+    const marks = readSettings(scopeOf(uri)).editorMarks
+    const expanded = !this.shown.has(uri.toString()) && marks
     before
       .filter((entry) => known.has(entry.stored.id) && !ids.has(entry.stored.id))
       .forEach((entry) => entry.thread.dispose())
@@ -549,10 +558,11 @@ export class ReviewComments implements vscode.Disposable {
         const range = fullRange(shownRange(carry), document)
         const anchor = { ...found.anchor, head: stored.commit }
         const old = before.find((shown) => shown.stored.id === stored.id)
+        const saved = this.saved.delete(stored.id)
         return {
           thread:
             old === undefined
-              ? this.draw(uri, stored, carry, found.anchor, range, expanded)
+              ? this.draw(uri, stored, carry, found.anchor, range, expanded || (saved && marks))
               : refresh(old, stored, carry, range, revisionOf(uri, found.anchor)),
           stored,
           anchor,
@@ -624,6 +634,7 @@ export class ReviewComments implements vscode.Disposable {
     const selected = document.validateRange(range)
     await this.timed(shared ? 'Save Shared' : 'Save Local', async () => {
       const { result } = await this.writeNew(document, rangeOf(document, selected), trimmed, shared)
+      this.saved.add(result.stored.id)
       result.notices?.forEach((notice) => {
         vscode.window.showInformationMessage(notice).then(undefined, () => undefined)
       })
@@ -742,11 +753,7 @@ export class ReviewComments implements vscode.Disposable {
     return Object.assign(
       this.controller.createCommentThread(uri, firstLine(range), []),
       openView(stored, carry, range, revisionOf(uri, anchor)),
-      {
-        collapsibleState: expanded
-          ? vscode.CommentThreadCollapsibleState.Expanded
-          : vscode.CommentThreadCollapsibleState.Collapsed,
-      },
+      { collapsibleState: stateOf(expanded) },
     )
   }
 
@@ -793,9 +800,7 @@ export class ReviewComments implements vscode.Disposable {
   /** The setting picks the state of the threads when a file loads, and again when it changes. */
   private applyMarks(): void {
     visibleUris().forEach((uri) => {
-      const collapsibleState = readSettings(scopeOf(uri)).editorMarks
-        ? vscode.CommentThreadCollapsibleState.Expanded
-        : vscode.CommentThreadCollapsibleState.Collapsed
+      const collapsibleState = stateOf(readSettings(scopeOf(uri)).editorMarks)
       this.snapshot(uri).forEach(({ thread }) => Object.assign(thread, { collapsibleState }))
       this.decorate(uri)
     })
@@ -1123,6 +1128,7 @@ export class ReviewComments implements vscode.Disposable {
       Object.assign(
         thread,
         openView(result.stored, carry, savedRange, revisionOf(document.uri, anchor)),
+        { collapsibleState: stateOf(readSettings(scopeOf(document.uri)).editorMarks) },
       )
       const twins = this.snapshot(document.uri).filter(
         (entry) => entry.stored.id === result.stored.id,

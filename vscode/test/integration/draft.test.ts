@@ -168,6 +168,7 @@ describe('the draft editor of a line that has a comment', function drafts() {
       'export function add(a: number, b: number): number {\n  return a + b',
     )
     assert.equal(saved?.stored.ref, REF)
+    assert.equal(saved?.thread.collapsibleState, vscode.CommentThreadCollapsibleState.Expanded)
     await backInSource(selection)
   })
 

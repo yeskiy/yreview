@@ -132,17 +132,29 @@ describe('comments in the editor', () => {
     assert.equal(tracked(), before)
   })
 
-  it('saves into the same thread, collapses it, and keeps it over reloads', async () => {
+  it('saves into the same thread, shows it open, and keeps it over reloads', async () => {
     const comments = await reviewComments()
     const draft = await saveDraft(new vscode.Range(0, 0, 1, 0), 'Same thread.')
     const shown = await shownWith('Same thread.')
     assert.equal(shown.thread, draft)
-    assert.equal(draft.collapsibleState, vscode.CommentThreadCollapsibleState.Collapsed)
+    assert.equal(draft.collapsibleState, vscode.CommentThreadCollapsibleState.Expanded)
     assert.equal(draft.canReply, false)
     assert.equal(draft.contextValue, 'yreview.open')
     await comments.reload(file())
     await comments.reload(file())
     assert.equal((await shownWith('Same thread.')).thread, draft)
+  })
+
+  it('saves a thread collapsed when the editor marks are off', async () => {
+    const config = vscode.workspace.getConfiguration('yreview', file())
+    await config.update('editorMarks', false, vscode.ConfigurationTarget.Global)
+    try {
+      const draft = await saveDraft(new vscode.Range(0, 0, 0, 0), 'Marks off.')
+      assert.equal(draft.collapsibleState, vscode.CommentThreadCollapsibleState.Collapsed)
+      await vscode.commands.executeCommand('yreview.resolve', draft)
+    } finally {
+      await config.update('editorMarks', undefined, vscode.ConfigurationTarget.Global)
+    }
   })
 
   it('puts the thread on the first line and keeps the full range for the marks', async () => {
@@ -189,6 +201,8 @@ describe('comments in the editor', () => {
       await vscode.workspace.openTextDocument(file()),
     )
     await focusWindow()
+    // The open threads that the last test resolved still collapse, and a native add then opens no box.
+    await wait(1500)
     editor.selection = new vscode.Selection(2, 1, 2, 4)
     await vscode.commands.executeCommand('yreview.addComment')
     await wait(1500)
@@ -207,7 +221,7 @@ describe('comments in the editor', () => {
     assert.deepEqual(shown.range, new vscode.Range(2, 1, 2, 4))
     assert.equal(shown.thread.range?.start.line, 2)
     assert.equal(shown.thread.range?.end.line, 2)
-    assert.equal(shown.thread.collapsibleState, vscode.CommentThreadCollapsibleState.Collapsed)
+    assert.equal(shown.thread.collapsibleState, vscode.CommentThreadCollapsibleState.Expanded)
   })
 
   it('opens the comment box with focus on line 1 of a file with no thread', async () => {

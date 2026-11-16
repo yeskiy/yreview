@@ -68,6 +68,22 @@ describe('comment writes of the review preview', () => {
     assert.deepEqual(await linesOf('Whole lines.'), [[2, 4]])
   })
 
+  it('shows a saved comment open on a file that shows threads already', async () => {
+    const comments = await reviewComments()
+    await comments.addAt(notes(), { start: 2, end: 2 }, 'Open first.', false)
+    await comments.addAt(notes(), { start: 3, end: 3 }, 'Open second.', false)
+    assert.deepEqual(
+      comments
+        .snapshot(notes())
+        .filter((shown) => ['Open first.', 'Open second.'].includes(textOf(shown)))
+        .map((shown) => shown.thread.collapsibleState),
+      [
+        vscode.CommentThreadCollapsibleState.Expanded,
+        vscode.CommentThreadCollapsibleState.Expanded,
+      ],
+    )
+  })
+
   it('saves a second comment on a line that has a saved thread', async () => {
     await vscode.window.showTextDocument(notes())
     const comments = await reviewComments()
