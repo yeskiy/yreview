@@ -204,6 +204,12 @@ search for `Yreview` in the Extensions view. Editors that use Open VSX get it fr
 [Open VSX](https://open-vsx.org/extension/yeskiy/yreview). The extension needs VS Code 1.101 or
 later and git 2.24 or later.
 
+CI tests the extension in VS Code on Windows, in Remote-SSH, WSL and Dev Containers windows,
+and in VSCodium and Windsurf. In Cursor 3.30, it installs and activates, and 6 of the 11 checks
+pass. CI cannot run the other 5, because a new Cursor profile opens a sign-in screen. The
+[check table](CONTRIBUTING.md#for-maintainers-the-remote-check-of-the-vs-code-extension) gives
+each check and each editor version.
+
 ## Settings
 
 Open Settings, Tools, Yreview. In VS Code, run Yreview: Open Settings.

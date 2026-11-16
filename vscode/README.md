@@ -165,6 +165,12 @@ with no time limit, so a slow pattern makes the scan slow.
 
 The extension is also on [Open VSX](https://open-vsx.org/extension/yeskiy/yreview).
 
+CI tests Yreview in VS Code on Windows, in Remote-SSH, WSL and Dev Containers windows, and in
+VSCodium and Windsurf. In Cursor 3.30, Yreview installs and activates, and 6 of the 11 checks
+pass. CI cannot run the other 5, because a new Cursor profile opens a sign-in screen. The
+[check table](https://github.com/yeskiy/yreview/blob/main/CONTRIBUTING.md#for-maintainers-the-remote-check-of-the-vs-code-extension)
+gives each check and each editor version.
+
 In a remote window, Yreview runs on the remote host. git, the review bridge, the agent terminal
 and the files under `~/.y-review/` are then on the remote host. The issue form opens in the
 browser of your local machine. The Markdown preview loads the Yreview marks and the line script
