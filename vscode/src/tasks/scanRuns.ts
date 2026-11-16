@@ -22,6 +22,45 @@ export const newest = async (latest: () => Promise<unknown>): Promise<void> => {
   if (latest() !== scan) await newest(latest)
 }
 
+interface Waiting {
+  readonly timer: NodeJS.Timeout
+  readonly work: () => Promise<void>
+}
+
+/** Runs each named work after a delay. A newer work of one name replaces the waiting one. */
+export class DelayedWork {
+  private readonly waiting = new Map<string, Waiting>()
+
+  constructor(private readonly failed: (error: unknown) => void) {}
+
+  later(name: string, work: () => Promise<void>, delay: number): void {
+    clearTimeout(this.waiting.get(name)?.timer)
+    this.waiting.set(name, { work, timer: setTimeout(() => this.start(name), delay) })
+  }
+
+  /** Runs now each waiting work whose name starts with `prefix`, and waits for them. */
+  async now(prefix: string): Promise<void> {
+    await Promise.all(
+      [...this.waiting.keys()]
+        .filter((name) => name.startsWith(prefix))
+        .map((name) => this.start(name)),
+    )
+  }
+
+  cancel(): void {
+    this.waiting.forEach(({ timer }) => clearTimeout(timer))
+    this.waiting.clear()
+  }
+
+  private async start(name: string): Promise<void> {
+    const entry = this.waiting.get(name)
+    if (entry === undefined) return
+    clearTimeout(entry.timer)
+    this.waiting.delete(name)
+    await entry.work().catch(this.failed)
+  }
+}
+
 /** A newer scan aborts the older one, and an aborted scan gives nothing. */
 export class ScanRuns {
   private current: AbortController | undefined

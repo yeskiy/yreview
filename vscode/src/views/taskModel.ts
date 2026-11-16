@@ -8,7 +8,14 @@ import type { Anchor, ReviewService } from '../store/reviewService'
 import { changeFiles } from '../tasks/changeScan'
 import { type ChangeFacts, NO_CHANGES } from '../tasks/changeTab'
 import { basePathOf } from '../tasks/roots'
-import { FirstScan, type ScanPhase, ScanRuns, ScanState, newest } from '../tasks/scanRuns'
+import {
+  DelayedWork,
+  FirstScan,
+  type ScanPhase,
+  ScanRuns,
+  ScanState,
+  newest,
+} from '../tasks/scanRuns'
 import {
   type RepositoryTasks,
   SCAN_DELAY_MS,
@@ -50,6 +57,8 @@ const EMPTY: Base = {
   patterns: [],
 }
 const EDIT_DELAY_MS = 300
+/** The name prefix of a waiting overlay update. A refresh runs these first. */
+const EDIT = 'edit '
 
 const changesOf = async (
   roots: readonly string[],
@@ -83,7 +92,9 @@ export class TaskModel implements vscode.Disposable {
 
   private readonly anchors = new Map<string, Promise<Anchor | undefined>>()
 
-  private readonly timers = new Map<string, NodeJS.Timeout>()
+  private readonly delayed = new DelayedWork((error) =>
+    this.log.error('The update of the review tasks failed.', error),
+  )
 
   private readonly schedule = new ScanSchedule((kind) => this.scanLater(kind))
 
@@ -110,7 +121,7 @@ export class TaskModel implements vscode.Disposable {
       { dispose: stopListening },
       {
         dispose: () => {
-          this.timers.forEach((timer) => clearTimeout(timer))
+          this.delayed.cancel()
           this.schedule.cancel()
           this.runs.cancel()
           this.first.settle()
@@ -121,8 +132,8 @@ export class TaskModel implements vscode.Disposable {
         this.overlay(document).then(() => this.schedule.request('full')),
       ),
       vscode.workspace.onDidChangeTextDocument((event) =>
-        this.later(
-          `edit ${event.document.uri.toString()}`,
+        this.delayed.later(
+          `${EDIT}${event.document.uri.toString()}`,
           () => this.overlay(event.document),
           EDIT_DELAY_MS,
         ),
@@ -142,7 +153,7 @@ export class TaskModel implements vscode.Disposable {
       this.disposables.push(
         watchRepositories(
           this.api,
-          () => this.later('changes', () => this.refreshChanges()),
+          () => this.delayed.later('changes', () => this.refreshChanges(), SCAN_DELAY_MS),
           () => this.schedule.request('full'),
         ),
       )
@@ -179,6 +190,7 @@ export class TaskModel implements vscode.Disposable {
   /** Scans now. A newer scan aborts this one, and the wait then ends after the newer scan. */
   async refresh(): Promise<void> {
     this.schedule.cancel()
+    await this.delayed.now(EDIT)
     this.pending = this.scan('full')
     await newest(() => this.pending)
   }
@@ -208,19 +220,6 @@ export class TaskModel implements vscode.Disposable {
   private scanLater(kind: ScanKind): void {
     this.pending = this.scan(this.running === 'full' || this.base === EMPTY ? 'full' : kind).catch(
       (error: unknown) => this.log.error('The update of the review tasks failed.', error),
-    )
-  }
-
-  private later(name: string, work: () => Promise<void>, delay = SCAN_DELAY_MS): void {
-    clearTimeout(this.timers.get(name))
-    this.timers.set(
-      name,
-      setTimeout(() => {
-        this.timers.delete(name)
-        work().catch((error: unknown) =>
-          this.log.error('The update of the review tasks failed.', error),
-        )
-      }, delay),
     )
   }
 
