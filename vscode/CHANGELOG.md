@@ -2,6 +2,13 @@
 
 git-cliff writes this file from the commit messages. Do not edit it by hand.
 
+## 1.1.1 - 2026-11-16
+
+### Fixed
+
+- Write the comment when VS Code saves a draft
+- Read the comments again when a write runs during a reload
+
 ## 1.1.0 - 2026-11-16
 
 ### Added
