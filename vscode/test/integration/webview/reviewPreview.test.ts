@@ -206,6 +206,22 @@ describe('the review preview', () => {
         assert.fail('no preview')
       await shown.settled()
       await shown.whenReady()
+      // The visible page must end at the last build, also when the webview host keeps a new page hidden.
+      if (
+        !(await untilInWebview(
+          REVIEW_PAGE,
+          `return JSON.parse(doc.body.dataset.yreviewPreview).build >= ${shown.lastBuild}`,
+        ))
+      )
+        assert.fail(
+          `the page did not show the last build ${shown.lastBuild}: ${JSON.stringify(
+            await inWebview(
+              REVIEW_PAGE,
+              `const hidden = document.getElementById('pending-frame')?.contentDocument?.body
+              return { shown: doc.body.dataset.yreviewPreview, hidden: hidden?.dataset.yreviewPreview ?? null }`,
+            ),
+          )}`,
+        )
       assert.ok(
         await untilInWebview(
           REVIEW_PAGE,
