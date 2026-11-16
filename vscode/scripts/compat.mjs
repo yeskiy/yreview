@@ -472,12 +472,14 @@ const main = async () => {
   })
   if (failure !== undefined) say(`the run failed: ${failure}`)
   const run = existsSync(results) ? JSON.parse(readFileSync(results, 'utf8')) : { tests: [] }
+  if ((run.firstRun?.length ?? 0) > 1) say(`first-run screen: ${JSON.stringify(run.firstRun)}`)
   const outcome = {
     setup,
     mode,
     os: process.platform,
     editor: { name: editor.name, version: editor.version, vscodeVersion: editor.vscodeVersion },
     host: run.host,
+    firstRun: run.firstRun,
     date: new Date().toISOString().slice(0, 10),
     install,
     checks: await checkResults(run.tests, failure),

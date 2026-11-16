@@ -1,11 +1,13 @@
 // Runs the compatibility checks in the extension host and writes one record for each test.
 import { readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { setTimeout as wait } from 'node:timers/promises'
 
 import Mocha from 'mocha'
 import * as vscode from 'vscode'
 
 import { evaluate, workbench } from '../integration/keymap/devtools'
+import { finishFirstRun } from './firstRun'
 import type { CompatConfig } from './kit'
 
 interface TestRecord {
@@ -44,6 +46,10 @@ export const run = async (): Promise<void> => {
   ) as CompatConfig
   // The remote extension host does not get the environment of the local editor.
   process.env.YREVIEW_USER_DATA = config.userData
+  // The workbench page shows up after the start of the host. A wait of 3 s lets a first-run screen show.
+  const firstRun = await wait(3000)
+    .then(() => finishFirstRun())
+    .catch((error: unknown) => [{ done: false, error: String(error) }])
   const mocha = new Mocha({ ui: 'bdd', timeout: 120_000, color: false })
   config.files.forEach((file) => mocha.addFile(path.join(__dirname, file)))
   const records: TestRecord[] = []
@@ -74,6 +80,7 @@ export const run = async (): Promise<void> => {
         appName: vscode.env.appName,
         vscodeVersion: vscode.version,
         platform: process.platform,
+        firstRun,
         tests: records.map((one) => ({ ...one, windowState: states.get(one.title) })),
       },
       null,
