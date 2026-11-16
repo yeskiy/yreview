@@ -8,6 +8,7 @@ import {
   lineOf,
   leavesOf,
   lineInBlock,
+  linesOfSelection,
   rangeOfContext,
   selectionSpan,
   type TextBlock,
@@ -55,6 +56,18 @@ describe('the preview lines', () => {
       fitted({ start: source.length, end: source.length }, source.length, blank),
       undefined,
     )
+  })
+})
+
+describe('the whole lines of a text selection', () => {
+  it('gives the lines from the first to the last line of the selection', () => {
+    assert.deepEqual(linesOfSelection(0, 0, 12), { start: 0, end: 0 })
+    assert.deepEqual(linesOfSelection(2, 4, 6), { start: 2, end: 4 })
+  })
+
+  it('drops a last line that the selection only touches at its start', () => {
+    assert.deepEqual(linesOfSelection(2, 5, 0), { start: 2, end: 4 })
+    assert.deepEqual(linesOfSelection(2, 2, 0), { start: 2, end: 2 })
   })
 })
 

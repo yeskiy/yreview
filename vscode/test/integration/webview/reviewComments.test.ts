@@ -315,6 +315,47 @@ describe('comments in the review preview', () => {
     }
   })
 
+  it('selects the whole heading line in the source from the preview', async () => {
+    await openReview()
+    assert.equal(await select(0, 0, 6), 'Review')
+    await vscode.commands.executeCommand('yreview.addCommentFromReviewPreview')
+    assert.equal(await boxLines(), '1-1')
+    await typeInBox('On the heading.')
+    await click('.yreview-save-local')
+    assert.ok(await savedAt('On the heading.', [0, 0]))
+    const heading = new vscode.Selection(0, 0, 0, 8)
+    const sourceSelects = (): Promise<boolean> =>
+      eventually(async () =>
+        vscode.window.visibleTextEditors.some(
+          (editor) =>
+            editor.document.uri.fsPath === review().fsPath && editor.selection.isEqual(heading),
+        ),
+      )
+    const caret = async (): Promise<void> => {
+      const source = vscode.window.visibleTextEditors.find(
+        (editor) => editor.document.uri.fsPath === review().fsPath,
+      )
+      if (source !== undefined) source.selection = new vscode.Selection(2, 3, 2, 3)
+    }
+    await caret()
+    assert.ok(
+      await untilInWebview(
+        REVIEW_PAGE,
+        `return doc.querySelector('button.yreview-badge') !== null`,
+      ),
+    )
+    await click('button.yreview-badge')
+    await click('.yreview-reveal')
+    assert.ok(await sourceSelects(), 'Show in Source does not select all of "# Review"')
+    await caret()
+    await inWebview(
+      REVIEW_PAGE,
+      `doc.querySelector('[data-line="0"]').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))
+       return true`,
+    )
+    assert.ok(await sourceSelects(), 'a double-click does not select all of "# Review"')
+  })
+
   it('shows the comment text as text in its card, shows the source, and resolves', async () => {
     const comments = (await yreview()).comments ?? assert.fail('no comments')
     await comments.addAt(review(), { start: 2, end: 4 }, 'Card text <b>raw</b>.', false)

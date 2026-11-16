@@ -27,6 +27,12 @@ export const lineInBlock = (
   before: string,
 ): number => Math.min(Math.max(block.text + before.split('\n').length - 1, block.start), block.end)
 
+/** The lines of a text selection. A last line that the selection touches only at column 0 is out. */
+export const linesOfSelection = (start: number, end: number, endColumn: number): LineRange => ({
+  start,
+  end: end > start && endColumn === 0 ? end - 1 : end,
+})
+
 /** The blocks that hold no other block of the list. */
 export const leavesOf = <N>(
   blocks: readonly TextBlock<N>[],

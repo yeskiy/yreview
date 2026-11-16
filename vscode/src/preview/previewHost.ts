@@ -7,7 +7,8 @@ import type { Log } from '../log'
 import type { ReviewService } from '../store/reviewService'
 import { gitApi, watchHeads } from '../views/repositories'
 import type { LineSpan, PreviewSource } from './markdownPlugin'
-import { fitted, type LineRange, rangeOfContext } from './previewLines'
+import { linesOfSelection, rangeOfContext } from './previewLines'
+import { wholeLines } from './wholeLines'
 
 /** The rich Markdown editor. VS Code keeps its selection for the editor that replaces it. */
 const RICH_EDITOR = 'vscode.markdown.editor'
@@ -95,21 +96,7 @@ const besideRich = async (
   return { editor, selection }
 }
 
-/** The lines of the context menu as a selection of whole lines, without blank lines at the end. */
-const linesIn = (
-  document: vscode.TextDocument,
-  lines: LineRange | undefined,
-): vscode.Selection | undefined => {
-  const range =
-    lines === undefined
-      ? undefined
-      : fitted(lines, document.lineCount, (line) => document.lineAt(line).isEmptyOrWhitespace)
-  return range === undefined
-    ? undefined
-    : new vscode.Selection(range.start, 0, range.end, document.lineAt(range.end).text.length)
-}
-
-/** Opens the comment box in the source, on the lines of the menu, the rich editor selection, or the caret. */
+/** Opens the comment box in the source, on the whole lines of the menu or the rich editor selection, else at the caret. */
 const fromPreview =
   (asked: RangeAsk) =>
   async (context?: unknown): Promise<void> => {
@@ -117,7 +104,16 @@ const fromPreview =
     const rich = lines === undefined ? await besideRich(asked) : undefined
     const editor = rich?.editor ?? (await sourceEditor(asked))
     if (editor === undefined) return
-    const selection = rich === undefined ? linesIn(editor.document, lines) : rich.selection
+    const selection = wholeLines(
+      editor.document,
+      rich?.selection === undefined
+        ? lines
+        : linesOfSelection(
+            rich.selection.start.line,
+            rich.selection.end.line,
+            rich.selection.end.character,
+          ),
+    )
     if (selection !== undefined) {
       editor.selection = selection
       editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport)

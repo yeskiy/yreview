@@ -73,7 +73,12 @@ export const commentHooks = (
         return true
       }
       if (message.type === 'reveal') {
-        await preview.showSource()
+        const found = await service.anchorOf(preview.uri.fsPath)
+        const mark =
+          found.kind === 'found'
+            ? marksOf(await service.placedAt(found.anchor)).find(({ id }) => id === message.id)
+            : undefined
+        await preview.showSource(mark)
         await comments.reveal(preview.uri, message.id)
         return true
       }

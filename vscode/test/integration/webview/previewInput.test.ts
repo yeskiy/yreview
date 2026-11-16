@@ -162,6 +162,26 @@ describe('real input in the Markdown preview', () => {
     assert.deepEqual(await saveBox('On the preview selection.'), [2, 4])
   })
 
+  it('selects the whole heading line in the source for words of a heading', async () => {
+    await showNotes(new vscode.Selection(2, 0, 2, 0))
+    await vscode.commands.executeCommand('markdown.showPreviewToSide', notes())
+    await focused('panel')
+    await focusPreview()
+    assert.equal(await selectInPreview(0, 0, 5), 'Notes')
+    await rightClickInPreview('selection')
+    await chooseMenuItem('Add Review Comment')
+    assert.ok(
+      await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment'),
+      'the comment box did not get the focus',
+    )
+    const selection = sourceBeside('panel')?.selection
+    assert.ok(
+      selection?.isEqual(new vscode.Selection(0, 0, 0, 7)),
+      `the source does not select all of "# Notes": ${JSON.stringify(selection)}`,
+    )
+    assert.deepEqual(await saveBox('On the heading.'), [0, 0])
+  })
+
   it('comments on one line of a paragraph of two lines from a real right-click', async () => {
     const original = (await vscode.workspace.openTextDocument(notes())).getText()
     // The document can close between two writes, so each write opens it again.

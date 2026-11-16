@@ -4,6 +4,8 @@ import path from 'node:path'
 import * as vscode from 'vscode'
 
 import type { Log } from '../log'
+import type { LineRange } from '../preview/previewLines'
+import { wholeLines } from '../preview/wholeLines'
 import { contributionsOf } from './contributions'
 import { linkTarget } from './links'
 import { DEFAULT_FONT, type PreviewLook, pageHtml } from './page'
@@ -220,19 +222,16 @@ export class ReviewPreview implements vscode.Disposable {
     )
   }
 
-  /** Shows the source beside the preview, with the caret at the line. */
-  async showSource(line?: number): Promise<vscode.TextEditor> {
+  /** Shows the source beside the preview, with the whole lines selected. */
+  async showSource(lines?: LineRange): Promise<vscode.TextEditor> {
     const editor = await vscode.window.showTextDocument(this.uri, {
       viewColumn: this.sourceColumn(),
       preserveFocus: false,
     })
-    if (line !== undefined) {
-      const at = new vscode.Position(Math.min(line, editor.document.lineCount - 1), 0)
-      editor.selection = new vscode.Selection(at, at)
-      editor.revealRange(
-        new vscode.Range(at, at),
-        vscode.TextEditorRevealType.InCenterIfOutsideViewport,
-      )
+    const selection = wholeLines(editor.document, lines)
+    if (selection !== undefined) {
+      editor.selection = selection
+      editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport)
     }
     return editor
   }
@@ -257,7 +256,8 @@ export class ReviewPreview implements vscode.Disposable {
   private async handle(message: FromWebview): Promise<void> {
     if ((await this.hooks()?.onMessage(this, message)) === true) return
     if (message.type === 'ready') await this.ready()
-    if (message.type === 'showSource') await this.showSource(message.line)
+    if (message.type === 'showSource')
+      await this.showSource({ start: message.line, end: message.line })
     if (message.type === 'openLink') await this.openLink(message.href)
   }
 

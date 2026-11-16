@@ -216,6 +216,24 @@ describe('comments from the Markdown preview', () => {
     assert.deepEqual(await saveBox('From the rich editor.'), [2, 4])
   })
 
+  it('selects the whole heading line for words of the rich Markdown editor', async function richHeading() {
+    if (!hasRichEditor()) this.skip()
+    await vscode.commands.executeCommand('vscode.openWith', notes(), 'vscode.markdown.editor')
+    await focused('vscode.markdown.editor')
+    await wait(1000)
+    await vscode.commands.executeCommand('markdown.editor.cursorDocumentStart')
+    await vscode.commands.executeCommand('markdown.editor.cursorWordRightSelect')
+    await vscode.commands.executeCommand('yreview.addCommentFromPreview')
+    if (!(await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'comment')))
+      assert.fail(`the comment box did not get the focus: ${focusState()}`)
+    const selection = sourceBeside('vscode.markdown.editor')?.selection
+    assert.ok(
+      selection?.isEqual(new vscode.Selection(0, 0, 0, 7)),
+      `the source does not select all of "# Notes": ${JSON.stringify(selection)}`,
+    )
+    assert.deepEqual(await saveBox('On the heading.'), [0, 0])
+  })
+
   it('comments on the selected lines of the text editor', async () => {
     await showNotes(new vscode.Selection(2, 0, 4, 6))
     await vscode.commands.executeCommand('yreview.addComment')
