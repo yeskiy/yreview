@@ -193,6 +193,19 @@ describe('the review preview', () => {
     try {
       await setting('markdown.preview', 'fontSize', 20)
       await setting('markdown.preview', 'breaks', true)
+      // The panel builds the page again on each change, so the check waits for the last build and its load.
+      assert.ok(
+        await until(
+          () =>
+            vscode.workspace.getConfiguration('markdown.preview', review()).get('breaks') === true,
+        ),
+        'the extension host did not get the breaks setting',
+      )
+      const shown =
+        (await previews()).all().find((one) => one.uri.fsPath === review().fsPath) ??
+        assert.fail('no preview')
+      await shown.settled()
+      await shown.whenReady()
       assert.ok(
         await untilInWebview(
           REVIEW_PAGE,

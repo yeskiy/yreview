@@ -57,7 +57,9 @@ export const inWebview = async (marker: string, body: string): Promise<unknown> 
       }),
     ),
   )
-  return values.find((value) => (value as { missing?: boolean } | null)?.missing !== true)
+  // A closing page can still match the marker, so a truthy value of any page wins.
+  const pages = values.filter((value) => (value as { missing?: boolean } | null)?.missing !== true)
+  return pages.find(Boolean) ?? pages[0]
 }
 
 /** Waits until the script gives a truthy value in the page. */
