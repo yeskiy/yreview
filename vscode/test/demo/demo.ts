@@ -442,9 +442,9 @@ const diffScene = async (): Promise<void> => {
   await wait(800)
   editor.selection = new vscode.Selection(24, 0, 24, 0)
   await openThread(21, 'seeded', 200)
-  rest()
+  glide({ x: 24, y: height - 140 }, 200)
   await quiet()
-  await wait(1200)
+  await wait(2000)
   still('diff')
 }
 
