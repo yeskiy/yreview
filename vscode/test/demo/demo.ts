@@ -215,14 +215,6 @@ const selectLines = async (first: number, last: number): Promise<void> => {
 /** Clicks the comment glyph of a line, so its saved thread opens. */
 const openThread = async (line: number, text: string, ms = 650): Promise<void> => {
   const { y } = await lineOf(line)
-  say(
-    `margin ${JSON.stringify(
-      await evaluate(
-        await workbench(),
-        `[...document.querySelectorAll('.editor-group-container.active .monaco-editor .margin [class*="comment"]')].map((node) => node.className + ' @' + Math.round(node.getBoundingClientRect().top))`,
-      ),
-    )} line y ${y}`,
-  )
   const glyph = await boxOf(
     visible(
       '.editor-group-container.active .monaco-editor .margin [class*="comment-thread"]',
@@ -318,7 +310,10 @@ const commentScene = async (): Promise<void> => {
       ),
     ),
   )
-  await wait(1200)
+  await wait(1000)
+  const blank = await lineOf(43)
+  await click({ x: blank.left + 220, y: blank.y })
+  await wait(600)
   await openThread(36, 'is empty')
   await wait(400)
   rest()
@@ -444,6 +439,7 @@ const diffScene = async (): Promise<void> => {
     200,
   )
   await wait(800)
+  editor.selection = new vscode.Selection(20, 0, 20, 0)
   await openThread(17, 'seeded', 200)
   rest()
   await quiet()
