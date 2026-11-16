@@ -29,8 +29,8 @@ const missing = (uri: vscode.Uri): never => {
   throw vscode.FileSystemError.FileNotFound(uri)
 }
 
-/** The drafts live only in memory, so a closed draft leaves no file on the disk. */
-const memoryFiles = () => {
+/** The drafts live only in memory. A save goes to `saving` first, and its failure fails the save. */
+const memoryFiles = (saving: (uri: vscode.Uri, content: Uint8Array) => Promise<void>) => {
   const files = new Map<string, { data: Uint8Array; mtime: number }>()
   const changed = new vscode.EventEmitter<vscode.FileChangeEvent[]>()
   return {
@@ -48,7 +48,8 @@ const memoryFiles = () => {
     readDirectory: (): [string, vscode.FileType][] => [],
     createDirectory: () => undefined,
     readFile: (uri: vscode.Uri): Uint8Array => files.get(uri.toString())?.data ?? missing(uri),
-    writeFile: (uri: vscode.Uri, content: Uint8Array): void => {
+    writeFile: async (uri: vscode.Uri, content: Uint8Array): Promise<void> => {
+      await saving(uri, content)
       files.set(uri.toString(), { data: content, mtime: Date.now() })
       changed.fire([{ type: vscode.FileChangeType.Changed, uri }])
     },
@@ -64,9 +65,15 @@ const memoryFiles = () => {
 
 /** A text editor for a new comment, beside its source. One draft for each file and line range. */
 export class CommentDrafts implements vscode.Disposable {
-  private readonly files = memoryFiles()
+  private readonly files = memoryFiles((uri, content) => this.saving(uri, content))
 
   private readonly drafts = new Map<string, Draft>()
+
+  /** Drafts that this class saves itself, so their save writes no comment. */
+  private readonly quiet = new Set<string>()
+
+  /** Drafts that a save of VS Code wrote as a comment, to close after the save. */
+  private readonly written = new Set<string>()
 
   private readonly disposables: vscode.Disposable[]
 
@@ -76,12 +83,19 @@ export class CommentDrafts implements vscode.Disposable {
     private readonly write: DraftWrite,
     private readonly sharedFirst: (source: vscode.Uri) => boolean,
     private readonly closed: (source: vscode.Uri, selection: vscode.Selection) => void,
-    log: Log,
+    private readonly log: Log,
   ) {
     this.disposables = [
       this.files,
       vscode.workspace.registerFileSystemProvider(DRAFT_SCHEME, this.files),
       vscode.workspace.onDidCloseTextDocument(({ uri }) => this.forget(uri)),
+      vscode.workspace.onDidSaveTextDocument(
+        guard(log, 'Close the draft', async (document: vscode.TextDocument) => {
+          const draft = this.drafts.get(document.uri.toString())
+          if (!this.written.delete(document.uri.toString()) || draft === undefined) return
+          await this.close(document, draft)
+        }),
+      ),
       vscode.commands.registerCommand(
         'yreview.draft.save',
         guard(log, 'Save', (uri?: vscode.Uri) => this.save(uri, undefined)),
@@ -112,7 +126,7 @@ export class CommentDrafts implements vscode.Disposable {
     const known = [...this.drafts].find(([, draft]) => draft.key === key)?.[0]
     const uri =
       known === undefined
-        ? this.create(source, key, selection, editor.viewColumn, lines)
+        ? await this.create(source, key, selection, editor.viewColumn, lines)
         : vscode.Uri.parse(known)
     await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri), {
       viewColumn: vscode.ViewColumn.Beside,
@@ -125,18 +139,18 @@ export class CommentDrafts implements vscode.Disposable {
   }
 
   // The .md name gives the draft the Markdown language, and the tab shows the file and the lines.
-  private create(
+  private async create(
     source: vscode.Uri,
     key: string,
     selection: vscode.Selection,
     column: vscode.ViewColumn | undefined,
     lines: { readonly start: number; readonly end: number },
-  ): vscode.Uri {
+  ): Promise<vscode.Uri> {
     this.count += 1
     const name = `Comment on ${path.posix.basename(source.path)} lines ${lines.start}-${lines.end}.md`
     const uri = vscode.Uri.from({ scheme: DRAFT_SCHEME, path: `/${this.count}/${name}` })
-    this.files.writeFile(uri, EMPTY)
     this.drafts.set(uri.toString(), { key, source, selection, column })
+    await this.files.writeFile(uri, EMPTY)
     return uri
   }
 
@@ -152,6 +166,23 @@ export class CommentDrafts implements vscode.Disposable {
     const { source, selection } = found.draft
     await this.write(source, selection, text, shared ?? this.sharedFirst(source))
     await this.close(found.document, found.draft)
+  }
+
+  /** A save of VS Code, for example Save of its close question, writes the comment with the first button. */
+  private async saving(uri: vscode.Uri, content: Uint8Array): Promise<void> {
+    const draft = this.drafts.get(uri.toString())
+    const text = new TextDecoder().decode(content).trim()
+    if (draft === undefined || this.quiet.has(uri.toString()) || text === '') return
+    try {
+      await this.write(draft.source, draft.selection, text, this.sharedFirst(draft.source))
+    } catch (error) {
+      this.log.error('Save failed.', error)
+      vscode.window
+        .showErrorMessage(`Save failed. ${error instanceof Error ? error.message : String(error)}`)
+        .then(undefined, () => undefined)
+      throw error
+    }
+    this.written.add(uri.toString())
   }
 
   /** Closes the draft. A draft with text closes only after the question. */
@@ -178,7 +209,12 @@ export class CommentDrafts implements vscode.Disposable {
 
   /** The text goes into memory first, so VS Code does not ask to save it when the tab closes. */
   private async close(document: vscode.TextDocument, draft: Draft): Promise<void> {
-    if (document.isDirty) await document.save()
+    this.quiet.add(document.uri.toString())
+    try {
+      if (document.isDirty) await document.save()
+    } finally {
+      this.quiet.delete(document.uri.toString())
+    }
     this.forget(document.uri)
     await vscode.window.tabGroups.close(
       vscode.window.tabGroups.all

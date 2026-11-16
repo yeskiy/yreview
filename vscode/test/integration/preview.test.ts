@@ -262,14 +262,26 @@ describe('comments from the Markdown preview', () => {
     assert.deepEqual(await saveBox('On the selection.'), [2, 4])
   })
 
-  // TODO: remove the skip once a second box on a line with a comment gets the focus.
-  it.skip('opens a second box on the lines of a comment, in the text editor', async () => {
+  it('opens a draft editor for a second comment on the lines of a comment, in the text editor', async () => {
     await showNotes(new vscode.Selection(2, 0, 4, 6))
     await vscode.commands.executeCommand('yreview.addComment')
     assert.deepEqual(await saveBox('The first comment.'), [2, 4])
     await showNotes(new vscode.Selection(2, 0, 4, 6))
     await vscode.commands.executeCommand('yreview.addComment')
-    assert.deepEqual(await saveBox('The second comment.'), [2, 4])
+    assert.ok(
+      await until(() => vscode.window.activeTextEditor?.document.uri.scheme === 'yreview-draft'),
+      'no draft editor opened',
+    )
+    const text = 'The second comment.'
+    await vscode.commands.executeCommand('type', { text })
+    await vscode.commands.executeCommand('yreview.draft.save')
+    const comments = await reviewComments()
+    assert.ok(
+      await until(() => comments.snapshot(notes()).some((shown) => textOf(shown) === text)),
+      'the draft did not save',
+    )
+    const saved = comments.snapshot(notes()).find((shown) => textOf(shown) === text)
+    assert.deepEqual([saved?.range.start.line, saved?.range.end.line], [2, 4])
   })
 
   it('marks the block of an open comment', async () => {

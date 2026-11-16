@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 
 import * as vscode from 'vscode'
@@ -169,6 +169,73 @@ describe('the draft editor of a line that has a comment', function drafts() {
     )
     assert.equal(saved?.stored.ref, REF)
     await backInSource(selection)
+  })
+
+  it('writes a local comment when the draft document saves, as Save of the close question does', async () => {
+    const selection = new vscode.Selection(0, 0, 2, 1)
+    await addOn(selection)
+    const text = 'Saved from the close question.'
+    await vscode.commands.executeCommand('type', { text })
+    const document = vscode.window.activeTextEditor?.document ?? assert.fail('no draft')
+    assert.equal(await document.save(), true, 'the draft document did not save')
+    const comments = await reviewComments()
+    assert.ok(
+      await until(() => comments.snapshot(file()).some((shown) => textOf(shown) === text)),
+      'the save of the draft document wrote no comment',
+    )
+    const saved = comments.snapshot(file()).find((shown) => textOf(shown) === text)
+    assert.deepEqual(saved?.stored.record.location?.range, { startLine: 1, endLine: 3 })
+    assert.equal(saved?.stored.ref, REF)
+    await backInSource(selection)
+    assert.equal(
+      comments.snapshot(file()).filter((shown) => textOf(shown) === text).length,
+      1,
+      'the comment was written twice',
+    )
+  })
+
+  it('writes nothing when a blank draft document saves', async () => {
+    await addOn(new vscode.Selection(0, 0, 1, 1))
+    const comments = await reviewComments()
+    const before = comments.snapshot(file()).length
+    await vscode.commands.executeCommand('type', { text: '  \n ' })
+    const document = vscode.window.activeTextEditor?.document ?? assert.fail('no draft')
+    await document.save()
+    await comments.reload(file())
+    assert.equal(comments.snapshot(file()).length, before, 'a blank draft wrote a comment')
+  })
+
+  it('keeps the draft and its text, and shows the error, when the write of a saved draft fails', async () => {
+    await addOn(new vscode.Selection(0, 0, 0, 5))
+    const text = 'Not written behind a lock.'
+    await vscode.commands.executeCommand('type', { text })
+    const document = vscode.window.activeTextEditor?.document ?? assert.fail('no draft')
+    // A lock file of the notes ref makes git refuse the write of the note.
+    const lock = path.resolve(workspace(), git('rev-parse', '--git-path', `${REF}.lock`).trim())
+    mkdirSync(path.dirname(lock), { recursive: true })
+    writeFileSync(lock, '')
+    const errors: string[] = []
+    const original = vscode.window.showErrorMessage
+    Object.defineProperty(vscode.window, 'showErrorMessage', {
+      configurable: true,
+      value: async (message: string) => {
+        errors.push(message)
+        return undefined
+      },
+    })
+    try {
+      assert.equal(await document.save(), false, 'a failed write saved the draft')
+    } finally {
+      Object.defineProperty(vscode.window, 'showErrorMessage', { value: original })
+      rmSync(lock, { force: true })
+    }
+    assert.ok(
+      errors.some((message) => message.startsWith('Save failed.')),
+      `no error: ${JSON.stringify(errors)}`,
+    )
+    assert.equal(draftTabs().length, 1, 'a failed write closed the draft')
+    assert.equal(document.isDirty, true)
+    assert.equal(document.getText(), text)
   })
 
   it('closes an empty draft with no question and gives the focus back to the source', async () => {
