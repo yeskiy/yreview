@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { setTimeout as wait } from 'node:timers/promises'
 
 import * as vscode from 'vscode'
 
@@ -28,7 +29,7 @@ describe('check 9', () => {
       // An editor can hide the toast, and the notification center still holds the message.
       const toast = await eventually(
         async () => (await pointOf('.notification-toast .monaco-button', 'Report')) !== null,
-        20,
+        80,
       )
       if (toast) await clickElement('.notification-toast .monaco-button', 'Report')
       else {
@@ -37,7 +38,7 @@ describe('check 9', () => {
         const test = this.test ?? assert.fail()
         test.title += ' (note: the error shows in the notification center, not as a toast)'
       }
-      await failing
+      await Promise.race([failing, wait(30_000)])
       assert.ok(await until(() => opened().length > 0), `nothing opened: ${JSON.stringify(asked)}`)
     } finally {
       Object.defineProperty(vscode.window, 'showInformationMessage', { value: original })

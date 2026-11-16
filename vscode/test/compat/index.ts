@@ -32,6 +32,8 @@ const readWindow = async (): Promise<unknown> => ({
       menus: [...document.querySelectorAll('.monaco-menu, .context-view')].map((n) => n.className.slice(0, 40) + ':' + n.textContent.slice(0, 120)),
       titleActions: [...document.querySelectorAll('.editor-actions .action-item')].map((n) => (n.querySelector('.action-label')?.getAttribute('aria-label') ?? '').slice(0, 40)),
       output: document.querySelector('.output-view') !== null,
+      atCenter: (({ tagName, className }) => tagName + '.' + String(className).slice(0, 80))(document.elementFromPoint(innerWidth / 2, innerHeight / 2) ?? {}),
+      overlays: [...document.body.querySelectorAll('*')].filter((n) => { const s = getComputedStyle(n); const r = n.getBoundingClientRect(); return (s.position === 'fixed' || s.position === 'absolute') && r.width * r.height > innerWidth * innerHeight * 0.5 && Number(s.zIndex) > 10 }).map((n) => n.tagName + '.' + String(n.className).slice(0, 60) + ' z' + getComputedStyle(n).zIndex).slice(0, 8),
       frames: document.querySelectorAll('iframe').length })`,
   ).catch((error: unknown) => String(error)),
 })
