@@ -17,7 +17,8 @@ export interface FileDiff {
   readonly hunks: readonly Hunk[]
 }
 
-/** Where one open comment stands in the working tree. spec/format.md section 17 states the rule. */
+/** Where one open comment stands in the working tree. Same: its lines stayed or moved. Outdated: an edit
+ *  touched its lines. Gone: the file was deleted or is empty. Missing: git refused the read. */
 export type Carry =
   | { readonly kind: 'same'; readonly range?: RecordRange }
   | { readonly kind: 'outdated'; readonly range: RecordRange; readonly original: readonly string[] }

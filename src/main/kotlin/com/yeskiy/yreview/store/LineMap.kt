@@ -8,7 +8,8 @@ data class Hunk(val oldStart: Int, val oldCount: Int, val newStart: Int, val new
 /** The changes of one path from a comment commit to the working tree. */
 data class FileDiff(val path: String, val deleted: Boolean, val binary: Boolean, val hunks: List<Hunk>)
 
-/** Where one open comment stands in the working tree. spec/format.md section 17 states the rule. */
+/** Where one open comment stands in the working tree. Same: its lines stayed or moved. Outdated: an edit
+ *  touched its lines. Gone: the file was deleted or is empty. Missing: git refused the read. */
 sealed interface Carry {
     data class Same(val range: Range?) : Carry
     data class Outdated(val range: Range, val original: List<String>) : Carry
