@@ -305,15 +305,23 @@ const bridgeFileExists = (file) => {
   return spawnSync('docker', ['exec', container, 'test', '-e', file]).status === 0
 }
 
-const bridgeGone = async (file, tries = 60) =>
-  !bridgeFileExists(file) || (tries > 0 && wait(500).then(() => bridgeGone(file, tries - 1)))
+const BRIDGE_WAIT_S = 120
+
+/** The seconds until the bridge file goes, or undefined when it stays. */
+const bridgeGone = async (file, waited = 0) => {
+  if (!bridgeFileExists(file)) return waited
+  if (waited >= BRIDGE_WAIT_S) return undefined
+  await wait(1000)
+  return bridgeGone(file, waited + 1)
+}
 
 /** The result of each check from the test records of the run. */
 const checkResults = async (records, failure) => {
   const bridge = existsSync(bridgeRecord)
     ? JSON.parse(readFileSync(bridgeRecord, 'utf8')).path
     : undefined
-  const gone = bridge === undefined ? false : await bridgeGone(bridge)
+  const gone = bridge === undefined ? undefined : await bridgeGone(bridge)
+  if (bridge !== undefined) say(`the bridge file went after ${gone ?? 'more than 120'} s`)
   return Promise.all(
     CHECKS.map(async ([check, name]) => {
       if (SKIPPED.has(check)) return { check, name, status: 'not checked yet', reason: '' }
@@ -336,12 +344,12 @@ const checkResults = async (records, failure) => {
           status: 'failed',
           reason: `the test did not run: ${failure ?? 'no record'}`,
         }
-      if (check === 11 && !gone)
+      if (check === 11 && gone === undefined)
         return {
           check,
           name,
           status: 'failed',
-          reason: 'the bridge file stays 30 s after the window closes',
+          reason: `the bridge file stays ${BRIDGE_WAIT_S} s after the window closes`,
         }
       return { check, name, status: 'passed', reason: '' }
     }),

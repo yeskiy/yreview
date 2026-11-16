@@ -119,6 +119,14 @@ jobs:
           chmod +x cursor.AppImage
           mkdir -p "$RUNNER_TEMP/editor" && (cd "$RUNNER_TEMP/editor" && "$GITHUB_WORKSPACE/vscode/cursor.AppImage" --appimage-extract >/dev/null)
 
+      - name: Show how Cursor picks its window
+        if: matrix.editor == 'cursor'
+        run: |
+          app=$(dirname "$(find "$RUNNER_TEMP/editor" -path '*resources/app/product.json' | head -1)")
+          for word in glassMode '"classic"' openAgentsWindowOnStartup 'agentsWindow' 'classic-editor'; do
+            echo "== $word"; grep -rhao ".\{100\}$word.\{140\}" "$app/out" --include=*.js | head -6
+          done
+
       - name: Get Windsurf and check its SHA-256
         if: matrix.editor == 'windsurf'
         run: |
