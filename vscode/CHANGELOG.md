@@ -2,6 +2,13 @@
 
 git-cliff writes this file from the commit messages. Do not edit it by hand.
 
+## 1.1.2 - 2026-11-17
+
+### Fixed
+
+- Run an agent command with its arguments
+- Show a saved comment thread open when the editor marks are on
+
 ## 1.1.1 - 2026-11-16
 
 ### Fixed
