@@ -41,6 +41,30 @@ describe('changeFiles', function changeScan() {
     assert.deepEqual(await changeFiles(new ProcessGitRunner(dir), root), [`${root}/src/new.txt`])
   })
 
+  it('reads only the given paths when the call names them', async () => {
+    writeFileSync(path.join(dir, 'src', 'other.txt'), 'other\n')
+    writeFileSync(path.join(dir, 'src', '[x].txt'), 'x\n')
+    const calls: (readonly string[])[] = []
+    const inner = new ProcessGitRunner(dir)
+    const runner: GitRunner = {
+      run: (args, signal) => {
+        calls.push(args)
+        return inner.run(args, signal)
+      },
+    }
+    assert.deepEqual(await changeFiles(runner, root, undefined, ['src/new.txt', 'src/[x].txt']), [
+      `${root}/src/[x].txt`,
+      `${root}/src/new.txt`,
+    ])
+    assert.deepEqual(calls.at(-1)?.slice(-3), [
+      '--',
+      ':(literal)src/new.txt',
+      ':(literal)src/[x].txt',
+    ])
+    assert.deepEqual(await changeFiles(runner, root, undefined, []), [])
+    assert.equal(calls.length, 1)
+  })
+
   it('gives undefined when git fails', async () => {
     const failing: GitRunner = {
       run: () => Promise.resolve({ exitCode: 128, stdout: '', stderr: 'x' }),

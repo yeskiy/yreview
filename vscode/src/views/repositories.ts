@@ -1,7 +1,7 @@
 import * as vscode from 'vscode'
 
 import { ProcessGitRunner } from '../git/runner'
-import { gitRoot, projectPath, uniqueRoots } from '../tasks/roots'
+import { gitRoot, projectPath, uniqueRoots, workspaceRepositories } from '../tasks/roots'
 
 export interface GitRepository {
   readonly rootUri: vscode.Uri
@@ -42,7 +42,8 @@ export const workspaceFolders = (): Promise<readonly string[]> =>
       .map((folder) => projectPath(folder.uri.fsPath)),
   )
 
-/** The roots that the git extension knows, and the root of each workspace folder. */
+/** The root of each workspace folder, and each root of the git extension that holds or sits in one. */
+// The git extension also opens the repository of a file outside the workspace, which stays an outside root.
 export const repositoryRoots = async (
   api: GitApi | undefined,
   gitPath: string,
@@ -50,13 +51,20 @@ export const repositoryRoots = async (
   signal?: AbortSignal,
 ): Promise<readonly string[]> =>
   uniqueRoots([
-    ...(await Promise.all(
-      (api?.repositories ?? []).map((repository) => projectPath(repository.rootUri.fsPath)),
-    )),
+    ...workspaceRepositories(
+      await Promise.all(
+        (api?.repositories ?? []).map((repository) => projectPath(repository.rootUri.fsPath)),
+      ),
+      folders,
+    ),
     ...(await Promise.all(
       folders.map((folder) => gitRoot(new ProcessGitRunner(folder, gitPath), signal)),
     )),
   ])
+
+/** True when the repository holds a workspace folder or a workspace folder holds it. */
+export const insideWorkspace = async (root: string): Promise<boolean> =>
+  workspaceRepositories([await projectPath(root)], await workspaceFolders()).length > 0
 
 /** Calls back when a repository changes its state, and when the git extension opens or closes one. */
 export const watchRepositories = (

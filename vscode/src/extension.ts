@@ -28,7 +28,13 @@ import { ReviewService } from './store/reviewService'
 import { projectCompletionHost } from './tasks/completionHost'
 import { TaskCompletion } from './tasks/taskCompletion'
 import { type TaskViews, createTaskViews, placeholderViews } from './views/taskViews'
-import { gitApi, repositoryRoots, watchFirstCommits, workspaceFolders } from './views/repositories'
+import {
+  gitApi,
+  insideWorkspace,
+  repositoryRoots,
+  watchFirstCommits,
+  workspaceFolders,
+} from './views/repositories'
 import { registerViewCommands } from './views/viewCommands'
 import { type TaskWrites, createTaskWrites, registerTaskWrites } from './views/taskWrites'
 import { vscodeHost } from './vscodeHost'
@@ -204,13 +210,19 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
       }),
     ),
   )
+  // The search for child stores reads the whole work tree, so a repository outside the workspace gets none.
+  const settleInside = (root: string): void => {
+    insideWorkspace(root).then((inside) => {
+      if (inside) settleRoot(root)
+    }, moveFailed)
+  }
   gitApi()
     .then((api) => {
       context.subscriptions.push(
-        watchFirstCommits(api, settleRoot),
+        watchFirstCommits(api, settleInside),
         ...(api === undefined
           ? []
-          : [api.onDidOpenRepository((repository) => settleRoot(repository.rootUri.fsPath))]),
+          : [api.onDidOpenRepository((repository) => settleInside(repository.rootUri.fsPath))]),
       )
     })
     .catch(moveFailed)

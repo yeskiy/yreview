@@ -3,7 +3,14 @@ import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 
 import { ProcessGitRunner } from '../../../src/git/runner'
-import { basePathOf, gitRoot, ownsFile, projectPath, uniqueRoots } from '../../../src/tasks/roots'
+import {
+  basePathOf,
+  gitRoot,
+  ownsFile,
+  projectPath,
+  uniqueRoots,
+  workspaceRepositories,
+} from '../../../src/tasks/roots'
 import { git, makeRepo, removeDir, scratchDir, shortForm } from '../../fixtures/scratch'
 
 const slash = (value: string): string => value.replaceAll('\\', '/')
@@ -72,5 +79,19 @@ describe('roots', function roots() {
 
   it('gives the roots once each, in order, with no empty value', () => {
     assert.deepEqual(uniqueRoots(['b', undefined, 'a', 'b', '']), ['a', 'b'])
+  })
+
+  it('keeps a repository that holds a workspace folder or that a workspace folder holds', () => {
+    assert.deepEqual(
+      workspaceRepositories(
+        ['E:/w', 'E:/w/in', 'E:/up', 'E:/other', 'E:/wide', 'E:/w2'],
+        ['E:/w', 'E:/up/f'],
+      ),
+      ['E:/w', 'E:/w/in', 'E:/up'],
+    )
+  })
+
+  it('keeps no repository in a window with no workspace folder', () => {
+    assert.deepEqual(workspaceRepositories(['E:/r'], []), [])
   })
 })

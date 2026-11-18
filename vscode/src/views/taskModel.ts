@@ -90,12 +90,15 @@ const outsideChangesOf = async (
     await Promise.all(
       outside
         .filter((entry) => entry.store === 'git')
-        .map(async ({ root, files }) => {
-          const open = new Set(files.map((file) => `${root}/${file.path}`))
-          return (
-            (await changeFiles(new ProcessGitRunner(root, gitPath), root, signal)) ?? []
-          ).filter((file) => open.has(file))
-        }),
+        .map(
+          async ({ root, files }) =>
+            (await changeFiles(
+              new ProcessGitRunner(root, gitPath),
+              root,
+              signal,
+              files.map((file) => file.path),
+            )) ?? [],
+        ),
     )
   ).flat()
 

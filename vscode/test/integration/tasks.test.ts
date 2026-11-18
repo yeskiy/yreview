@@ -71,7 +71,7 @@ describe('task views', function views() {
     assert.equal(project.view.badge?.value, project.rows().tasks.length)
   })
 
-  it('scans a repository that the git extension opens later, and drops it after a close', async function lateRepository() {
+  it('a repository that the git extension opens outside the workspace folder shows only its open file', async function lateRepository() {
     const tasks = await taskViews()
     await tasks.model.refresh()
     const project = tasks.view('project')
@@ -79,18 +79,27 @@ describe('task views', function views() {
     const late = (...args: string[]): string =>
       execFileSync('git', args, { cwd: dir, encoding: 'utf8' })
     writeFileSync(path.join(dir, 'late.ts'), '// TODO: late task\n')
+    writeFileSync(path.join(dir, 'closed.ts'), '// TODO: closed file task\n')
     late('init', '-q', '-b', 'main')
     late('config', 'commit.gpgsign', 'false')
     late('add', '.')
     late('commit', '-q', '-m', 'init')
-    const shows = (): boolean => todoTexts(project.rows().tasks).includes('TODO: late task')
+    const texts = (): readonly string[] => todoTexts(project.rows().tasks)
+    const outside = (): readonly ReviewTask[] =>
+      project.rows().tasks.filter((task) => task.outside === true)
     try {
       await vscode.commands.executeCommand('git.openRepository', dir)
       // The git extension of VS Code 1.101 does not open a repository outside the workspace.
       if (!(await eventually(() => gitRepository(dir) !== undefined))) this.skip()
-      await until(shows)
-      await vscode.commands.executeCommand('git.close', vscode.Uri.file(dir))
-      await until(() => !shows())
+      await tasks.model.refresh()
+      const root = dir.replaceAll('\\', '/').toLowerCase()
+      assert.ok(tasks.model.roots().every((each) => each.toLowerCase() !== root))
+      assert.ok(!texts().includes('TODO: late task'))
+      await vscode.window.showTextDocument(vscode.Uri.file(path.join(dir, 'late.ts')))
+      await until(() => outside().some((task) => task.text === 'TODO: late task'))
+      assert.ok(!texts().includes('TODO: closed file task'))
+      await vscode.commands.executeCommand('workbench.action.closeActiveEditor')
+      await until(() => !texts().includes('TODO: late task'))
     } finally {
       await removeRepository(dir)
     }

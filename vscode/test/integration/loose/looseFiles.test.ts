@@ -19,7 +19,7 @@ import * as vscode from 'vscode'
 import type { YreviewApi } from '../../../src/extension'
 import type { Row } from '../../../src/tasks/viewRows'
 
-import { until } from '../window'
+import { removeRepository, until } from '../window'
 
 const api = async (): Promise<YreviewApi> =>
   (
@@ -39,6 +39,42 @@ const lines = (file: string): readonly string[] =>
   readFileSync(file, 'utf8')
     .split('\n')
     .filter((line) => line !== '')
+
+const samePath = (a: string, b: string): boolean =>
+  process.platform === 'win32'
+    ? path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase()
+    : path.resolve(a) === path.resolve(b)
+
+interface TraceEvent {
+  readonly event: string
+  readonly sid: string
+  readonly argv?: readonly string[]
+  readonly worktree?: string
+}
+
+/** The arguments of each git process that ran in the work tree, from a trace2 event file. */
+const gitCallsIn = (trace: string, worktree: string): readonly (readonly string[])[] => {
+  const events = existsSync(trace) ? lines(trace).map((line) => JSON.parse(line) as TraceEvent) : []
+  const sids = new Set(
+    events
+      .filter((each) => each.event === 'def_repo' && samePath(each.worktree ?? '', worktree))
+      .map((each) => each.sid),
+  )
+  return events
+    .filter((each) => each.event === 'start' && sids.has(each.sid))
+    .map((each) => (each.argv ?? []).slice(1))
+}
+
+interface GitExtension {
+  getAPI(version: 1): { readonly repositories: readonly { readonly rootUri: vscode.Uri }[] }
+}
+
+/** The API of the built-in git extension, with the repositories that it opened. */
+const gitExtensionApi = async () =>
+  (
+    (await vscode.extensions.getExtension<GitExtension>('vscode.git')?.activate()) ??
+    assert.fail('no git extension')
+  ).getAPI(1)
 
 describe('comments on loose files in an empty window', () => {
   const folder = path.join(realpathSync.native(tmpdir()), `yreview-loose-${randomUUID()}`)
@@ -65,17 +101,27 @@ describe('comments on loose files in an empty window', () => {
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
     // Git writes its object files read-only, and the test host does not delete a read-only file on Windows.
-    const child = `${folder}-child`
-    ;[child, `${folder}-tree-repo`]
+    const repositories = [`${folder}-child`, `${folder}-tree-repo`]
+    repositories
       .filter((dir) => existsSync(dir))
       .forEach((dir) =>
         readdirSync(dir, { recursive: true, withFileTypes: true })
           .filter((entry) => entry.isFile())
           .forEach((entry) => chmodSync(path.join(entry.parentPath, entry.name), 0o666)),
       )
-    rmSync(`${folder}-tree-repo`, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
+    // The git extension holds the files of a repository that it opened until it closes it.
+    await repositories.reduce<Promise<void>>(
+      (done, dir) => done.then(() => removeRepository(dir)),
+      Promise.resolve(),
+    )
     // On Windows the file watcher of the window can hold the folder for a short time.
-    ;[folder, child, `${folder}-locked`, `${folder}-tree-a`, `${folder}-tree-b`].forEach((dir) =>
+    ;[
+      folder,
+      `${folder}-locked`,
+      `${folder}-tree-a`,
+      `${folder}-tree-b`,
+      `${folder}-trace.json`,
+    ].forEach((dir) =>
       rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }),
     )
   })
@@ -139,9 +185,6 @@ describe('comments on loose files in an empty window', () => {
     mkdirSync(sub, { recursive: true })
     writeFileSync(path.join(sub, 'f.txt'), 'one\n')
     writeFileSync(path.join(sub, 'g.txt'), 'two\n')
-    // The git extension then does not open the new repository, so only the tab open moves the store.
-    const gitSettings = vscode.workspace.getConfiguration('git')
-    await gitSettings.update('autoRepositoryDetection', false, vscode.ConfigurationTarget.Global)
     try {
       await vscode.window.showTextDocument(fileIn(sub, 'f.txt'))
       await save(fileIn(sub, 'f.txt'), 'Child note.')
@@ -173,11 +216,6 @@ describe('comments on loose files in an empty window', () => {
       )
     } finally {
       await vscode.commands.executeCommand('workbench.action.closeAllEditors')
-      await gitSettings.update(
-        'autoRepositoryDetection',
-        undefined,
-        vscode.ConfigurationTarget.Global,
-      )
     }
   })
 
@@ -210,6 +248,9 @@ describe('comments on loose files in an empty window', () => {
     writeFileSync(path.join(first ?? '', 'x.md'), '# X\n')
     writeFileSync(path.join(second ?? '', 'y.md'), '# Y\n')
     writeFileSync(path.join(repo ?? '', 'z.md'), '# Z\n')
+    // A full scan of the repository would show these TODO items, because no tab holds their files.
+    writeFileSync(path.join(repo ?? '', 'w.md'), '<!-- TODO: tracked and closed -->\n')
+    writeFileSync(path.join(repo ?? '', 'u.md'), '<!-- TODO: untracked and closed -->\n')
     const run = (...args: string[]): string =>
       execFileSync(
         'git',
@@ -217,17 +258,22 @@ describe('comments on loose files in an empty window', () => {
         { cwd: repo, encoding: 'utf8' },
       )
     run('init', '-q', '-b', 'main')
-    run('add', 'z.md')
+    run('add', 'z.md', 'w.md')
     run('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'init')
+    const trace = `${folder}-trace.json`
     const branches = (): readonly Row[] =>
       project.topRows().filter((row) => row.kind === 'folder' && row.folder.kind === 'outside')
     const branchOf = (dir: string): Row | undefined =>
       branches().find(
         (row) => row.kind === 'folder' && row.folder.name.startsWith(`${path.basename(dir)} (`),
       )
-    // The git extension then does not open the repository, so it stays a root outside the workspace.
+    // With "always", the git extension opens the repository of an open file outside every workspace folder.
     const gitSettings = vscode.workspace.getConfiguration('git')
-    await gitSettings.update('autoRepositoryDetection', false, vscode.ConfigurationTarget.Global)
+    await gitSettings.update(
+      'openRepositoryInParentFolders',
+      'always',
+      vscode.ConfigurationTarget.Global,
+    )
     const shown: string[] = []
     const original = vscode.window.showWarningMessage
     try {
@@ -266,11 +312,36 @@ describe('comments on loose files in an empty window', () => {
 
       await vscode.window.showTextDocument(fileIn(second ?? '', 'y.md'), { preview: false })
       await save(fileIn(second ?? '', 'y.md'), 'Tree note B.')
+      process.env.GIT_TRACE2_EVENT = trace
       await vscode.window.showTextDocument(fileIn(repo ?? '', 'z.md'), { preview: false })
       await save(fileIn(repo ?? '', 'z.md'), 'Tree note repo.')
+      const gitExtension = await gitExtensionApi()
+      assert.ok(
+        await until(() =>
+          gitExtension.repositories.some((each) => samePath(each.rootUri.fsPath, repo ?? '')),
+        ),
+        'the git extension did not open the repository of the open file',
+      )
       await tasks.model.refresh()
       assert.ok(await until(() => branches().length === 3), `${branches().length} branches`)
-      assert.ok(branchOf(repo ?? '')?.tasks.some((entry) => entry.revision !== 'worktree'))
+      assert.ok(!tasks.model.roots().some((root) => samePath(root, repo ?? '')))
+      const repoTasks = branchOf(repo ?? '')?.tasks ?? []
+      assert.deepEqual(
+        repoTasks.map((entry) => [entry.path, entry.text]),
+        [['z.md', 'Tree note repo.']],
+      )
+      assert.ok(repoTasks.every((entry) => entry.revision !== 'worktree'))
+      delete process.env.GIT_TRACE2_EVENT
+      const calls = gitCallsIn(trace, repo ?? '')
+      assert.ok(calls.length > 0, 'the trace holds no git call of the repository')
+      assert.deepEqual(
+        calls.filter(
+          (args) =>
+            (args.includes('grep') && args.includes('--untracked')) ||
+            (args.includes('ls-files') && args.includes('--others')),
+        ),
+        [],
+      )
 
       Object.assign(vscode.window, {
         showWarningMessage: (text: string) => {
@@ -282,7 +353,12 @@ describe('comments on loose files in an empty window', () => {
         'yreview.sendTasks',
         branches().flatMap((each) => each.tasks),
       )
+      await vscode.commands.executeCommand(
+        'yreview.copyTasks',
+        branches().flatMap((each) => each.tasks),
+      )
       assert.deepEqual(shown, [
+        'The agent works in the workspace folder, so it does not take these tasks.',
         'The agent works in the workspace folder, so it does not take these tasks.',
       ])
       assert.deepEqual(tasks.chosenTasks(), [])
@@ -300,10 +376,11 @@ describe('comments on loose files in an empty window', () => {
         'the branch of the closed tab stays',
       )
     } finally {
+      delete process.env.GIT_TRACE2_EVENT
       Object.assign(vscode.window, { showWarningMessage: original })
       await vscode.commands.executeCommand('workbench.action.closeAllEditors')
       await gitSettings.update(
-        'autoRepositoryDetection',
+        'openRepositoryInParentFolders',
         undefined,
         vscode.ConfigurationTarget.Global,
       )

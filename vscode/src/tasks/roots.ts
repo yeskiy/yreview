@@ -33,5 +33,14 @@ export const ownsFile = (root: string, filePath: string, roots: readonly string[
   holds(root, filePath) &&
   !roots.some((other) => other.length > root.length && holds(other, filePath))
 
+/** The repositories that hold a workspace folder or that a workspace folder holds. */
+export const workspaceRepositories = (
+  repositories: readonly string[],
+  folders: readonly string[],
+): readonly string[] =>
+  repositories.filter((root) =>
+    folders.some((folder) => holds(root, folder) || holds(folder, root)),
+  )
+
 export const uniqueRoots = (roots: readonly (string | undefined)[]): readonly string[] =>
   [...new Set(roots.filter((root): root is string => root !== undefined && root !== ''))].sort()
