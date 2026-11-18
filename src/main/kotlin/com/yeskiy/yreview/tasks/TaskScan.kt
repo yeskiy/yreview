@@ -38,6 +38,7 @@ import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.atomic.AtomicInteger
 
 /** Where one TODO line sits, so the task record names the file and the commit. */
 private data class TodoPlace(val path: String, val filePath: String, val rootPath: String, val commit: String)
@@ -64,6 +65,9 @@ data class RepositoryTasks(
  */
 object TaskScan {
 
+    /** How many full reads ran. The bench and the tests read it. */
+    internal val reads = AtomicInteger()
+
     /**
      * The tasks of every store of the project, one entry per git repository and per folder.
      *
@@ -75,6 +79,7 @@ object TaskScan {
      * that rule, so a TODO of an inner repository reaches the tree once.
      */
     fun read(project: Project, onlyFile: VirtualFile?, showResolved: Boolean = false): List<RepositoryTasks> {
+        reads.incrementAndGet()
         val repositories = GitRepositoryManager.getInstance(project).repositories
         val roots = repositories.map { it.root.path }
         return repositories.mapNotNull { repository ->
@@ -114,7 +119,7 @@ object TaskScan {
      * and the TODO reader keeps every file under its root, so a TODO of a nested repository
      * would appear twice. A comment reaches exactly one store, so a comment cannot repeat.
      */
-    private fun folderTasks(
+    internal fun folderTasks(
         project: Project,
         onlyFile: VirtualFile?,
         showResolved: Boolean,
@@ -135,7 +140,7 @@ object TaskScan {
      * The tasks of each store root outside the project that has a file open in the editor.
      * An entry reads only its open files, so it runs no TODO index walk and no git search.
      */
-    private fun outsideTasks(
+    internal fun outsideTasks(
         project: Project,
         roots: List<String>,
         onlyFile: VirtualFile?,
@@ -262,7 +267,7 @@ object TaskScan {
     }
 
     /** The module of every task, so the tree can put a module row above the files. */
-    private fun withModules(project: Project, tasks: List<ReviewTask>): List<ReviewTask> {
+    internal fun withModules(project: Project, tasks: List<ReviewTask>): List<ReviewTask> {
         if (tasks.isEmpty()) return tasks
         return ReadAction.nonBlocking<List<ReviewTask>> {
             val index = ProjectFileIndex.getInstance(project)
@@ -276,7 +281,7 @@ object TaskScan {
         return index.getModuleForFile(file)?.name.orEmpty()
     }
 
-    private fun comments(
+    internal fun comments(
         project: Project,
         root: VirtualFile,
         head: String?,
@@ -290,7 +295,7 @@ object TaskScan {
         }
     }
 
-    private fun todos(
+    internal fun todos(
         project: Project,
         root: VirtualFile,
         roots: List<String>,

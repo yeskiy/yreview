@@ -180,7 +180,7 @@ private data class SendOutcome(val report: SendReport, val clipboard: String?)
 private data class CopyOutcome(val text: String, val tasks: Int, val folders: Int, val unwritten: List<String>)
 
 /** The tasks the panel read, the rows they build after the filters run, and the local changes. */
-private data class TreeContent(
+internal data class TreeContent(
     val repositories: List<RepositoryTasks>,
     val layout: TaskLayout,
     val changeList: ChangeListFacts,
@@ -225,12 +225,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         override fun isCopyVisible(dataContext: DataContext): Boolean = true
     }
 
-    private val tree = object : Tree(AsyncTreeModel(treeModel, this)), UiDataProvider {
+    internal val tree: Tree = object : Tree(AsyncTreeModel(treeModel, this)), UiDataProvider {
 
         override fun uiDataSnapshot(sink: DataSink) = sink.set(PlatformDataKeys.COPY_PROVIDER, treeCopy)
     }
 
-    private val queue = MergingUpdateQueue("y-review-tasks", RELOAD_DELAY, true, this, this, this)
+    internal val queue = MergingUpdateQueue("y-review-tasks", RELOAD_DELAY, true, this, this, this)
 
     private val settings = ReviewSettings.getInstance(project)
 
@@ -242,7 +242,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private val loading = JBLoadingPanel(BorderLayout(), this, LOADING_DELAY)
 
-    private val state = ScanState()
+    internal val state = ScanState()
 
     private val runs = ScanRuns()
 
@@ -268,7 +268,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private val toolbar: ActionToolbar
 
     @Volatile
-    private var repositories: List<RepositoryTasks> = emptyList()
+    internal var repositories: List<RepositoryTasks> = emptyList()
 
     @Volatile
     private var changeList = ChangeListFacts()
@@ -427,7 +427,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     }
 
     /** The rows of the scope, or null when the project went away before the read ended. */
-    private fun scan(onlyFile: VirtualFile?, chosen: SearchScope?): TreeContent? {
+    internal fun scan(onlyFile: VirtualFile?, chosen: SearchScope?): TreeContent? {
         if (project.isDisposed) return null
         val found = TaskScan.read(project, onlyFile, tab().showResolved)
         val changes = readChangeList().let { facts ->
@@ -494,7 +494,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun publish(content: TreeContent) =
         ApplicationManager.getApplication().invokeLater({ show(content) }, project.disposed)
 
-    private fun show(content: TreeContent) {
+    internal fun show(content: TreeContent) {
         repositories = content.repositories
         changeList = content.changeList
         structure.layout = content.layout
@@ -518,7 +518,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      * Builds the rows of the tree. The caller runs it off the user interface thread, because
      * a scope test reads the project index.
      */
-    private fun layoutOf(
+    internal fun layoutOf(
         found: List<RepositoryTasks>,
         chosen: SearchScope?,
         changes: ChangeListFacts,

@@ -1,5 +1,18 @@
 package com.yeskiy.yreview.bench
 
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.module.Module
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.vcs.ProjectLevelVcsManager
+import com.intellij.openapi.vcs.VcsDirectoryMapping
+import com.intellij.openapi.vcs.changes.ChangeListManagerImpl
+import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager
+import com.intellij.openapi.vfs.LocalFileSystem
+import com.intellij.openapi.vfs.VfsUtil
+import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.testFramework.IndexingTestUtil
+import com.intellij.testFramework.PsiTestUtil
+import com.intellij.testFramework.runInEdtAndWait
 import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.FolderNotes
 import com.yeskiy.yreview.store.FolderStore
@@ -9,6 +22,8 @@ import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NoteStore
 import com.yeskiy.yreview.store.ProcessGitRunner
 import com.yeskiy.yreview.store.Range
+import git4idea.GitVcs
+import git4idea.repo.GitRepositoryManager
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -252,6 +267,11 @@ class BenchFixture(val base: File, private val size: BenchSize = BenchSize()) {
         file.writeText("inserted $round a\ninserted $round b\ninserted $round c\n" + file.readText())
     }
 
+    /** One new comment record on [path] at the last head, as a line for `git notes append` outside the IDE. */
+    fun outsideNote(path: String): String = MemoryNotes().also {
+        CommentBook(it, author = "bench").add(NoteRefs.LOCAL, heads.last(), path, Range(startLine = 2, endLine = 2), "outside note ${System.nanoTime()}")
+    }.notes.values.single().values.single().single()
+
     companion object {
         const val SEED = 20261118
 
@@ -259,4 +279,22 @@ class BenchFixture(val base: File, private val size: BenchSize = BenchSize()) {
 
         const val TODO_LINE = 20
     }
+}
+
+fun vfs(file: File): VirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)!!
+
+/** Maps the built fixture into [project] and [module], and gives the repository root. */
+fun BenchFixture.mapInto(project: Project, module: Module): VirtualFile {
+    val folder = vfs(work)
+    VfsUtil.markDirtyAndRefresh(false, true, true, folder, vfs(outside))
+    runInEdtAndWait { PsiTestUtil.addContentRoot(module, folder) }
+    ProjectLevelVcsManager.getInstance(project).directoryMappings =
+        listOf(VcsDirectoryMapping(repo.path.replace('\\', '/'), GitVcs.NAME))
+    val root = vfs(repo)
+    checkNotNull(GitRepositoryManager.getInstance(project).getRepositoryForRoot(root)) { "git4idea found no repository" }
+    IndexingTestUtil.waitUntilIndexesAreReady(project)
+    VcsDirtyScopeManager.getInstance(project).markEverythingDirty()
+    ChangeListManagerImpl.getInstanceImpl(project).ensureUpToDate()
+    runInEdtAndWait { FileEditorManager.getInstance(project).openFile(vfs(File(outside, "O0.txt")), false) }
+    return root
 }

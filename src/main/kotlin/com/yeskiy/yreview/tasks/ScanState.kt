@@ -101,7 +101,8 @@ class ScanState {
      */
     var rows: Int = 0
 
-    private var ticket = 0L
+    internal var ticket = 0L
+        private set
 
     /** Starts a scan and gives the ticket that the result of the scan must carry. */
     fun start(indexing: Boolean): Long {

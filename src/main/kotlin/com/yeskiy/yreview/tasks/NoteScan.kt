@@ -37,6 +37,9 @@ object NoteScan {
 
     private val cache = ConcurrentHashMap<Key, Entry>()
 
+    /** Clears the cache, so the next read is cold. The bench and the tests call this. */
+    internal fun forget() = cache.clear()
+
     private val OBJECT_ID = Regex("^[0-9a-f]{40}([0-9a-f]{24})?$")
 
     /** Null when git gave no full answer, so the caller reads each note in turn. */

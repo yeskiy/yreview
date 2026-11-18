@@ -3,23 +3,16 @@ package com.yeskiy.yreview.bench
 import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
-import com.intellij.openapi.vcs.VcsDirectoryMapping
 import com.intellij.openapi.vcs.changes.ChangeListManagerImpl
-import com.intellij.openapi.vcs.changes.VcsDirtyScopeManager
 import com.intellij.openapi.vcs.impl.ProjectLevelVcsManagerImpl
-import com.intellij.openapi.vfs.LocalFileSystem
-import com.intellij.openapi.vfs.VfsUtil
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess
 import com.intellij.psi.search.PsiTodoSearchHelper
 import com.intellij.testFramework.HeavyPlatformTestCase
-import com.intellij.testFramework.IndexingTestUtil
-import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.runInEdtAndGet
 import com.intellij.testFramework.runInEdtAndWait
 import com.intellij.util.Processor
 import com.intellij.util.ui.tree.TreeUtil
-import com.intellij.util.ui.update.MergingUpdateQueue
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.DiffCache
 import com.yeskiy.yreview.store.NoteRefs
@@ -37,10 +30,9 @@ import com.yeskiy.yreview.tasks.ScanState
 import com.yeskiy.yreview.tasks.TaskKind
 import com.yeskiy.yreview.tasks.TaskScan
 import com.yeskiy.yreview.tasks.TaskScope
+import com.yeskiy.yreview.toolwindow.CommentPreviewPanel
 import com.yeskiy.yreview.toolwindow.ReviewTreePanel
 import com.intellij.openapi.application.ReadAction
-import com.intellij.ui.treeStructure.Tree
-import git4idea.GitVcs
 import git4idea.repo.GitRepositoryManager
 import com.intellij.dvcs.repo.VcsRepositoryManager
 import com.intellij.dvcs.repo.VcsRepositoryMappingListener
@@ -63,7 +55,6 @@ import com.yeskiy.yreview.tasks.SourceSignal
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.io.File
-import java.lang.reflect.Method
 import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -122,6 +113,7 @@ private data class OpenRun(
     val git: List<TracedGit>,
     val settled: Boolean,
     val signals: Map<String, Int>,
+    val scans: Int,
 )
 
 /** Counts the signals that the panel listens to, with the same filters as the panel. */
@@ -236,8 +228,6 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         out.writeText(lines.joinToString("\n", postfix = "\n"))
     }
 
-    private fun vfs(file: File): VirtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file)!!
-
     private fun measure(name: String, warmup: Int = 1, runs: Int = 5, before: () -> Unit = {}, block: () -> Unit): Spread {
         repeat(warmup) {
             before()
@@ -253,12 +243,9 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
     }
 
     private fun coldCaches() {
-        (NoteScan::class.java.getDeclaredField("cache").apply { isAccessible = true }.get(NoteScan) as MutableMap<*, *>).clear()
+        NoteScan.forget()
         DiffCache.forget()
     }
-
-    private fun scanMethod(name: String): Method =
-        TaskScan::class.java.declaredMethods.single { it.name == name }.apply { isAccessible = true }
 
     private fun gitOf(block: () -> Unit): String {
         val mark = trace?.mark() ?: return "no GIT_TRACE2_EVENT"
@@ -274,18 +261,7 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         say("fixture built in %.1f s".format(millis(System.nanoTime() - start) / 1000))
         ReviewSettings.getInstance(project).channel = false
         ReviewService.getInstance(project).homeOverride = fixture.home.path
-        val work = vfs(fixture.work)
-        VfsUtil.markDirtyAndRefresh(false, true, true, work, vfs(fixture.outside))
-        runInEdtAndWait { PsiTestUtil.addContentRoot(module, work) }
-        ProjectLevelVcsManager.getInstance(project).directoryMappings =
-            listOf(VcsDirectoryMapping(fixture.repo.path.replace('\\', '/'), GitVcs.NAME))
-        val root = vfs(fixture.repo)
-        assertNotNull("git4idea found no repository", GitRepositoryManager.getInstance(project).getRepositoryForRoot(root))
-        IndexingTestUtil.waitUntilIndexesAreReady(project)
-        VcsDirtyScopeManager.getInstance(project).markEverythingDirty()
-        ChangeListManagerImpl.getInstanceImpl(project).ensureUpToDate()
-        runInEdtAndWait { FileEditorManager.getInstance(project).openFile(vfs(File(fixture.outside, "O0.txt")), false) }
-        return root
+        return fixture.mapInto(project, module)
     }
 
     // --- The benchmark ---
@@ -305,6 +281,7 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         panelOpen(preview = true)
         commentChange(root, preview = false)
         commentChange(root, preview = true)
+        newCases(root)
     }
 
     private fun gitSpawn(root: VirtualFile) {
@@ -345,8 +322,7 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
 
         val roots = GitRepositoryManager.getInstance(project).repositories.map { it.root.path }
         val commit = head.orEmpty()
-        val todos = scanMethod("todos")
-        measure("TODO search (todos, processFilesWithTodoItems)") { todos.invoke(TaskScan, project, root, roots, commit, null) }
+        measure("TODO search (todos, processFilesWithTodoItems)") { TaskScan.todos(project, root, roots, commit, null) }
         measure("TODO file list only (processFilesWithTodoItems, no item read)") {
             ReadAction.nonBlocking<Int> {
                 var count = 0
@@ -355,33 +331,27 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
             }.executeSynchronously()
         }
         measure("comments (placedTasks with NoteScan, ideGitRunner)") {
-            scanMethod("comments").invoke(TaskScan, project, root, head, null, false)
+            TaskScan.comments(project, root, head, null, false)
         }
         val all = found.flatMap { it.tasks }
-        measure("withModules over ${all.size} tasks") { scanMethod("withModules").invoke(TaskScan, project, all) }
-        measure("folderTasks (store roots, folder notes)") { scanMethod("folderTasks").invoke(TaskScan, project, null, false) }
+        measure("withModules over ${all.size} tasks") { TaskScan.withModules(project, all) }
+        measure("folderTasks (store roots, folder notes)") { TaskScan.folderTasks(project, null, false) }
         measure("ReviewService.storeRoots") { ReviewService.getInstance(project).storeRoots() }
-        measure("outsideTasks (1 open outside file)") { scanMethod("outsideTasks").invoke(TaskScan, project, roots, null, false) }
-        say("  git per outsideTasks: ${gitOf { scanMethod("outsideTasks").invoke(TaskScan, project, roots, null, false) }}")
+        measure("outsideTasks (1 open outside file)") { TaskScan.outsideTasks(project, roots, null, false) }
+        say("  git per outsideTasks: ${gitOf { TaskScan.outsideTasks(project, roots, null, false) }}")
         measure("ChangeListScan.read") { ChangeListScan.read(project) }
 
         val panel = runInEdtAndGet { ReviewTreePanel(project, TaskScope.PROJECT).also { Disposer.register(testRootDisposable, it) } }
-        val layoutOf = panel.javaClass.declaredMethods.single { it.name == "layoutOf" }.apply { isAccessible = true }
-        measure("layoutOf (filter, group, tree layout) over ${all.size} tasks") { layoutOf.invoke(panel, found, null, ChangeListFacts()) }
-        val scan = panel.javaClass.declaredMethods.single { it.name == "scan" }.apply { isAccessible = true }
-        measure("panel scan (TaskScan.read, change list, layout)") { scan.invoke(panel, null, null) }
-        val content = scan.invoke(panel, null, null)
-        val show = panel.javaClass.declaredMethods.single { it.name == "show" }.apply { isAccessible = true }
-        measure("show on the EDT (model swap, toolbar, preview)") { runInEdtAndWait { show.invoke(panel, content) } }
+        measure("layoutOf (filter, group, tree layout) over ${all.size} tasks") { panel.layoutOf(found, null, ChangeListFacts()) }
+        measure("panel scan (TaskScan.read, change list, layout)") { panel.scan(null, null) }
+        val content = panel.scan(null, null)!!
+        measure("show on the EDT (model swap, toolbar, preview)") { runInEdtAndWait { panel.show(content) } }
         rendering(panel)
         runInEdtAndWait { Disposer.dispose(panel) }
     }
 
-    private fun treeOf(panel: ReviewTreePanel): Tree =
-        panel.javaClass.getDeclaredField("tree").apply { isAccessible = true }.get(panel) as Tree
-
     private fun rendering(panel: ReviewTreePanel) {
-        val tree = treeOf(panel)
+        val tree = panel.tree
         val expand = System.nanoTime()
         runInEdtAndGet { TreeUtil.promiseExpandAll(tree) }.blockingGet(120_000)
         say("expand every row (AsyncTreeModel build): %.1f ms".format(millis(System.nanoTime() - expand)))
@@ -400,19 +370,9 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
 
     // --- The open of the tool window ---
 
-    private fun stateOf(panel: ReviewTreePanel): ScanState =
-        panel.javaClass.getDeclaredField("state").apply { isAccessible = true }.get(panel) as ScanState
+    private fun tasksOf(panel: ReviewTreePanel): Int = panel.repositories.sumOf { it.tasks.size }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun tasksOf(panel: ReviewTreePanel): Int =
-        (panel.javaClass.getDeclaredField("repositories").apply { isAccessible = true }.get(panel) as List<RepositoryTasks>).sumOf { it.tasks.size }
-
-    private fun ticketOf(state: ScanState): Long =
-        ScanState::class.java.getDeclaredField("ticket").apply { isAccessible = true }.getLong(state)
-
-    private fun activate(panel: ReviewTreePanel) = runInEdtAndWait {
-        (panel.javaClass.getDeclaredField("queue").apply { isAccessible = true }.get(panel) as MergingUpdateQueue).showNotify()
-    }
+    private fun activate(panel: ReviewTreePanel) = runInEdtAndWait { panel.queue.showNotify() }
 
     private fun waitFor(timeoutMillis: Long = 120_000, test: () -> Boolean): Long {
         val start = System.nanoTime()
@@ -426,12 +386,12 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
     /** Waits until the ticket stays the same for [quietMillis], and gives false after [maxMillis] without quiet. */
     private fun quiet(state: ScanState, quietMillis: Long = 2000, maxMillis: Long = 10_000): Boolean {
         val start = System.nanoTime()
-        var last = ticketOf(state)
+        var last = state.ticket
         var since = System.nanoTime()
         while (System.nanoTime() - since < quietMillis * 1_000_000 || state.phase != ScanPhase.READY) {
             if (System.nanoTime() - start > maxMillis * 1_000_000) return false
             Thread.sleep(20)
-            val now = ticketOf(state)
+            val now = state.ticket
             if (now != last) {
                 last = now
                 since = System.nanoTime()
@@ -440,31 +400,46 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         return true
     }
 
-    /** The factory makes one panel per scope, and the platform shows the selected tab only. */
-    private fun open(shown: TaskScope): OpenRun {
+    private fun panels(): Map<TaskScope, ReviewTreePanel> = runInEdtAndGet { TaskScope.entries.associateWith { ReviewTreePanel(project, it) } }
+
+    /**
+     * The factory makes one panel per scope, and the platform shows the selected tab only.
+     * With [switchTo], the [shown] tab gets quiet first, and the times start at the activation of [switchTo].
+     */
+    private fun open(shown: TaskScope, switchTo: TaskScope? = null): OpenRun {
+        val ready = switchTo?.let {
+            panels().also { early ->
+                val first = early.getValue(shown)
+                activate(first)
+                waitFor { first.state.phase == ScanPhase.READY && first.state.rows > 0 }
+                if (!quiet(first.state)) say("  the $shown tab did not settle in 10 s before the switch")
+            }
+        }
         val mark = trace?.mark()
+        val scans = TaskScan.reads.get()
         val probe = EdtProbe().apply { start() }
         val listening = Disposer.newDisposable()
         val signals = Signals(project, listening)
         val start = System.nanoTime()
-        val panels = runInEdtAndGet { TaskScope.entries.associateWith { ReviewTreePanel(project, it) } }
+        val panels = ready ?: panels()
         val built = System.nanoTime()
-        val panel = panels.getValue(shown)
+        val panel = panels.getValue(switchTo ?: shown)
         activate(panel)
-        val state = stateOf(panel)
-        val tree = treeOf(panel)
+        val state = panel.state
+        val tree = panel.tree
         val showAt = waitFor { state.phase == ScanPhase.READY && state.rows > 0 }
         val rowAt = waitFor { runInEdtAndGet { tree.rowCount } > 0 }
         val settled = quiet(state)
         val (maxLag, blocked) = probe.finish()
         val git = mark?.let { trace!!.since(it) }.orEmpty()
-        val reloads = ticketOf(state)
+        val reloads = state.ticket
+        val reads = TaskScan.reads.get() - scans
         runInEdtAndWait {
             panels.values.forEach { Disposer.dispose(it) }
             Disposer.dispose(listening)
         }
         return OpenRun(
-            millis(built - start), millis(showAt - start), millis(rowAt - start), reloads, maxLag, blocked, git, settled, signals.snapshot(),
+            millis(built - start), millis(showAt - start), millis(rowAt - start), reloads, maxLag, blocked, git, settled, signals.snapshot(), reads,
         )
     }
 
@@ -503,7 +478,7 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         say("--- reload after one comment change, preview ${if (preview) "on" else "off"} ---")
         val panel = runInEdtAndGet { ReviewTreePanel(project, TaskScope.PROJECT).also { Disposer.register(testRootDisposable, it) } }
         activate(panel)
-        val state = stateOf(panel)
+        val state = panel.state
         waitFor { state.phase == ScanPhase.READY && state.rows > 0 }
         if (!quiet(state)) say("  the panel did not settle in 10 s before the comment changes")
         val service = ReviewService.getInstance(project)
@@ -514,18 +489,18 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         val tickets = mutableListOf<Long>()
         val gits = mutableListOf<String>()
         (0 until 6).forEach { n ->
-            val before = ticketOf(state)
+            val before = state.ticket
             val count = tasksOf(panel)
             val mark = trace?.mark()
             val start = System.nanoTime()
             service.addComment(root, NoteRefs.LOCAL, head, path, Range(startLine = 3 + n, endLine = 3 + n), "changed comment $n")
             val written = System.nanoTime()
-            val settled = waitFor { ticketOf(state) > before && state.phase == ScanPhase.READY && tasksOf(panel) > count }
+            val settled = waitFor { state.ticket > before && state.phase == ScanPhase.READY && tasksOf(panel) > count }
             if (!quiet(state)) say("  comment change $n did not settle in 10 s")
             if (n > 0) {
                 writes += millis(written - start)
                 reloads += millis(settled - written)
-                tickets += ticketOf(state) - before
+                tickets += state.ticket - before
                 mark?.let { gits += GitTrace.summary(trace!!.since(it)) }
             }
         }
@@ -537,5 +512,34 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
             service.addComment(root, NoteRefs.LOCAL, head, path, Range(startLine = 10, endLine = 10), "direct ${System.nanoTime()}")
         }) { TaskScan.read(project, null) }
         runInEdtAndWait { Disposer.dispose(panel) }
+    }
+
+    // --- Cases for the load plan ---
+
+    private fun newCases(root: VirtualFile) {
+        say("--- cases for the load plan ---")
+        val head = GitRepositoryManager.getInstance(project).getRepositoryForRoot(root)!!.currentRevision!!
+        val service = ReviewService.getInstance(project)
+        say("addComment git: ${gitOf {
+            service.addComment(root, NoteRefs.LOCAL, head, fixture.sourceFiles[2], Range(startLine = 2, endLine = 2), "count ${System.nanoTime()}")
+        }}")
+        val task = TaskScan.read(project, null).flatMap { it.tasks }.first { it.kind == TaskKind.COMMENT && !it.outside }
+        measure("preview record (commentOf)") { CommentPreviewPanel.commentOf(project, task) }
+        say("  git per preview record: ${gitOf { CommentPreviewPanel.commentOf(project, task) }}")
+        val raw = ProcessGitRunner(File(root.path), checkCanceled = {})
+        // A file keeps the quotes of the record, which a Windows command line can lose.
+        val note = File(base, "outside-note.txt")
+        val outsideWrite = {
+            note.writeText(fixture.outsideNote(fixture.sourceFiles[3]) + "\n")
+            raw.run("notes", "--ref", NoteRefs.LOCAL, "append", "-F", note.absolutePath, head).let { check(it.ok) { it.stderr } }
+        }
+        measure("TaskScan.read after an outside note write", before = outsideWrite) { TaskScan.read(project, null) }
+        say("  git per scan after an outside note write: ${gitOf {
+            outsideWrite()
+            TaskScan.read(project, null)
+        }}")
+        val switches = (1..5).map { open(TaskScope.PROJECT, switchTo = TaskScope.CHANGE_LIST) }
+        report("tab switch, Project then Changelist", switches)
+        say("tab switch, Project then Changelist, TaskScan.read runs per switch: ${switches.map { it.scans }}")
     }
 }
