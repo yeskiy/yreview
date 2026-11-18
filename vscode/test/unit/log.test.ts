@@ -142,6 +142,7 @@ describe('records in the log', () => {
         sessionLocation: 'panel',
         agent: 'claude',
         agentCommand: 'default',
+        outsideRoots: 0,
       }
       return reportText(facts, own.recent(), places)
     }

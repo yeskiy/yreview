@@ -7,8 +7,8 @@ export interface TaskGroup {
   readonly name: string
 }
 
-/** A workspace folder row or a directory row. */
-export type FolderKind = 'folder' | 'directory'
+/** A workspace folder row, a directory row, or the row of a root outside the workspace. */
+export type FolderKind = 'folder' | 'directory' | 'outside'
 
 export interface TaskLayout {
   readonly folders: readonly TaskFolder[]
@@ -124,6 +124,13 @@ const directories = (groups: readonly TaskGroup[], grouping: TaskGrouping): Task
   if (!grouping.byDirectory) return { folders: [], files: sortedGroups(groups) }
   return grouping.flatten ? flat(groups) : nest(groups, 0)
 }
+
+/** The branch of one root outside the workspace. Its rows nest by directory as the toggles say. */
+export const outsideFolder = (
+  label: string,
+  groups: readonly TaskGroup[],
+  grouping: TaskGrouping,
+): TaskFolder => folderRow(label, 'outside', directories(groups, grouping))
 
 export const layoutTasks = (groups: readonly TaskGroup[], grouping: TaskGrouping): TaskLayout => {
   if (!grouping.byFolder) return directories(groups, grouping)

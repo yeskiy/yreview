@@ -7,6 +7,7 @@ import type { Log } from '../log'
 import type { ReviewService } from '../store/reviewService'
 import type { ReviewTask } from '../tasks/reviewTask'
 import { TabStates } from '../tasks/tabState'
+import { chosenOf } from '../tasks/taskChoice'
 import { type Row, VIEW_KEYS, type ViewKey, viewIdOf } from '../tasks/viewRows'
 import { TaskModel } from './taskModel'
 import { TaskView } from './taskView'
@@ -103,8 +104,9 @@ export const createTaskViews = (
     },
     chosenTasks: () => {
       const view = [...views.values()].find((each) => each.view.visible) ?? views.get('project')
-      const checked = view === undefined ? [] : view.checks.checkedOf(view.rows().tasks)
-      return checked.length > 0 ? checked : (view?.selectedTasks() ?? [])
+      return view === undefined
+        ? []
+        : chosenOf(view.checks.checkedOf(view.rows().tasks), view.selectedTasks())
     },
     view: (key) => {
       const found = views.get(key)

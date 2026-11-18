@@ -100,7 +100,15 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
   const sessions = registerSessions(context, log, link.prepare)
   context.subscriptions.push(registerSettingsPage())
   const git = await findGitPath()
-  context.subscriptions.push(...registerDiagnostics(context, { log, ring, places, git }))
+  context.subscriptions.push(
+    ...registerDiagnostics(context, {
+      log,
+      ring,
+      places,
+      git,
+      outsideRoots: () => held.tasks?.model.outsideRoots() ?? 0,
+    }),
+  )
   const problem = await checkGit(git)
   if (problem !== undefined) {
     log.error(problem)

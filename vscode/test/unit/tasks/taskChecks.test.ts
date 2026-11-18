@@ -19,6 +19,17 @@ describe('task checks', () => {
     assert.equal(checks.state([first, second]), 'none')
   })
 
+  it('never checks a task outside the workspace', () => {
+    const checks = new TaskChecks()
+    const outside = { ...item('c'), outside: true }
+
+    checks.set([first, outside], true)
+
+    assert.equal(checks.isChecked(outside), false)
+    assert.equal(checks.isChecked(first), true)
+    assert.equal(checks.size, 1)
+  })
+
   it('checks one task', () => {
     const checks = new TaskChecks()
 

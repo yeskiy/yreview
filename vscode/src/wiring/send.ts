@@ -20,10 +20,13 @@ import { takesSend } from '../session/sessionReach'
 import type { SessionRegistry } from '../session/sessionRegistry'
 import { readSettings } from '../settings'
 import type { ReviewTask } from '../tasks/reviewTask'
+import { agentTasks } from '../tasks/taskChoice'
 import type { BridgeWiring } from './bridge'
 import { registerMcpAdd, shownText } from './mcpAdd'
 
 export const NO_TASK = 'Check or select the review tasks to send first.'
+export const OUTSIDE_TASKS =
+  'The agent works in the workspace folder, so it does not take these tasks.'
 export const PICK_PLACEHOLDER = 'Send the review tasks to'
 export const SEND_FAILED = 'The send of the review tasks failed.'
 
@@ -195,9 +198,10 @@ const sendAll = async (
   }, Promise.resolve([]))
 
 export const sendTasks = async (deps: DeliveryDeps, given?: unknown): Promise<void> => {
-  const tasks = isTaskList(given) ? given : deps.chosenTasks()
+  const chosen = isTaskList(given) ? given : deps.chosenTasks()
+  const tasks = agentTasks(chosen)
   if (tasks.length === 0) {
-    vscode.window.showWarningMessage(NO_TASK)
+    vscode.window.showWarningMessage(chosen.length === 0 ? NO_TASK : OUTSIDE_TASKS)
     return
   }
   // An agent reads only the short handle, as in the copy of the tasks.

@@ -425,6 +425,11 @@ export class ReviewService {
       : { store: 'folder', root: folder, head: WORKTREE, path: relative }
   }
 
+  /** The real home folder with "/", or undefined when it is not known. */
+  home(): string | undefined {
+    return this.host.home()
+  }
+
   /** Every root that this service anchored, for the log redaction. */
   knownRoots(): readonly string[] {
     return [...this.roots]

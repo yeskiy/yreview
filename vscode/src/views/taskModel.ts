@@ -17,6 +17,7 @@ import {
   newest,
 } from '../tasks/scanRuns'
 import {
+  type OutsideRoot,
   type RepositoryTasks,
   SCAN_DELAY_MS,
   type ScanInput,
@@ -34,6 +35,7 @@ import {
   watchRepositories,
   workspaceFolders,
 } from './repositories'
+import { openFileUris, outsideFiles, outsideKey, outsideRoots, textOfDocuments } from './tabRoots'
 
 export interface ModelSnapshot {
   readonly repositories: readonly RepositoryTasks[]
@@ -47,6 +49,9 @@ interface Base {
   readonly roots: readonly string[]
   readonly folders: readonly string[]
   readonly patterns: readonly CompiledPattern[]
+  /** The changed files of the inside roots. The changes add the open changed files of outside roots. */
+  readonly insideChanges: ReadonlySet<string>
+  readonly outside: readonly OutsideRoot[]
 }
 
 const EMPTY: Base = {
@@ -55,6 +60,8 @@ const EMPTY: Base = {
   roots: [],
   folders: [],
   patterns: [],
+  insideChanges: new Set(),
+  outside: [],
 }
 const EDIT_DELAY_MS = 300
 /** The name prefix of a waiting overlay update. A refresh runs these first. */
@@ -72,6 +79,35 @@ const changesOf = async (
       )
     ).flatMap((files) => files ?? []),
   )
+
+/** The changed files of each outside git root, kept to the open files of that root. */
+const outsideChangesOf = async (
+  outside: readonly OutsideRoot[],
+  gitPath: string,
+  signal?: AbortSignal,
+): Promise<readonly string[]> =>
+  (
+    await Promise.all(
+      outside
+        .filter((entry) => entry.store === 'git')
+        .map(async ({ root, files }) => {
+          const open = new Set(files.map((file) => `${root}/${file.path}`))
+          return (
+            (await changeFiles(new ProcessGitRunner(root, gitPath), root, signal)) ?? []
+          ).filter((file) => open.has(file))
+        }),
+    )
+  ).flat()
+
+const changeFactsOf = (
+  roots: readonly string[],
+  inside: ReadonlySet<string>,
+  outside: readonly OutsideRoot[],
+  outsideChanges: readonly string[],
+): ChangeFacts => ({
+  gitFound: roots.length > 0 || outside.some((entry) => entry.store === 'git'),
+  files: new Set([...inside, ...outsideChanges]),
+})
 
 const sameSet = (a: ReadonlySet<string>, b: ReadonlySet<string>): boolean =>
   a.size === b.size && [...a].every((value) => b.has(value))
@@ -110,6 +146,9 @@ export class TaskModel implements vscode.Disposable {
 
   private api: GitApi | undefined
 
+  /** The outside open files of the last scan, so a tab event that changes nothing starts no scan. */
+  private outsideSeen = ''
+
   constructor(
     private readonly service: ReviewService,
     private readonly gitPath: string,
@@ -139,6 +178,9 @@ export class TaskModel implements vscode.Disposable {
         ),
       ),
       vscode.workspace.onDidCloseTextDocument((document) => this.overlay(document)),
+      vscode.window.tabGroups.onDidChangeTabs(() =>
+        this.delayed.later('tabs', () => this.tabsChanged(), 0),
+      ),
       vscode.workspace.onDidChangeWorkspaceFolders(() => this.schedule.request('full')),
       vscode.workspace.onDidChangeConfiguration((event) => {
         if (event.affectsConfiguration('yreview.todoPatterns')) this.schedule.request('full')
@@ -162,6 +204,11 @@ export class TaskModel implements vscode.Disposable {
       this.first.settle()
       throw error
     }
+  }
+
+  /** The count of open tab roots outside the workspace in the last scan. */
+  outsideRoots(): number {
+    return this.base.outside.length
   }
 
   snapshot(): ModelSnapshot {
@@ -248,24 +295,38 @@ export class TaskModel implements vscode.Disposable {
     this.warnRefused(compiled.refused)
     const folders = await workspaceFolders()
     const roots = await repositoryRoots(this.api, this.gitPath, folders, signal)
+    const input = await this.input(roots, folders, compiled.patterns, signal)
+    const insideChanges = await changesOf(roots, this.gitPath, signal)
     return {
-      repositories: await scanProject(await this.input(roots, folders, compiled.patterns, signal)),
-      changes: { gitFound: roots.length > 0, files: await changesOf(roots, this.gitPath, signal) },
+      repositories: await scanProject(input),
+      changes: changeFactsOf(
+        roots,
+        insideChanges,
+        input.outside,
+        await outsideChangesOf(input.outside, this.gitPath, signal),
+      ),
       roots,
       folders,
       patterns: compiled.patterns,
+      insideChanges,
+      outside: input.outside,
     }
   }
 
   /** The comments of the last scan read again, with its roots, TODO items and changed files. */
   private async readNotes(signal: AbortSignal): Promise<Base> {
     const { base } = this
+    const input = await this.input(base.roots, base.folders, base.patterns, signal)
     return {
       ...base,
-      repositories: await rescanNotes(
-        await this.input(base.roots, base.folders, base.patterns, signal),
-        base.repositories,
+      repositories: await rescanNotes(input, base.repositories),
+      changes: changeFactsOf(
+        base.roots,
+        base.insideChanges,
+        input.outside,
+        await outsideChangesOf(input.outside, this.gitPath, signal),
       ),
+      outside: input.outside,
     }
   }
 
@@ -274,7 +335,10 @@ export class TaskModel implements vscode.Disposable {
     folders: readonly string[],
     patterns: readonly CompiledPattern[],
     signal: AbortSignal,
-  ): Promise<ScanInput> {
+  ): Promise<ScanInput & { readonly outside: readonly OutsideRoot[] }> {
+    const inside = [...roots, ...folders]
+    const uris = openFileUris(vscode.window.tabGroups.all)
+    this.outsideSeen = outsideKey(await outsideFiles(uris, inside, (uri) => this.anchorOf(uri)))
     return {
       gitPath: this.gitPath,
       roots,
@@ -283,15 +347,40 @@ export class TaskModel implements vscode.Disposable {
       unshared: (id) => this.service.unshared(id),
       signal,
       folderStores: await this.service.folderStores(true),
+      outside: await outsideRoots(
+        uris,
+        inside,
+        (uri) => this.anchorOf(uri),
+        textOfDocuments(() => vscode.workspace.textDocuments),
+        this.service.home(),
+      ),
     }
   }
 
   /** The git extension reads the status often, so this reads the changed files only. */
   private async refreshChanges(): Promise<void> {
-    const files = await inBackground(() => changesOf(this.base.roots, this.gitPath))
-    if (sameSet(files, this.base.changes.files)) return
-    this.base = { ...this.base, changes: { gitFound: this.base.roots.length > 0, files } }
+    const [insideChanges, outsideChanges] = await inBackground(() =>
+      Promise.all([
+        changesOf(this.base.roots, this.gitPath),
+        outsideChangesOf(this.base.outside, this.gitPath),
+      ]),
+    )
+    const changes = changeFactsOf(this.base.roots, insideChanges, this.base.outside, outsideChanges)
+    if (sameSet(changes.files, this.base.changes.files)) return
+    this.base = { ...this.base, changes, insideChanges }
     this.emitter.fire()
+  }
+
+  /** A notes scan reads the outside roots again when the set of outside open files changed. */
+  private async tabsChanged(): Promise<void> {
+    const seen = outsideKey(
+      await outsideFiles(
+        openFileUris(vscode.window.tabGroups.all),
+        [...this.base.roots, ...this.base.folders],
+        (uri) => this.anchorOf(uri),
+      ),
+    )
+    if (seen !== this.outsideSeen) this.schedule.request('notes')
   }
 
   private async overlay(document: vscode.TextDocument): Promise<void> {

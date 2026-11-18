@@ -146,6 +146,82 @@ describe('view rows', () => {
     )
   })
 
+  describe('a root outside the workspace', () => {
+    const loose = (path: string): ReviewTask =>
+      task({
+        id: `${path}-id`,
+        path,
+        rootPath: 'C:/tmp/notes',
+        filePath: `C:/tmp/notes/${path}`,
+        revision: 'worktree',
+        outside: true,
+      })
+    const outsideEntry: RepositoryTasks = {
+      root: 'C:/tmp/notes',
+      commit: 'worktree',
+      outside: 'notes (C:/tmp/notes)',
+      tasks: [loose('a/one.md'), loose('two.md')],
+    }
+    const toggles: readonly Partial<TabState>[] = [
+      {},
+      { byFolder: true },
+      { byDirectory: true },
+      { byDirectory: true, flatten: true },
+      { byFolder: true, byDirectory: true },
+      { byFolder: true, byDirectory: true, flatten: true },
+    ]
+    const withOutside = (tab: Partial<TabState>) =>
+      derive([], tab, {
+        repositories: [repo([task(), other]), outsideEntry],
+        folderOf: (each) => (each.outside === true ? '' : 'repo'),
+      })
+
+    toggles.forEach((tab) =>
+      it(`adds one outside branch last for ${JSON.stringify(tab)}`, () => {
+        const { layout, tasks } = withOutside(tab)
+        const last = layout.folders.at(-1)
+        assert.equal(last?.kind, 'outside')
+        assert.equal(last?.name, 'notes (C:/tmp/notes)')
+        assert.equal(layout.folders.filter((folder) => folder.kind === 'outside').length, 1)
+        assert.equal(tasks.length, 4)
+        assert.deepEqual(
+          layout.files.flatMap((group) => group.tasks).filter((each) => each.outside === true),
+          [],
+        )
+      }),
+    )
+
+    it('keeps the plain layout of the inside part', () => {
+      const { layout } = withOutside({})
+      assert.deepEqual(
+        layout.files.map((group) => group.name),
+        ['src/Main.kt', 'src/Other.kt'],
+      )
+    })
+
+    it('lists the paths of the outside branch from its root', () => {
+      const branch = withOutside({}).layout.folders.at(-1)
+      assert.deepEqual(
+        branch?.files.map((group) => group.name),
+        ['a/one.md', 'two.md'],
+      )
+    })
+
+    it('an outside branch with no task left after the filters shows no row', () => {
+      const { layout } = withOutside({ kindFilter: 'todos' })
+      assert.deepEqual(
+        layout.folders.filter((folder) => folder.kind === 'outside'),
+        [],
+      )
+    })
+
+    it('the row of the outside branch has its own identifier', () => {
+      const rows = rowsOfLayout('project', withOutside({ byFolder: true }).layout)
+      assert.equal(new Set(rows.map((row) => row.id)).size, rows.length)
+      assert.ok(rows.at(-1)?.id.startsWith('project/o:'))
+    })
+  })
+
   it('a path key on Windows ignores the case and the slash', () => {
     assert.equal(pathKey('C:\\A\\b.ts', 'win32'), 'c:/a/b.ts')
     assert.equal(pathKey('/A/b.ts', 'linux'), '/A/b.ts')

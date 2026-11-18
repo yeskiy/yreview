@@ -35,6 +35,8 @@ export interface ReviewTask {
   readonly resolved: boolean
   /** The place of an open comment in the working tree. A TODO and a resolved comment have none. */
   readonly carry?: TaskCarry
+  /** True for a task of an open file outside the workspace. */
+  readonly outside?: boolean
 }
 
 /** A repository with no commit gives WORKTREE, so the tasks name the working tree. */

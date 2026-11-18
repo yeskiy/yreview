@@ -17,11 +17,14 @@ export class TaskChecks {
     return this.checked.has(checkKey(task))
   }
 
+  /** A task outside the workspace has no check box, so it never gets checked. */
   set(tasks: readonly ReviewTask[], value: boolean): void {
-    tasks.forEach((task) => {
-      if (value) this.checked.add(checkKey(task))
-      else this.checked.delete(checkKey(task))
-    })
+    tasks
+      .filter((task) => task.outside !== true)
+      .forEach((task) => {
+        if (value) this.checked.add(checkKey(task))
+        else this.checked.delete(checkKey(task))
+      })
   }
 
   clear(): void {

@@ -5,6 +5,7 @@ import { assignTodoIds, repositoryOf } from '../core/taskIds'
 import { type NoteStore, NotesGateway } from '../git/notes'
 import { type GitRunner, ProcessGitRunner, isOk, ran } from '../git/runner'
 import { CommentBook } from '../store/commentBook'
+import { FolderNotes } from '../store/folderNotes'
 import { commentTask } from './commentTask'
 import { noAuthor, readNotes } from './noteScan'
 import { placedComments } from './placedComments'
@@ -18,6 +19,18 @@ export interface RepositoryTasks {
   readonly root: string
   readonly commit: string
   readonly tasks: readonly ReviewTask[]
+  /** The label of a root outside the workspace. Only its open files give tasks. */
+  readonly outside?: string
+}
+
+/** A root of open tabs outside the workspace, with the open files of that root. */
+export interface OutsideRoot {
+  readonly root: string
+  readonly store: 'git' | 'folder'
+  /** HEAD, or WORKTREE for a folder store. */
+  readonly commit: string
+  readonly label: string
+  readonly files: readonly { readonly path: string; readonly text: string }[]
 }
 
 export interface ScanInput {
@@ -28,7 +41,13 @@ export interface ScanInput {
   readonly unshared: (id: string) => boolean
   readonly signal?: AbortSignal
   readonly folderStores?: readonly { readonly root: string; readonly store: NoteStore }[]
+  readonly outside?: readonly OutsideRoot[]
+  /** The git runner of one root. Tests give a counting runner. */
+  readonly runnerOf?: (root: string) => GitRunner
 }
+
+const runnerOf = (input: ScanInput, root: string): GitRunner =>
+  input.runnerOf?.(root) ?? new ProcessGitRunner(root, input.gitPath)
 
 export type ScanKind = 'notes' | 'full'
 
@@ -94,7 +113,7 @@ const todosOfFile = (
   )
 
 export const scanRepository = async (input: ScanInput, root: string): Promise<RepositoryTasks> => {
-  const git = new ProcessGitRunner(root, input.gitPath)
+  const git = runnerOf(input, root)
   const head = await git.run(['rev-parse', '-q', '--verify', 'HEAD^{commit}'], input.signal)
   if (!ran(head)) throw new Error(head.stderr.trim() || 'Git did not answer.')
   const commit = revisionOf(isOk(head) ? kotlinTrim(head.stdout) : undefined)
@@ -129,14 +148,41 @@ const folderTasks = async (input: ScanInput): Promise<readonly RepositoryTasks[]
       (input.folderStores ?? []).map(async ({ root, store }) => ({
         root,
         commit: WORKTREE,
-        tasks: await commentTasksOf(
-          input,
-          new ProcessGitRunner(root, input.gitPath),
-          root,
-          WORKTREE,
-          store,
-        ),
+        tasks: await commentTasksOf(input, runnerOf(input, root), root, WORKTREE, store),
       })),
+    )
+  ).filter((entry) => entry.tasks.length > 0)
+
+/** The comments and the TODO items of the open files of each outside root. No git grep runs there. */
+const outsideTasks = async (input: ScanInput): Promise<readonly RepositoryTasks[]> =>
+  (
+    await Promise.all(
+      (input.outside ?? []).map(async ({ root, store, commit, label, files }) => {
+        const git = runnerOf(input, root)
+        const open = new Set(files.map((file) => file.path))
+        const repository = repositoryOf(input.basePathOf(root), root)
+        return {
+          root,
+          commit,
+          outside: label,
+          tasks: [
+            ...(
+              await commentTasksOf(
+                input,
+                git,
+                root,
+                commit,
+                store === 'git'
+                  ? await notesOfRoot(git, root, input.signal)
+                  : new FolderNotes(root),
+              )
+            ).filter((task) => open.has(task.path)),
+            ...files.flatMap(({ path, text }) =>
+              todosOfFile(repository, root, path, commit, todosOfText(text, input.patterns)),
+            ),
+          ].map((task) => ({ ...task, outside: true })),
+        }
+      }),
     )
   ).filter((entry) => entry.tasks.length > 0)
 
@@ -154,6 +200,7 @@ const inTurn = (
 export const scanProject = async (input: ScanInput): Promise<readonly RepositoryTasks[]> => [
   ...(await inTurn(input, (root) => scanRepository(input, root))),
   ...(await folderTasks(input)),
+  ...(await outsideTasks(input)),
 ]
 
 /** Reads the comments again and keeps the TODO items. A ref tip that did not move starts no git grep. */
@@ -166,7 +213,7 @@ export const rescanNotes = async (
     ...(await inTurn(input, async (root) => {
       const old = known.get(root)
       if (old === undefined) return scanRepository(input, root)
-      const git = new ProcessGitRunner(root, input.gitPath)
+      const git = runnerOf(input, root)
       return {
         ...old,
         tasks: [
@@ -182,6 +229,7 @@ export const rescanNotes = async (
       }
     })),
     ...(await folderTasks(input)),
+    ...(await outsideTasks(input)),
   ]
 }
 
@@ -223,7 +271,8 @@ export const withOverlays = (
 ): readonly RepositoryTasks[] =>
   found.map((repo) => {
     // A folder store entry has no TODO items, the same as in a full scan.
-    if (!roots.includes(repo.root)) return repo
+    // An outside entry keeps the text of the open document that the scan read.
+    if (repo.outside !== undefined || !roots.includes(repo.root)) return repo
     const mine = [...overlays].filter(
       ([filePath]) =>
         ownsFile(repo.root, filePath, roots) &&

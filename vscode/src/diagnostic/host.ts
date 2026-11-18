@@ -34,6 +34,8 @@ export interface DiagnosticsDeps {
   readonly ring: SessionLog
   readonly places: () => Places
   readonly git: string
+  /** The count of open tab roots outside the workspace. */
+  readonly outsideRoots: () => number
 }
 
 const gitVersion = async (git: string): Promise<string> =>
@@ -58,7 +60,7 @@ export const machineFacts = async (
   mcpProvider: typeof lm?.registerMcpServerDefinitionProvider === 'function',
 })
 
-const reportFacts = (machine: MachineFacts): ReportFacts => {
+const reportFacts = (machine: MachineFacts, outsideRoots: number): ReportFacts => {
   const config = vscode.workspace.getConfiguration('yreview')
   const agent = config.get<string>('agent') ?? ''
   return {
@@ -68,6 +70,7 @@ const reportFacts = (machine: MachineFacts): ReportFacts => {
     sessionLocation: config.get<string>('sessionLocation', 'panel'),
     agent: agent === '' ? 'not chosen' : agent,
     agentCommand: commandKind(parseAgent(agent), commandsOf(config.get('agentCommands'))),
+    outsideRoots,
   }
 }
 
@@ -99,7 +102,11 @@ export const registerDiagnostics = (
       'yreview.copyDiagnosticReport',
       // The command also gives the text back, so a test can read it without the clipboard.
       guard(deps.log, 'Copy Diagnostic Report', async () => {
-        const text = reportText(reportFacts(await facts), deps.ring.recent(), deps.places())
+        const text = reportText(
+          reportFacts(await facts, deps.outsideRoots()),
+          deps.ring.recent(),
+          deps.places(),
+        )
         await vscode.env.clipboard.writeText(text)
         vscode.window.showInformationMessage(COPIED)
         return text

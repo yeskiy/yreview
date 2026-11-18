@@ -7,7 +7,7 @@ import type { ReviewTask } from '../tasks/reviewTask'
 import { LOADING_TEXT, emptyText, isLoading } from '../tasks/scanRuns'
 import type { TabState, TabStates } from '../tasks/tabState'
 import { TaskChecks, checkKey } from '../tasks/taskChecks'
-import { type ToolbarFacts, toolbarFacts } from '../tasks/taskChoice'
+import { OUTSIDE_REASON, type ToolbarFacts, agentTasks, toolbarFacts } from '../tasks/taskChoice'
 import {
   countOf,
   fileCount,
@@ -19,7 +19,7 @@ import {
   tooltipLines,
   tooltipPlace,
 } from '../tasks/taskLabels'
-import { rowsOf } from '../tasks/taskTree'
+import { type TaskFolder, rowsOf } from '../tasks/taskTree'
 import {
   type DerivedView,
   type Row,
@@ -46,15 +46,27 @@ const tooltipOf = (task: ReviewTask): vscode.MarkdownString => {
     supportHtml: false,
   })
   markdown.appendText(tooltipPlace(task))
-  tooltipLines(task.text).forEach((line) => {
-    markdown.appendMarkdown('\n\n')
-    markdown.appendText(line)
-  })
+  ;[...tooltipLines(task.text), ...(task.outside === true ? [OUTSIDE_REASON] : [])].forEach(
+    (line) => {
+      markdown.appendMarkdown('\n\n')
+      markdown.appendText(line)
+    },
+  )
   return markdown
 }
 
 const scopeFiles = async (glob: string): Promise<ReadonlySet<string>> =>
   new Set((await vscode.workspace.findFiles(glob, null)).map((uri) => pathKey(uri.fsPath)))
+
+/** A row of a root outside the workspace has no check box, because the agent does not take its tasks. */
+const checkable = (row: Row): boolean => row.tasks.some((task) => task.outside !== true)
+
+const folderIcon = (kind: TaskFolder['kind']): vscode.ThemeIcon =>
+  ({
+    folder: new vscode.ThemeIcon('root-folder'),
+    directory: vscode.ThemeIcon.Folder,
+    outside: new vscode.ThemeIcon('folder-opened'),
+  })[kind]
 
 const iconOf = (task: ReviewTask): vscode.ThemeIcon => {
   if (task.kind === 'todo') return new vscode.ThemeIcon('checklist')
@@ -169,13 +181,17 @@ export class TaskView implements vscode.TreeDataProvider<Row>, vscode.Disposable
 
   getTreeItem(row: Row): vscode.TreeItem {
     const state = this.checks.state(row.tasks)
-    const checkboxState = {
-      state:
-        state === 'all'
-          ? vscode.TreeItemCheckboxState.Checked
-          : vscode.TreeItemCheckboxState.Unchecked,
-      tooltip: state === 'some' ? SOME_CHECKED : undefined,
-    }
+    const box = !checkable(row)
+      ? {}
+      : {
+          checkboxState: {
+            state:
+              state === 'all'
+                ? vscode.TreeItemCheckboxState.Checked
+                : vscode.TreeItemCheckboxState.Unchecked,
+            tooltip: state === 'some' ? SOME_CHECKED : undefined,
+          },
+        }
     const checked = state === 'some' ? `, ${this.checks.checkedOf(row.tasks).length} checked` : ''
     if (row.kind === 'task') {
       return Object.assign(
@@ -186,7 +202,7 @@ export class TaskView implements vscode.TreeDataProvider<Row>, vscode.Disposable
           tooltip: tooltipOf(row.task),
           iconPath: iconOf(row.task),
           contextValue: `yreview.task.${row.task.kind}`,
-          checkboxState,
+          ...box,
           command: { command: 'yreview.tasks.open', title: 'Open Review Task', arguments: [row] },
         },
       )
@@ -200,7 +216,7 @@ export class TaskView implements vscode.TreeDataProvider<Row>, vscode.Disposable
           resourceUri: vscode.Uri.file(row.tasks[0]?.filePath ?? ''),
           iconPath: vscode.ThemeIcon.File,
           contextValue: 'yreview.file',
-          checkboxState,
+          ...box,
         },
       )
     }
@@ -209,12 +225,10 @@ export class TaskView implements vscode.TreeDataProvider<Row>, vscode.Disposable
       {
         id: row.id,
         description: `${folderCount(row.folder)}${checked}`,
-        iconPath:
-          row.folder.kind === 'folder'
-            ? new vscode.ThemeIcon('root-folder')
-            : vscode.ThemeIcon.Folder,
+        iconPath: folderIcon(row.folder.kind),
+        ...(row.folder.kind === 'outside' ? { tooltip: row.folder.name } : {}),
         contextValue: 'yreview.folder',
-        checkboxState,
+        ...box,
       },
     )
   }
@@ -281,7 +295,7 @@ export class TaskView implements vscode.TreeDataProvider<Row>, vscode.Disposable
 
   private decorate(snapshot: ModelSnapshot): void {
     const rows = rowsOf(this.derived.layout)
-    const count = this.derived.tasks.length
+    const count = agentTasks(this.derived.tasks).length
     this.view.message =
       rows === 0
         ? emptyText(
