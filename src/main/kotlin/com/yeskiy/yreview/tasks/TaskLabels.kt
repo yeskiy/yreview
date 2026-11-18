@@ -25,6 +25,12 @@ object TaskLabels {
     /** How many lines of the text the tooltip of a row shows. */
     const val TOOLTIP_LINES = 20
 
+    /** Why the check box of a task outside the project is off. */
+    const val OUTSIDE_CHECK = "The agent works in the project folder, so it does not take this task."
+
+    /** Why a send of tasks outside the project sends nothing. */
+    const val OUTSIDE_SEND = "The agent works in the project folder, so it does not take the tasks outside the project."
+
     fun fileTitle(group: TaskGroup): String = group.name
 
     fun fileCount(group: TaskGroup): String = count(group.tasks.size, "task")
@@ -82,6 +88,7 @@ object TaskLabels {
             .append(HtmlChunk.text("${task.path}:${lines(task)}").bold())
             .br()
             .appendWithSeparators(HtmlChunk.br(), tooltipLines(task.text.trim()).map { HtmlChunk.text(it) })
+            .apply { if (task.outside) br().br().append(HtmlChunk.text(OUTSIDE_CHECK)) }
             .wrapWithHtmlBody()
             .toString()
 

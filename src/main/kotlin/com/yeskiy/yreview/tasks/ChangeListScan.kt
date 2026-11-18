@@ -40,6 +40,30 @@ object ChangeListTab {
     /** The tasks whose file is in the changelist. Every other task drops out. */
     fun keep(tasks: List<ReviewTask>, files: Set<String>): List<ReviewTask> = tasks.filter { it.filePath in files }
 
+    /** The git status arguments for the open files of a repository outside the project. */
+    fun statusArguments(paths: List<String>): List<String> =
+        listOf("--literal-pathspecs", "status", "--porcelain=v1", "-z", "--untracked-files=all", "--") + paths
+
+    /**
+     * The full paths in the answer of [statusArguments]. A rename or a copy entry is followed
+     * by its old path, and that path drops out. A path that leaves [root] drops out too.
+     */
+    fun statusFiles(root: String, status: String): Set<String> =
+        status.split('\u0000')
+            .fold(emptyList<String>() to false) { (kept, old), entry ->
+                if (old || entry.length < STATUS_PREFIX + 1) {
+                    kept to false
+                } else {
+                    (kept + entry.substring(STATUS_PREFIX)) to entry.take(2).any { it == 'R' || it == 'C' }
+                }
+            }
+            .first
+            .filter { path -> !path.startsWith("/") && path.split('/').none { it == ".." } }
+            .map { "$root/$it" }
+            .toSet()
+
+    private const val STATUS_PREFIX = 3
+
     /**
      * The name of the tab.
      *

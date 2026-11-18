@@ -18,8 +18,9 @@ class TaskChecks {
 
     fun isChecked(task: ReviewTask): Boolean = keyOf(task) in checked
 
+    /** A task outside the project never takes a check, because the agent cannot reach it. */
     fun set(tasks: Collection<ReviewTask>, value: Boolean) {
-        val keys = tasks.map { keyOf(it) }
+        val keys = tasks.filterNot { it.outside }.map { keyOf(it) }
         if (value) checked.addAll(keys) else checked.removeAll(keys.toSet())
     }
 
@@ -28,10 +29,11 @@ class TaskChecks {
     }
 
     fun state(tasks: Collection<ReviewTask>): CheckState {
-        val hits = tasks.count { isChecked(it) }
-        return when (hits) {
-            0 -> CheckState.NONE
-            tasks.size -> CheckState.ALL
+        val open = tasks.filterNot { it.outside }
+        val hits = open.count { isChecked(it) }
+        return when {
+            hits == 0 -> CheckState.NONE
+            hits == open.size -> CheckState.ALL
             else -> CheckState.SOME
         }
     }

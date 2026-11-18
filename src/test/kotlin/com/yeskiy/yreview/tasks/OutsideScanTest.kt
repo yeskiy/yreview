@@ -10,6 +10,7 @@ import com.yeskiy.yreview.store.FolderStore
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.store.ideGitRunner
 import java.io.File
 import java.nio.file.Files
 
@@ -96,6 +97,34 @@ class OutsideScanTest : BasePlatformTestCase() {
 
         assertEquals(1, outside().size)
         assertEquals(emptyList<ReviewTask>(), TaskScan.openTodos(project))
+    }
+
+    fun testTheDiagnosticCountNamesEachOutsideRootWithAnOpenFile() {
+        TempRepo().use { repo ->
+            repo.commit("a.txt", "a\n")
+            val a = vfs(File(repo.dir, "a.txt"))
+            open(a)
+            service.anchorOf(a)
+
+            assertEquals(1, TaskScan.outsideCount(project))
+        }
+    }
+
+    fun testGitStatusNamesOnlyTheChangedOpenFilesOfAnOutsideRepository() {
+        TempRepo().use { repo ->
+            repo.commit("a.txt", "a\n")
+            repo.commit("b [1].txt", "b\n")
+            File(repo.dir, "a.txt").writeText("changed\n")
+            File(repo.dir, "b [1].txt").writeText("changed\n")
+            File(repo.dir, "new").mkdirs()
+            File(repo.dir, "new/c.txt").writeText("c\n")
+            val root = vfs(repo.dir)
+            val status = ideGitRunner(project, root)
+                .run(*ChangeListTab.statusArguments(listOf("b [1].txt", "new/c.txt")).toTypedArray())
+
+            assertTrue(status.stderr, status.ok)
+            assertEquals(setOf("${root.path}/b [1].txt", "${root.path}/new/c.txt"), ChangeListTab.statusFiles(root.path, status.stdout))
+        }
     }
 
     fun testTheCurrentFileScanKeepsOnlyThatOutsideFile() {

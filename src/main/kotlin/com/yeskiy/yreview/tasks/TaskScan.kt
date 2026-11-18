@@ -21,6 +21,7 @@ import com.intellij.psi.search.PsiTodoSearchHelper
 import com.intellij.psi.search.TodoItem
 import com.intellij.util.Processor
 import com.yeskiy.yreview.settings.ShareLog
+import com.yeskiy.yreview.store.AnchorResult
 import com.yeskiy.yreview.store.AnchorRules
 import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.FolderStore
@@ -143,11 +144,7 @@ object TaskScan {
         val service = ReviewService.getInstance(project)
         val open = FileEditorManager.getInstance(project).openFiles.toList()
             .filter { onlyFile == null || it == onlyFile }
-        val inside = roots + listOfNotNull(project.guessProjectDir()?.path) +
-            ReadAction.compute<List<String>, RuntimeException> {
-                ProjectRootManager.getInstance(project).contentRoots.map { it.path }
-            }
-        return OutsideRoots.of(open, inside, service::anchorOf, service.home()).mapNotNull { outside ->
+        return OutsideRoots.of(open, insideRoots(project, roots), service::anchorOf, service.home()).mapNotNull { outside ->
             ProgressManager.checkCanceled()
             val root = LocalFileSystem.getInstance().findFileByPath(outside.root) ?: return@mapNotNull null
             val tasks = outsideComments(project, root, outside, showResolved) + outsideTodos(project, root, outside)
@@ -155,6 +152,24 @@ object TaskScan {
                 ?.let { RepositoryTasks(root, outside.commit, it.map { task -> task.copy(outside = true) }, outside.label) }
         }
     }
+
+    /** How many store roots outside the project have an open file. It reads the store cache only, so it starts no git. */
+    fun outsideCount(project: Project): Int {
+        val service = ReviewService.getInstance(project)
+        return OutsideRoots.of(
+            FileEditorManager.getInstance(project).openFiles.toList(),
+            insideRoots(project, GitRepositoryManager.getInstance(project).repositories.map { it.root.path }),
+            { service.anchorOfCached(it) ?: AnchorResult.NoPlace },
+            service.home(),
+        ).size
+    }
+
+    /** The repository roots, the project folder and the content roots. */
+    private fun insideRoots(project: Project, repositories: List<String>): List<String> =
+        repositories + listOfNotNull(project.guessProjectDir()?.path) +
+            ReadAction.compute<List<String>, RuntimeException> {
+                ProjectRootManager.getInstance(project).contentRoots.map { it.path }
+            }
 
     /** The store reads once, and each open file then takes its own comment rows. */
     private fun outsideComments(

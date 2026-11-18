@@ -32,6 +32,35 @@ class TaskChoiceTest {
 
     private val all = listOf(task("a"), task("b"), task("c"))
 
+    private fun loose(id: String) = task(id).copy(rootPath = "/loose", filePath = "/loose/a.txt", outside = true)
+
+    @Test
+    fun `a send drops the outside tasks of the checked rows`() {
+        val target = TaskChoice.sendTarget(listOf(task("a"), loose("x")), emptyList(), all)
+
+        assertEquals(SendScope.CHECKED, target.scope)
+        assertEquals(listOf("a"), target.tasks.map { it.id })
+        assertEquals(1, target.outside)
+    }
+
+    @Test
+    fun `a selection of outside tasks only sends nothing and keeps the reason`() {
+        val target = TaskChoice.sendTarget(emptyList(), listOf(loose("x")), all)
+
+        assertEquals(SendScope.NONE, target.scope)
+        assertEquals(emptyList(), target.tasks)
+        assertEquals(1, target.outside)
+        assertEquals(TaskLabels.OUTSIDE_SEND, target.description)
+    }
+
+    @Test
+    fun `a send of the whole tree leaves out the outside tasks`() {
+        val target = TaskChoice.sendTarget(emptyList(), emptyList(), all + loose("x"))
+
+        assertEquals(SendScope.ALL, target.scope)
+        assertEquals(listOf("a", "b", "c"), target.tasks.map { it.id })
+    }
+
     @Test
     fun `sends the checked tasks first`() {
         val target = TaskChoice.sendTarget(listOf(task("a")), listOf(task("b")), all)
