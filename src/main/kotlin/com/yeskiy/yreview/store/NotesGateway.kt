@@ -1,6 +1,7 @@
 package com.yeskiy.yreview.store
 
 import java.nio.file.Files
+import java.nio.file.Path
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReentrantLock
@@ -8,11 +9,20 @@ import kotlin.concurrent.withLock
 
 class NotesWriteException(message: String) : RuntimeException(message)
 
+/** A move of [ref] from [from] to [to] by one write. [after] gives the note of [commit] from its note before. */
+data class NoteMove(val ref: String, val from: String?, val to: String, val commit: String, val after: (List<String>) -> List<String>)
+
 /**
  * Reads and writes git notes. A write moves the ref only if no other writer moved it after the
  * read, and one lock for each repository and ref serializes the writers of this IDE.
  */
-class NotesGateway(private val git: GitRunner) : NoteStore {
+class NotesGateway(
+    private val git: GitRunner,
+    private val root: String? = null,
+    private val onMoved: (NoteMove) -> Unit = {},
+) : NoteStore {
+
+    private val common: Path? by lazy { root?.let(GitDirs::commonDir) }
 
     /**
      * The records of one note, and no record when the plugin cannot read that note.
@@ -40,12 +50,11 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
 
     override fun append(ref: String, commit: String, line: String) =
         guarded(ref) { tip ->
-            val landed = swap(ref, tip) { scratch ->
+            swap(ref, tip) { scratch ->
                 withFile(line, "git notes append failed") { path ->
                     listOf("notes", "--ref", scratch, "append", "-F", path, commit)
                 }
-            }
-            if (landed) Unit else null
+            }?.let { built -> onMoved(NoteMove(ref, tip, built, commit) { before -> before + line }) }
         }
 
     /**
@@ -61,7 +70,10 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
         guarded(ref) { tip ->
             val before = readOrRefuse(ref, commit)
             val after = change(before)
-            before.takeIf { after == before || swap(ref, tip) { scratch -> store(scratch, commit, after) } }
+            if (after == before) return@guarded before
+            swap(ref, tip) { scratch -> store(scratch, commit, after) }
+                ?.let { built -> onMoved(NoteMove(ref, tip, built, commit) { after }) }
+                ?.let { before }
         }
 
     override fun commitsWithNotes(ref: String): List<String> =
@@ -89,25 +101,25 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
     /** Runs [attempt] under the lock until one attempt gives an answer. Null means that the ref moved. */
     private fun <T : Any> guarded(ref: String, attempt: (tip: String?) -> T?): T =
         LOCKS.computeIfAbsent(lockKey(ref)) { ReentrantLock() }.withLock {
-            (1..MAX_TRIES).firstNotNullOfOrNull { attempt(tip(ref)) }
+            (1..MAX_TRIES).firstNotNullOfOrNull { attempt(tip(ref, fromFiles = it == 1)) }
         } ?: throw NotesWriteException(
             "Another program changed $ref during each of $MAX_TRIES writes, so the plugin wrote no record. Try again.",
         )
 
     /**
      * Builds the new note on a scratch ref that starts at [tip], and moves [ref] from [tip] to it.
-     * False when another writer moved [ref] after [tip] was read.
+     * Gives the new tip, and null when another writer moved [ref] after [tip] was read.
      */
-    private fun swap(ref: String, tip: String?, write: (scratch: String) -> Unit): Boolean {
+    private fun swap(ref: String, tip: String?, write: (scratch: String) -> Unit): String? {
         val scratch = "$SCRATCH_PREFIX${UUID.randomUUID()}"
         try {
             tip?.let { check(git.run("update-ref", scratch, it), "git update-ref failed") }
             write(scratch)
-            val built = tip(scratch) ?: throw NotesWriteException("git notes wrote no commit for $ref.")
+            val built = tip(scratch, fromFiles = true) ?: throw NotesWriteException("git notes wrote no commit for $ref.")
             val moved = git.run("update-ref", ref, built, tip.orEmpty())
-            if (moved.ok) return true
+            if (moved.ok) return built
             if (tip(ref) == tip) check(moved, "git update-ref failed")
-            return false
+            return null
         } finally {
             git.run("update-ref", "-d", scratch)
         }
@@ -123,8 +135,9 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
         }
     }
 
-    /** The commit that [ref] names, and null when the ref does not exist. */
-    private fun tip(ref: String): String? {
+    /** The commit that [ref] names, and null when the ref does not exist. A retry and a check after a failed move ask git. */
+    private fun tip(ref: String, fromFiles: Boolean = false): String? {
+        if (fromFiles) common?.let { NoteTips.read(it, listOf(ref)) }?.get(ref)?.let { return it }
         val result = git.run("rev-parse", "-q", "--verify", ref)
         if (result.ok) return result.stdout.trim()
         if (!result.ran) throw NotesWriteException(refusal(ref, result))
@@ -133,9 +146,11 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
 
     /** Two worktrees of one repository share the note refs, so the key is the common git directory. */
     private fun lockKey(ref: String): String {
-        val result = git.run("rev-parse", "--path-format=absolute", "--git-common-dir")
-        if (!result.ok) throw NotesWriteException(refusal("the git directory", result))
-        return result.stdout.trim() + "\u0000" + ref
+        val dir = common ?: git.run("rev-parse", "--path-format=absolute", "--git-common-dir").let { result ->
+            if (!result.ok) throw NotesWriteException(refusal("the git directory", result))
+            Path.of(result.stdout.trim())
+        }
+        return dir.toAbsolutePath().normalize().toString() + "\u0000" + ref
     }
 
     private fun check(result: GitResult, fallback: String) {

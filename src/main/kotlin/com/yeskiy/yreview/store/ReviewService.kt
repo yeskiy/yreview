@@ -26,6 +26,7 @@ import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.handoff.GitDir
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.settings.ShareLog
+import com.yeskiy.yreview.tasks.NoteScan
 import com.yeskiy.yreview.ui.ReviewNotice
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryChangeListener
@@ -206,7 +207,7 @@ class ReviewService(private val project: Project) : Disposable {
     fun bookFor(store: StoreRoot): CommentBook {
         val runner = ideGitRunner(project, store.root)
         return CommentBook(
-            if (store.kind == StoreKind.GIT) NotesGateway(runner) else folderNotesOf(store.root),
+            if (store.kind == StoreKind.GIT) NotesGateway(runner, store.root.path) { NoteScan.moved(store.root.path, it) } else folderNotesOf(store.root),
             authorOf = { GitAuthor.of(runner) },
         )
     }

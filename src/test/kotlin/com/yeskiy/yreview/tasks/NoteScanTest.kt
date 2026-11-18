@@ -8,7 +8,6 @@ import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NotesGateway
 import com.yeskiy.yreview.store.Range
 import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -16,12 +15,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NoteScanTest {
-
-    /** Counts every git process of one scan. */
-    private class Counting(private val git: GitRunner, private val answer: GitResult? = null) : GitRunner {
-        val runs = AtomicInteger()
-        override fun run(vararg args: String): GitResult = runs.incrementAndGet().let { answer ?: git.run(*args) }
-    }
 
     private class Canceled : RuntimeException()
 
@@ -113,6 +106,30 @@ class NoteScanTest {
         val before = git.runs.get()
         assertEquals(emptyList(), rows(git, "nowhere", false))
         assertTrue(git.runs.get() > before + 1)
+    }
+
+    @Test
+    fun `a warm scan of a real repository root starts no git process`() {
+        TempRepo().use { repo ->
+            reviewed(repo, commits = 6)
+            NoteScan.forget()
+            NoteScan.read(repo.git, repo.dir.path)
+            val git = Counting(repo.git)
+            assertEquals(slow(repo, repo.dir.path, false), TaskScan.placedTasks(git, repo.dir.path, null, null, false, { false }))
+            assertEquals(0, git.runs.get())
+        }
+    }
+
+    @Test
+    fun `a note written by git outside the scan shows at the next scan`() {
+        TempRepo().use { repo ->
+            val book = reviewed(repo, commits = 3)
+            NoteScan.forget()
+            NoteScan.read(repo.git, repo.dir.path)
+            val commit = repo.commit("late.txt", "late")
+            book.add(NoteRefs.LOCAL, commit, "late.txt", Range(startLine = 1, endLine = 1), "late comment")
+            assertTrue(rows(repo.git, repo.dir.path, false).any { it.text == "late comment" })
+        }
     }
 
     private companion object {
