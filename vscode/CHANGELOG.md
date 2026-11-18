@@ -2,6 +2,24 @@
 
 git-cliff writes this file from the commit messages. Do not edit it by hand.
 
+## 1.2.0 - 2026-11-18
+
+### Added
+
+- Add the store walk and the record rewrite rules
+- Find the store of a file outside the workspace
+- Offer only local comments for a folder store
+- Find the child stores of a repository
+- Move child folder stores into the git notes with new identifiers
+- Scan the open files outside the workspace
+- Show open files outside the workspace in the task views
+
+### Fixed
+
+- Name a saved local file in the no place message
+- Leave outside tasks out of a task list given to the copy
+- Keep a repository outside the workspace an outside root
+
 ## 1.1.2 - 2026-11-17
 
 ### Fixed
