@@ -71,7 +71,13 @@ describe('review sessions', () => {
       assert.equal(session?.terminal.name, 'Agent 1')
       assert.equal(sessions.registry.entries()[0]?.name, 'Agent 1')
       assert.ok(
-        await until(() => existsSync(path.join(dir, 'cwd.txt')), THIRTY_SECONDS),
+        // The shell makes the file before it writes the line, so the wait is for the line end.
+        await until(
+          () =>
+            existsSync(path.join(dir, 'cwd.txt')) &&
+            readFileSync(path.join(dir, 'cwd.txt'), 'utf8').includes('\n'),
+          THIRTY_SECONDS,
+        ),
         'the agent wrote no working folder',
       )
       assert.ok(same(readFileSync(path.join(dir, 'cwd.txt'), 'utf8'), workspace()))
