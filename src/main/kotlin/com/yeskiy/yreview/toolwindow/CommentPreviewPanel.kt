@@ -9,6 +9,7 @@ import com.intellij.openapi.editor.InlayProperties
 import com.intellij.openapi.editor.addComponentInlay
 import com.intellij.openapi.editor.ex.EditorEx
 import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -17,11 +18,17 @@ import com.intellij.usages.UsageViewPresentation
 import com.intellij.usages.impl.UsagePreviewPanel
 import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.gutter.CommentIndex
+import com.yeskiy.yreview.store.CommentBook
+import com.yeskiy.yreview.store.NoteStore
+import com.yeskiy.yreview.store.NotesGateway
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
 import com.yeskiy.yreview.store.ReviewCommentListener
 import com.yeskiy.yreview.store.ReviewService
+import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoredComment
+import com.yeskiy.yreview.store.ideGitRunner
 import com.yeskiy.yreview.tasks.CommentPick
+import com.yeskiy.yreview.tasks.NoteScan
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.TaskKind
 import com.yeskiy.yreview.ui.ReadBox
@@ -161,14 +168,21 @@ class CommentPreviewPanel(
 
         private val logger = logger<CommentPreviewPanel>()
 
-        /** The record behind a comment row. The lookup runs git, so the caller stays off the user interface thread. */
+        /** The record behind a comment row. A git store reads the note snapshot, so a warm read starts no git. */
         fun commentOf(project: Project, task: ReviewTask): PreviewComment? {
             if (task.kind != TaskKind.COMMENT || task.rootPath.isEmpty()) return null
             val root = LocalFileSystem.getInstance().findFileByPath(task.rootPath) ?: return null
-            val stored = ReviewService.getInstance(project).bookForRoot(root)
-                .findAt(task.revision, task.id)
-                ?: return null
-            return PreviewComment(root, stored)
+            val service = ReviewService.getInstance(project)
+            val notes = if (service.storeAt(root).kind == StoreKind.GIT) {
+                val git = ideGitRunner(project, root)
+                NoteScan.read(git, root.path) { ProgressManager.checkCanceled() } ?: NotesGateway(git)
+            } else {
+                service.folderNotesOf(root)
+            }
+            return recordIn(notes, task)?.let { PreviewComment(root, it) }
         }
+
+        internal fun recordIn(notes: NoteStore, task: ReviewTask): StoredComment? =
+            CommentBook(notes, author = "").findAt(task.revision, task.id)
     }
 }
