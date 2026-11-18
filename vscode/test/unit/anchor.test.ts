@@ -1,7 +1,14 @@
 import assert from 'node:assert/strict'
 import path from 'node:path'
 
-import { folderRoot, ownsFile, planAnchor, relativeTo, slashPath } from '../../src/core/anchor'
+import {
+  type AnchorPlan,
+  folderRoot,
+  ownsFile,
+  planAnchor,
+  relativeTo,
+  slashPath,
+} from '../../src/core/anchor'
 
 describe('anchor rules', () => {
   const base = 'E:/Projects/site'
@@ -76,17 +83,23 @@ describe('anchor rules', () => {
 describe('anchor plan', () => {
   const project = 'E:/Projects/site'
   const head = '9f0e1d2c3b4a5968778695a4b3c2d1e0f9a8b706'
+  // The call of ReviewService.anchorOf: the workspace root is the only store, and a new store has no place.
   const plan = (
     filePath: string,
     options: { repositoryRoot?: string; head?: string; contentRoots?: readonly string[] } = {},
-  ) =>
-    planAnchor(
+  ): AnchorPlan => {
+    const workspace = (): string | undefined =>
+      folderRoot(filePath, project, options.contentRoots ?? [])
+    const result = planAnchor(
       filePath,
       options.repositoryRoot,
       options.head,
-      () => project,
-      () => options.contentRoots ?? [],
+      workspace,
+      undefined,
+      (dir) => options.repositoryRoot === undefined && dir === workspace(),
     )
+    return result.kind === 'folder' && !result.exists ? { kind: 'noPlace' } : result
+  }
 
   it('a file of a repository goes to the notes of that repository', () => {
     assert.deepEqual(
@@ -121,6 +134,7 @@ describe('anchor plan', () => {
       kind: 'folder',
       root: project,
       path: 'notes/one.md',
+      exists: true,
     })
   })
 
@@ -140,11 +154,12 @@ describe('anchor plan', () => {
       `${project}/api/src/Main.kt`,
       `${project}/api`,
       head,
-      () => project,
       () => {
         reads.push(1)
-        return [project]
+        return project
       },
+      undefined,
+      () => true,
     )
     assert.deepEqual(reads, [], 'the rule read the content roots of the project')
   })

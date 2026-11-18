@@ -1,7 +1,13 @@
 import { stat } from 'node:fs/promises'
 import path from 'node:path'
 
-import { WORKTREE, planAnchor, relativeTo, slashPath } from '../core/anchor'
+import {
+  WORKTREE,
+  folderRoot as rootOfFolders,
+  planAnchor,
+  relativeTo,
+  slashPath,
+} from '../core/anchor'
 import { lineTextOnDisk } from '../core/lineText'
 import { containedPath, isRelativeUnder, realOf } from '../core/paths'
 import type { RecordRange } from '../core/record'
@@ -163,15 +169,24 @@ export class ReviewService {
     }
     const commit = root !== undefined && isOk(head) ? head.stdout.trim() : undefined
     const folders = root === undefined ? await this.folderRoots() : []
+    const workspaceRoot = (): string | undefined =>
+      rootOfFolders(slashPath(real), undefined, folders)
     const plan = planAnchor(
       slashPath(real),
       root,
       commit,
-      () => undefined,
-      () => folders,
+      workspaceRoot,
+      undefined,
+      (folder) => root === undefined && folder === workspaceRoot(),
     )
     if (plan.kind === 'noCommit') return { kind: 'noCommit' }
-    if (plan.kind === 'noPlace') return NO_PLACE_RESULT
+    // A store outside every workspace folder waits for the store discovery.
+    if (
+      plan.kind === 'noPlace' ||
+      plan.kind === 'homeFile' ||
+      (plan.kind === 'folder' && !plan.exists && !folders.includes(plan.root))
+    )
+      return NO_PLACE_RESULT
     this.roots.add(plan.root)
     if (plan.kind === 'folder') {
       return found({ store: 'folder', root: plan.root, head: WORKTREE, path: plan.path })

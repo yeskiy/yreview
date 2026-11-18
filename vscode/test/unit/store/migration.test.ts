@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readdirSync } from 'node:fs'
 import path from 'node:path'
 
 import { WORKTREE } from '../../../src/core/anchor'
+import { type ReviewRecord, decodeRecord, recordId } from '../../../src/core/record'
 import { NotesWriteError } from '../../../src/git/errors'
 import { type NoteStore, NotesGateway } from '../../../src/git/notes'
 import { ProcessGitRunner } from '../../../src/git/runner'
@@ -14,6 +15,8 @@ import {
   maySettle,
   migrationNotice,
   moveStoreFolder,
+  RewrittenNotes,
+  rewriteRecords,
 } from '../../../src/store/migration'
 import { ALL_REFS, DISCUSS, LOCAL } from '../../../src/store/noteRefs'
 import { git, makeRepo, removeDir, scratchDir } from '../../fixtures/scratch'
@@ -195,12 +198,64 @@ describe('folder migration', function migration() {
     assert.deepEqual(await bookOf(notes).list(head), [])
   })
 
+  it('a rewritten store copies the records with the new identifiers', async () => {
+    const { folder, notes, head } = setup()
+    const stored = await bookOf(folder).add(
+      LOCAL,
+      WORKTREE,
+      'a.kt',
+      { startLine: 1, endLine: 1 },
+      'one',
+    )
+    await bookOf(folder).resolve(stored)
+    const { renames } = rewriteRecords(await folder.readOrRefuse(LOCAL, WORKTREE), 'sub')
+    const report = await copyFolder(
+      new RewrittenNotes(folder, 'sub', renames),
+      notes,
+      ALL_REFS,
+      head,
+    )
+    assert.deepEqual(report, { moved: 2 })
+    const copied = (await notes.readOrRefuse(LOCAL, head)).map(
+      (line) => decodeRecord(line) as ReviewRecord,
+    )
+    assert.deepEqual(new Set(copied.map(recordId)), new Set(renames.values()))
+    assert.deepEqual(
+      copied.map((record) => record.location?.path),
+      ['sub/a.kt', 'sub/a.kt'],
+    )
+    assert.deepEqual(await bookOf(notes).open(head), [])
+  })
+
+  it('a rewritten store with an empty prefix copies the same bytes', async () => {
+    const { folder, notes, head } = setup()
+    await bookOf(folder).add(LOCAL, WORKTREE, 'a.kt', { startLine: 1, endLine: 1 }, 'one')
+    const plain = makeRepo()
+    dirs.push(plain)
+    const direct = new NotesGateway(new ProcessGitRunner(plain))
+    const plainHead = git(plain, 'rev-parse', 'HEAD')
+    await copyFolder(new RewrittenNotes(folder, '', new Map()), notes, ALL_REFS, head)
+    await copyFolder(folder, direct, ALL_REFS, plainHead)
+    assert.deepEqual(
+      await notes.readOrRefuse(LOCAL, head),
+      await direct.readOrRefuse(LOCAL, plainHead),
+    )
+  })
+
+  it('a rewritten store takes no write', async () => {
+    const { folder } = setup()
+    await assert.rejects(
+      new RewrittenNotes(folder, 'sub', new Map()).append(LOCAL, WORKTREE, '{}'),
+      NotesWriteError,
+    )
+  })
+
   it('a repository rooted at the folder may take the records', () => {
     assert.equal(maySettle(FOLDER_ROOT, FOLDER_ROOT), true)
   })
 
-  it('a repository rooted above the folder may not take the records', () => {
-    assert.equal(maySettle(FOLDER_ROOT, `${FOLDER_ROOT}/api`), false)
+  it('a repository rooted above the folder may take the records', () => {
+    assert.equal(maySettle(FOLDER_ROOT, `${FOLDER_ROOT}/api`), true)
   })
 
   it('a repository beside the folder may not take the records', () => {
