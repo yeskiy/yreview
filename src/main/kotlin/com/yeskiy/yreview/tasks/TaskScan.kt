@@ -68,6 +68,9 @@ object TaskScan {
     /** How many full reads ran. The bench and the tests read it. */
     internal val reads = AtomicInteger()
 
+    /** A test hook. When it is not 0, the folder part and the outside part sleep this many milliseconds first. */
+    internal var partDelay: Long = 0
+
     /**
      * The tasks of every store of the project, one entry per git repository and per folder.
      *
@@ -82,10 +85,10 @@ object TaskScan {
         reads.incrementAndGet()
         val repositories = GitRepositoryManager.getInstance(project).repositories
         val roots = repositories.map { it.root.path }
-        return repositories.mapNotNull { repository ->
-            ProgressManager.checkCanceled()
-            repositoryTasks(project, repository, roots, onlyFile, showResolved)
-        } + folderTasks(project, onlyFile, showResolved) + outsideTasks(project, roots, onlyFile, showResolved)
+        val parts: List<() -> List<RepositoryTasks>> = repositories.map { repository ->
+            { listOfNotNull(repositoryTasks(project, repository, roots, onlyFile, showResolved)) }
+        } + listOf({ folderTasks(project, onlyFile, showResolved) }, { outsideTasks(project, roots, onlyFile, showResolved) })
+        return ParallelReads.map(parts, ProgressManager::checkCanceled) { it() }.flatten()
     }
 
     /** The TODO items that are still in the source. A root outside the project never reaches an agent. */
@@ -101,15 +104,14 @@ object TaskScan {
     ): RepositoryTasks? {
         if (onlyFile != null && !VfsUtilCore.isAncestor(repository.root, onlyFile, false)) return null
         val commit = TaskRevision.of(repository.currentRevision)
-        return RepositoryTasks(
-            repository.root,
-            commit,
-            withModules(
-                project,
-                comments(project, repository.root, repository.currentRevision, onlyFile, showResolved) +
-                    todos(project, repository.root, roots, commit, onlyFile),
+        val (comments, todos) = ParallelReads.map(
+            listOf<() -> List<ReviewTask>>(
+                { comments(project, repository.root, repository.currentRevision, onlyFile, showResolved) },
+                { todos(project, repository.root, roots, commit, onlyFile) },
             ),
-        )
+            ProgressManager::checkCanceled,
+        ) { it() }
+        return RepositoryTasks(repository.root, commit, withModules(project, comments + todos))
     }
 
     /**
@@ -123,8 +125,9 @@ object TaskScan {
         project: Project,
         onlyFile: VirtualFile?,
         showResolved: Boolean,
-    ): List<RepositoryTasks> =
-        ReviewService.getInstance(project).storeRoots()
+    ): List<RepositoryTasks> {
+        if (partDelay != 0L) Thread.sleep(partDelay)
+        return ReviewService.getInstance(project).storeRoots()
             .filter { it.kind == StoreKind.FOLDER }
             .filter { onlyFile == null || VfsUtilCore.isAncestor(it.root, onlyFile, false) }
             .map { store ->
@@ -135,6 +138,7 @@ object TaskScan {
                 )
             }
             .filter { it.tasks.isNotEmpty() }
+    }
 
     /**
      * The tasks of each store root outside the project that has a file open in the editor.
@@ -146,6 +150,7 @@ object TaskScan {
         onlyFile: VirtualFile?,
         showResolved: Boolean,
     ): List<RepositoryTasks> {
+        if (partDelay != 0L) Thread.sleep(partDelay)
         val service = ReviewService.getInstance(project)
         val open = FileEditorManager.getInstance(project).openFiles.toList()
             .filter { onlyFile == null || it == onlyFile }
