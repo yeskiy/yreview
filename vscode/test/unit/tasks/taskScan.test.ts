@@ -15,7 +15,9 @@ import type { ReviewTask } from '../../../src/tasks/reviewTask'
 import {
   type RepositoryTasks,
   type ScanInput,
+  type OutsideRoot,
   notesOfRoot,
+  rescanNotes,
   scanProject,
   scanRepository,
   withOverlays,
@@ -277,6 +279,125 @@ describe('taskScan', function taskScan() {
         () => shared.dir,
       ),
       shared.found,
+    )
+  })
+})
+
+describe('the scan of open files outside the workspace', function outsideScan() {
+  this.timeout(120_000)
+  const dirs: string[] = []
+  after(() => dirs.forEach(removeDir))
+  const shared = { dir: '', head: '' }
+
+  before(async () => {
+    shared.dir = slash(makeRepo())
+    dirs.push(shared.dir)
+    shared.head = commit(shared.dir, 'src/b.ts', '// TODO: closed file\n')
+    const book = bookOf(shared.dir)
+    await book.add(LOCAL, shared.head, 'src/a.txt', line(1), 'on the open file')
+    await book.add(LOCAL, shared.head, 'src/b.ts', line(1), 'on a closed file')
+  })
+
+  beforeEach(() => forgetNotes())
+
+  const gitRoot = (): OutsideRoot => ({
+    root: shared.dir,
+    store: 'git',
+    commit: shared.head,
+    label: 'repo',
+    files: [{ path: 'src/a.txt', text: '// TODO: open\n' }],
+  })
+
+  const outsideInput = (outside: readonly OutsideRoot[], runner?: GitRunner): ScanInput =>
+    input(shared.dir, {
+      roots: [],
+      basePathOf: () => undefined,
+      outside,
+      ...(runner === undefined ? {} : { runnerOf: () => runner }),
+    })
+
+  it('gives the comments and the TODO items of the open files only', async () => {
+    const { calls, runner } = counting(new ProcessGitRunner(shared.dir))
+    const found = await scanProject(outsideInput([gitRoot()], runner))
+    assert.equal(found.length, 1)
+    const [entry] = found
+    assert.equal(entry?.outside, 'repo')
+    assert.equal(entry?.root, shared.dir)
+    assert.equal(entry?.commit, shared.head)
+    assert.deepEqual(
+      entry?.tasks.map((task) => [task.kind, task.path, task.text, task.outside]),
+      [
+        ['comment', 'src/a.txt', 'on the open file', true],
+        ['todo', 'src/a.txt', 'TODO: open', true],
+      ],
+    )
+    assert.deepEqual(
+      // The note read runs `git grep -e ^` on the notes commit. The TODO grep reads the work tree.
+      calls.filter((args) => args.includes('--untracked') || args.includes('ls-files')),
+      [],
+    )
+  })
+
+  it('reads the outside roots again in a notes rescan', async () => {
+    const found = await rescanNotes(outsideInput([gitRoot()]), [])
+    assert.deepEqual(
+      found.map((entry) => [entry.outside, entry.tasks.length]),
+      [['repo', 2]],
+    )
+  })
+
+  it('gives the TODO items of a folder root that has no store yet', async () => {
+    const loose = slash(scratchDir())
+    dirs.push(loose)
+    const [entry, ...more] = await scanProject(
+      outsideInput([
+        {
+          root: loose,
+          store: 'folder',
+          commit: WORKTREE,
+          label: 'loose',
+          files: [{ path: 'n.txt', text: 'TODO: loose\n' }],
+        },
+      ]),
+    )
+    assert.deepEqual(more, [])
+    assert.equal(entry?.outside, 'loose')
+    assert.deepEqual(
+      entry?.tasks.map((task) => [task.kind, task.text, task.revision, task.filePath]),
+      [['todo', 'TODO: loose', WORKTREE, `${loose}/n.txt`]],
+    )
+  })
+
+  it('gives no entry for a root with no comment and no TODO item', async () => {
+    const loose = slash(scratchDir())
+    dirs.push(loose)
+    assert.deepEqual(
+      await scanProject(
+        outsideInput([
+          {
+            root: loose,
+            store: 'folder',
+            commit: WORKTREE,
+            label: 'loose',
+            files: [{ path: 'n.txt', text: 'plain\n' }],
+          },
+        ]),
+      ),
+      [],
+    )
+  })
+
+  it('leaves an outside entry as it is in the overlays', () => {
+    const entry: RepositoryTasks = { root: shared.dir, commit: '', tasks: [], outside: 'repo' }
+    assert.deepEqual(
+      withOverlays(
+        [entry],
+        new Map([[`${shared.dir}/src/a.txt`, '// TODO: x\n']]),
+        defaults,
+        [shared.dir],
+        () => shared.dir,
+      ),
+      [entry],
     )
   })
 })
