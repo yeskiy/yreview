@@ -145,6 +145,7 @@ import com.yeskiy.yreview.tasks.TaskLabels
 import com.yeskiy.yreview.tasks.TaskLayout
 import com.yeskiy.yreview.tasks.TaskRemoval
 import com.yeskiy.yreview.tasks.TaskScan
+import com.yeskiy.yreview.tasks.TaskScanService
 import com.yeskiy.yreview.tasks.TaskScope
 import com.yeskiy.yreview.tasks.TaskTree
 import com.yeskiy.yreview.tasks.TodoRemoval
@@ -265,7 +266,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         }
     }
 
-    private val toolbar: ActionToolbar
+    internal val toolbar: ActionToolbar
 
     @Volatile
     internal var repositories: List<RepositoryTasks> = emptyList()
@@ -403,6 +404,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         })
     }
 
+    /** A signal that can change any task. The next read of each tab then scans again. */
+    private fun rescan() {
+        TaskScanService.getInstance(project).invalidate()
+        scheduleReload()
+    }
+
     /** A write of this IDE changed the store. A shown tab reads it at once, a hidden tab reads it when it shows. */
     private fun reloadNow() {
         if (!queue.isActive) return scheduleReload()
@@ -436,7 +443,11 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     /** The rows of the scope, or null when the project went away before the read ended. */
     internal fun scan(onlyFile: VirtualFile?, chosen: SearchScope?): TreeContent? {
         if (project.isDisposed) return null
-        val found = TaskScan.read(project, onlyFile, tab().showResolved)
+        val found = if (onlyFile == null && scope != TaskScope.CURRENT_FILE) {
+            TaskScanService.getInstance(project).read(tab().showResolved) { ProgressManager.checkCanceled() }
+        } else {
+            TaskScan.read(project, onlyFile, tab().showResolved)
+        }
         val changes = readChangeList().let { facts ->
             if (scope == TaskScope.CHANGE_LIST) facts.copy(files = facts.files + outsideChanges(found)) else facts
         }
@@ -1116,9 +1127,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private fun subscribe() {
         val onProject = project.messageBus.connect(this)
-        onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener { reloadNow() })
-        onProject.subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { scheduleReload() })
-        onProject.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { scheduleReload() })
+        onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener {
+            TaskScanService.getInstance(project).invalidate()
+            reloadNow()
+        })
+        onProject.subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { rescan() })
+        onProject.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { rescan() })
         onProject.subscribe(DumbService.DUMB_MODE, IndexWatch())
         onProject.subscribe(
             FileEditorManagerListener.FILE_EDITOR_MANAGER,
@@ -1139,11 +1153,11 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         // A change of the TODO patterns arrives here. The platform keeps the topic for a
         // change of the TODO filters internal, so a filter edit shows at the next reload.
         val onApplication = ApplicationManager.getApplication().messageBus.connect(this)
-        onApplication.subscribe(IndexPatternProvider.INDEX_PATTERNS_CHANGED, PropertyChangeListener { scheduleReload() })
+        onApplication.subscribe(IndexPatternProvider.INDEX_PATTERNS_CHANGED, PropertyChangeListener { rescan() })
         onApplication.subscribe(
             FileTypeManager.TOPIC,
             object : FileTypeListener {
-                override fun fileTypesChanged(event: FileTypeEvent) = scheduleReload()
+                override fun fileTypesChanged(event: FileTypeEvent) = rescan()
             },
         )
 
@@ -1154,7 +1168,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     private fun reloadForTab(file: VirtualFile) {
         if (!file.isInLocalFileSystem) return
         if (!ReadAction.compute<Boolean, RuntimeException> { ProjectFileIndex.getInstance(project).isInContent(file) }) {
-            scheduleReload()
+            rescan()
         }
     }
 
@@ -1217,7 +1231,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
         override fun exitDumbMode() = changePhase {
             state.exitIndexing()
-            scheduleReload()
+            rescan()
         }
     }
 
@@ -1250,12 +1264,12 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
         override fun propertyChanged(event: PsiTreeChangeEvent) {
             val item = event.element as? PsiFileSystemItem
-            if (SourceSignal.readAgain(event.propertyName) && (item == null || SourceSignal.watched(project, item))) scheduleReload()
+            if (SourceSignal.readAgain(event.propertyName) && (item == null || SourceSignal.watched(project, item))) rescan()
         }
 
         /** A change inside a file, of a whole file or of a whole folder of a store needs a new read. */
         private fun scheduleFor(event: PsiTreeChangeEvent, child: PsiElement?) {
-            if (SourceSignal.watched(project, event.file ?: child as? PsiFileSystemItem)) scheduleReload()
+            if (SourceSignal.watched(project, event.file ?: child as? PsiFileSystemItem)) rescan()
         }
     }
 
@@ -1267,27 +1281,27 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      */
     private inner class ChangeListWatch : ChangeListListener {
 
-        override fun changeListUpdateDone() = scheduleReload()
+        override fun changeListUpdateDone() = rescan()
 
-        override fun changeListChanged(list: ChangeList?) = scheduleReload()
+        override fun changeListChanged(list: ChangeList?) = rescan()
 
-        override fun changesAdded(changes: Collection<Change>, toList: ChangeList?) = scheduleReload()
+        override fun changesAdded(changes: Collection<Change>, toList: ChangeList?) = rescan()
 
-        override fun changesRemoved(changes: Collection<Change>, fromList: ChangeList?) = scheduleReload()
+        override fun changesRemoved(changes: Collection<Change>, fromList: ChangeList?) = rescan()
 
         override fun changesMoved(
             changes: Collection<Change>,
             fromList: ChangeList?,
             toList: ChangeList?,
-        ) = scheduleReload()
+        ) = rescan()
 
-        override fun defaultListChanged(oldDefaultList: ChangeList?, newDefaultList: ChangeList?) = scheduleReload()
+        override fun defaultListChanged(oldDefaultList: ChangeList?, newDefaultList: ChangeList?) = rescan()
 
-        override fun changeListRenamed(list: ChangeList?, oldName: String?) = scheduleReload()
+        override fun changeListRenamed(list: ChangeList?, oldName: String?) = rescan()
 
-        override fun allChangeListsMappingsChanged() = scheduleReload()
+        override fun allChangeListsMappingsChanged() = rescan()
 
-        override fun changeListAvailabilityChanged() = scheduleReload()
+        override fun changeListAvailabilityChanged() = rescan()
     }
 
     private inner class RefreshAction :
@@ -1295,7 +1309,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
         override fun getActionUpdateThread(): ActionUpdateThread = ActionUpdateThread.BGT
 
-        override fun actionPerformed(event: AnActionEvent) = scheduleReload()
+        override fun actionPerformed(event: AnActionEvent) = rescan()
     }
 
     /**

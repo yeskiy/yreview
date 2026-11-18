@@ -29,6 +29,7 @@ import com.yeskiy.yreview.tasks.ScanPhase
 import com.yeskiy.yreview.tasks.ScanState
 import com.yeskiy.yreview.tasks.TaskKind
 import com.yeskiy.yreview.tasks.TaskScan
+import com.yeskiy.yreview.tasks.TaskScanService
 import com.yeskiy.yreview.tasks.TaskScope
 import com.yeskiy.yreview.toolwindow.CommentPreviewPanel
 import com.yeskiy.yreview.toolwindow.ReviewTreePanel
@@ -343,7 +344,9 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
 
         val panel = runInEdtAndGet { ReviewTreePanel(project, TaskScope.PROJECT).also { Disposer.register(testRootDisposable, it) } }
         measure("layoutOf (filter, group, tree layout) over ${all.size} tasks") { panel.layoutOf(found, null, ChangeListFacts()) }
-        measure("panel scan (TaskScan.read, change list, layout)") { panel.scan(null, null) }
+        measure("panel scan (TaskScan.read, change list, layout)", before = { TaskScanService.getInstance(project).invalidate() }) {
+            panel.scan(null, null)
+        }
         val content = panel.scan(null, null)!!
         measure("show on the EDT (model swap, toolbar, preview)") { runInEdtAndWait { panel.show(content) } }
         rendering(panel)
