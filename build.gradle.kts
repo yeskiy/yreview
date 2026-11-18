@@ -145,4 +145,6 @@ tasks.test {
     )
     // The contract test also runs the channel server of the VS Code extension when its bundle exists.
     systemProperty("y.review.node.channel", layout.projectDirectory.file("vscode/dist/channel.js").asFile.absolutePath)
+    // Git reads this file as the global config, so a write outside a test repository has an author on every machine.
+    environment("GIT_CONFIG_GLOBAL", layout.projectDirectory.file("src/test/git/gitconfig").asFile.absolutePath)
 }
