@@ -24,7 +24,16 @@ describe('check 14', () => {
     'worktree.jsonl',
   )
 
+  // The compat workspace sets the identity in its repository only, and a loose file has no repository.
+  const IDENTITY = {
+    GIT_CONFIG_COUNT: '1',
+    GIT_CONFIG_KEY_0: 'user.email',
+    GIT_CONFIG_VALUE_0: 'reviewer@example.com',
+  }
+  before(() => Object.assign(process.env, IDENTITY))
+
   after(async () => {
+    Object.keys(IDENTITY).forEach((name) => delete process.env[name])
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
     rmSync(folder, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
   })
