@@ -1,0 +1,756 @@
+{
+    "parent": [
+        {
+            "path": "/a/b/c",
+            "parent": "/a/b"
+        },
+        {
+            "path": "/a/b",
+            "parent": "/a"
+        },
+        {
+            "path": "/a",
+            "parent": "/"
+        },
+        {
+            "path": "/",
+            "parent": null
+        },
+        {
+            "path": "C:/a/b",
+            "parent": "C:/a"
+        },
+        {
+            "path": "C:/a",
+            "parent": "C:/"
+        },
+        {
+            "path": "C:/",
+            "parent": null
+        },
+        {
+            "path": "//srv/share/a/b",
+            "parent": "//srv/share/a"
+        },
+        {
+            "path": "//srv/share/a",
+            "parent": "//srv/share"
+        },
+        {
+            "path": "//srv/share",
+            "parent": null
+        }
+    ],
+    "walk": [
+        {
+            "name": "posix-to-root",
+            "dir": "/a/b",
+            "workspaceRoot": null,
+            "home": null,
+            "walk": [
+                "/a/b",
+                "/a",
+                "/"
+            ]
+        },
+        {
+            "name": "posix-home-elsewhere",
+            "dir": "/a/b",
+            "workspaceRoot": null,
+            "home": "/h",
+            "walk": [
+                "/a/b",
+                "/a",
+                "/"
+            ]
+        },
+        {
+            "name": "posix-root-dir",
+            "dir": "/",
+            "workspaceRoot": null,
+            "home": null,
+            "walk": [
+                "/"
+            ]
+        },
+        {
+            "name": "workspace-stops",
+            "dir": "/w/a/b",
+            "workspaceRoot": "/w",
+            "home": "/h",
+            "walk": [
+                "/w/a/b",
+                "/w/a",
+                "/w"
+            ]
+        },
+        {
+            "name": "workspace-equals-dir",
+            "dir": "/w",
+            "workspaceRoot": "/w",
+            "home": "/h",
+            "walk": [
+                "/w"
+            ]
+        },
+        {
+            "name": "workspace-not-holding",
+            "dir": "/x/a",
+            "workspaceRoot": "/w",
+            "home": "/h",
+            "walk": [
+                "/x/a",
+                "/x",
+                "/"
+            ]
+        },
+        {
+            "name": "workspace-name-prefix",
+            "dir": "/wx/a",
+            "workspaceRoot": "/w",
+            "home": null,
+            "walk": [
+                "/wx/a",
+                "/wx",
+                "/"
+            ]
+        },
+        {
+            "name": "home-stops",
+            "dir": "/h/a/b",
+            "workspaceRoot": null,
+            "home": "/h",
+            "walk": [
+                "/h/a/b",
+                "/h/a"
+            ]
+        },
+        {
+            "name": "home-name-prefix",
+            "dir": "/hx/a",
+            "workspaceRoot": null,
+            "home": "/h",
+            "walk": [
+                "/hx/a",
+                "/hx",
+                "/"
+            ]
+        },
+        {
+            "name": "home-equal",
+            "dir": "/h",
+            "workspaceRoot": null,
+            "home": "/h",
+            "walk": []
+        },
+        {
+            "name": "home-equal-with-workspace",
+            "dir": "/h",
+            "workspaceRoot": "/h",
+            "home": "/h",
+            "walk": []
+        },
+        {
+            "name": "workspace-on-home",
+            "dir": "/h/a",
+            "workspaceRoot": "/h",
+            "home": "/h",
+            "walk": [
+                "/h/a"
+            ]
+        },
+        {
+            "name": "workspace-above-home",
+            "dir": "/h/a",
+            "workspaceRoot": "/",
+            "home": "/h",
+            "walk": [
+                "/h/a"
+            ]
+        },
+        {
+            "name": "workspace-below-home",
+            "dir": "/h/w/a",
+            "workspaceRoot": "/h/w",
+            "home": "/h",
+            "walk": [
+                "/h/w/a",
+                "/h/w"
+            ]
+        },
+        {
+            "name": "home-below-workspace",
+            "dir": "/w/h/a",
+            "workspaceRoot": "/w",
+            "home": "/w/h",
+            "walk": [
+                "/w/h/a"
+            ]
+        },
+        {
+            "name": "windows-drive",
+            "dir": "C:/a/b",
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "walk": [
+                "C:/a/b",
+                "C:/a",
+                "C:/"
+            ]
+        },
+        {
+            "name": "windows-drive-root-dir",
+            "dir": "C:/",
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "walk": [
+                "C:/"
+            ]
+        },
+        {
+            "name": "windows-home",
+            "dir": "C:/Users/u/a/b",
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "walk": [
+                "C:/Users/u/a/b",
+                "C:/Users/u/a"
+            ]
+        },
+        {
+            "name": "windows-home-equal",
+            "dir": "C:/Users/u",
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "walk": []
+        },
+        {
+            "name": "windows-workspace",
+            "dir": "C:/w/a",
+            "workspaceRoot": "C:/w",
+            "home": "C:/Users/u",
+            "walk": [
+                "C:/w/a",
+                "C:/w"
+            ]
+        },
+        {
+            "name": "windows-other-drive",
+            "dir": "D:/a",
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "walk": [
+                "D:/a",
+                "D:/"
+            ]
+        },
+        {
+            "name": "unc-share",
+            "dir": "//srv/share/a/b",
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "walk": [
+                "//srv/share/a/b",
+                "//srv/share/a",
+                "//srv/share"
+            ]
+        }
+    ],
+    "locate": [
+        {
+            "name": "git-wins",
+            "file": "/r/a/f.txt",
+            "repository": {
+                "root": "/r",
+                "head": "0123456789abcdef0123456789abcdef01234567"
+            },
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [
+                "/r/a"
+            ],
+            "plan": {
+                "kind": "git",
+                "root": "/r",
+                "commit": "0123456789abcdef0123456789abcdef01234567",
+                "path": "a/f.txt"
+            }
+        },
+        {
+            "name": "git-in-home",
+            "file": "/h/f.txt",
+            "repository": {
+                "root": "/h",
+                "head": "0123456789abcdef0123456789abcdef01234567"
+            },
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "git",
+                "root": "/h",
+                "commit": "0123456789abcdef0123456789abcdef01234567",
+                "path": "f.txt"
+            }
+        },
+        {
+            "name": "no-commit-no-store",
+            "file": "/r/f.txt",
+            "repository": {
+                "root": "/r",
+                "head": null
+            },
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "noCommit"
+            }
+        },
+        {
+            "name": "no-commit-keeps-store",
+            "file": "/r/a/f.txt",
+            "repository": {
+                "root": "/r",
+                "head": null
+            },
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [
+                "/r/a"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "/r/a",
+                "path": "f.txt",
+                "exists": true
+            }
+        },
+        {
+            "name": "nearest-store",
+            "file": "/w/a/b/f.txt",
+            "repository": null,
+            "workspaceRoot": "/w",
+            "home": "/h",
+            "stores": [
+                "/w",
+                "/w/a"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "/w/a",
+                "path": "b/f.txt",
+                "exists": true
+            }
+        },
+        {
+            "name": "workspace-ceiling",
+            "file": "/p/w/f.txt",
+            "repository": null,
+            "workspaceRoot": "/p/w",
+            "home": "/h",
+            "stores": [
+                "/p"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "/p/w",
+                "path": "f.txt",
+                "exists": false
+            }
+        },
+        {
+            "name": "workspace-root-checked",
+            "file": "/w/a/f.txt",
+            "repository": null,
+            "workspaceRoot": "/w",
+            "home": "/h",
+            "stores": [
+                "/w"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "/w",
+                "path": "a/f.txt",
+                "exists": true
+            }
+        },
+        {
+            "name": "home-never-checked",
+            "file": "/h/a/f.txt",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [
+                "/h"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "/h/a",
+                "path": "f.txt",
+                "exists": false
+            }
+        },
+        {
+            "name": "home-file",
+            "file": "/h/f.txt",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "homeFile"
+            }
+        },
+        {
+            "name": "home-file-in-workspace",
+            "file": "/h/f.txt",
+            "repository": null,
+            "workspaceRoot": "/h",
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "homeFile"
+            }
+        },
+        {
+            "name": "bridge-folder",
+            "file": "/h/.y-review/mcp/x.json",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "homeFile"
+            }
+        },
+        {
+            "name": "loose-create",
+            "file": "/tmp/x/f.txt",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "folder",
+                "root": "/tmp/x",
+                "path": "f.txt",
+                "exists": false
+            }
+        },
+        {
+            "name": "loose-above",
+            "file": "/tmp/x/y/f.txt",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [
+                "/tmp"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "/tmp",
+                "path": "x/y/f.txt",
+                "exists": true
+            }
+        },
+        {
+            "name": "posix-root-store",
+            "file": "/a/f.txt",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "/h",
+            "stores": [
+                "/"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "/",
+                "path": "a/f.txt",
+                "exists": true
+            }
+        },
+        {
+            "name": "drive-root-store",
+            "file": "C:/a/f.txt",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "stores": [
+                "C:/"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "C:/",
+                "path": "a/f.txt",
+                "exists": true
+            }
+        },
+        {
+            "name": "workspace-on-home",
+            "file": "/h/a/f.txt",
+            "repository": null,
+            "workspaceRoot": "/h",
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "folder",
+                "root": "/h/a",
+                "path": "f.txt",
+                "exists": false
+            }
+        },
+        {
+            "name": "workspace-above-home",
+            "file": "/h/a/f.txt",
+            "repository": null,
+            "workspaceRoot": "/",
+            "home": "/h",
+            "stores": [],
+            "plan": {
+                "kind": "folder",
+                "root": "/h/a",
+                "path": "f.txt",
+                "exists": false
+            }
+        },
+        {
+            "name": "windows-workspace",
+            "file": "C:/w/a/f.txt",
+            "repository": null,
+            "workspaceRoot": "C:/w",
+            "home": "C:/Users/u",
+            "stores": [
+                "C:/w"
+            ],
+            "plan": {
+                "kind": "folder",
+                "root": "C:/w",
+                "path": "a/f.txt",
+                "exists": true
+            }
+        },
+        {
+            "name": "unc-share",
+            "file": "//srv/share/a/f.txt",
+            "repository": null,
+            "workspaceRoot": null,
+            "home": "C:/Users/u",
+            "stores": [],
+            "plan": {
+                "kind": "folder",
+                "root": "//srv/share/a",
+                "path": "f.txt",
+                "exists": false
+            }
+        }
+    ],
+    "label": [
+        {
+            "root": "/h/p/yreview",
+            "home": "/h",
+            "label": "yreview (~/p/yreview)"
+        },
+        {
+            "root": "/h",
+            "home": "/h",
+            "label": "~"
+        },
+        {
+            "root": "/tmp/x",
+            "home": "/h",
+            "label": "x (/tmp/x)"
+        },
+        {
+            "root": "/tmp/x",
+            "home": null,
+            "label": "x (/tmp/x)"
+        },
+        {
+            "root": "/hx/a",
+            "home": "/h",
+            "label": "a (/hx/a)"
+        },
+        {
+            "root": "/",
+            "home": "/h",
+            "label": "/"
+        },
+        {
+            "root": "C:/",
+            "home": "C:/Users/u",
+            "label": "C:/"
+        },
+        {
+            "root": "C:/Users/u",
+            "home": "C:/Users/u",
+            "label": "~"
+        },
+        {
+            "root": "C:/Users/u/code/a",
+            "home": "C:/Users/u",
+            "label": "a (~/code/a)"
+        },
+        {
+            "root": "D:/notes",
+            "home": "C:/Users/u",
+            "label": "notes (D:/notes)"
+        },
+        {
+            "root": "//srv/share/a",
+            "home": "C:/Users/u",
+            "label": "a (//srv/share/a)"
+        }
+    ],
+    "prefix": [
+        {
+            "repository": "/r",
+            "folder": "/r",
+            "prefix": ""
+        },
+        {
+            "repository": "/r",
+            "folder": "/r/a",
+            "prefix": "a"
+        },
+        {
+            "repository": "/r",
+            "folder": "/r/a/b",
+            "prefix": "a/b"
+        },
+        {
+            "repository": "/r",
+            "folder": "/x",
+            "prefix": null
+        },
+        {
+            "repository": "/r",
+            "folder": "/rx",
+            "prefix": null
+        },
+        {
+            "repository": "/r",
+            "folder": "/rx/a",
+            "prefix": null
+        },
+        {
+            "repository": "/r/a",
+            "folder": "/r",
+            "prefix": null
+        },
+        {
+            "repository": "C:/r",
+            "folder": "C:/r",
+            "prefix": ""
+        },
+        {
+            "repository": "C:/r",
+            "folder": "C:/r/a/b",
+            "prefix": "a/b"
+        },
+        {
+            "repository": "C:/r",
+            "folder": "D:/r/a",
+            "prefix": null
+        }
+    ],
+    "rewrite": [
+        {
+            "name": "root-keeps-bytes",
+            "prefix": "",
+            "lines": [
+                "{\"timestamp\":\"1787194427\",\"author\": \"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "out": [
+                "{\"timestamp\":\"1787194427\",\"author\": \"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "renames": {}
+        },
+        {
+            "name": "child-path",
+            "prefix": "a/b",
+            "lines": [
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "out": [
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"a/b/f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "renames": {
+                "3f1f7bb975c5eb158360a809812746962dec04c5": "0dbc572cd46fa559b9e82a2279629dfd02cda2fe"
+            }
+        },
+        {
+            "name": "parent-link",
+            "prefix": "sub",
+            "lines": [
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+                "{\"timestamp\":\"1787194500\",\"author\":\"author@example.com\",\"description\":\"Fixed in the next commit.\",\"parent\":\"3f1f7bb975c5eb158360a809812746962dec04c5\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "out": [
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"sub/f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+                "{\"timestamp\":\"1787194500\",\"author\":\"author@example.com\",\"description\":\"Fixed in the next commit.\",\"parent\":\"ca0727a9f7fcc3b78635b719b56915a45d8bd67f\",\"location\":{\"commit\":\"worktree\",\"path\":\"sub/f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "renames": {
+                "3f1f7bb975c5eb158360a809812746962dec04c5": "ca0727a9f7fcc3b78635b719b56915a45d8bd67f",
+                "9c861606bc8fc66072911971f93d60047f6ec1f2": "c5c528b78b9ebe934f0382c6a9dbb703f4f04f33"
+            }
+        },
+        {
+            "name": "resolve-original",
+            "prefix": "sub",
+            "lines": [
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+                "{\"timestamp\":\"1787194600\",\"author\":\"reviewer@example.com\",\"original\":\"3f1f7bb975c5eb158360a809812746962dec04c5\",\"resolved\":true,\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "out": [
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"sub/f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}",
+                "{\"timestamp\":\"1787194600\",\"author\":\"reviewer@example.com\",\"original\":\"ca0727a9f7fcc3b78635b719b56915a45d8bd67f\",\"resolved\":true,\"location\":{\"commit\":\"worktree\",\"path\":\"sub/f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "renames": {
+                "3f1f7bb975c5eb158360a809812746962dec04c5": "ca0727a9f7fcc3b78635b719b56915a45d8bd67f",
+                "05f85635cfe8bfafb89ff3734e906534c3ffb87e": "6c183d6c5df4842629d2d64ddb6c17f7edfff7cc"
+            }
+        },
+        {
+            "name": "outside-link",
+            "prefix": "sub",
+            "lines": [
+                "{\"timestamp\":\"1787194500\",\"author\":\"author@example.com\",\"description\":\"Fixed in the next commit.\",\"parent\":\"ffffffffffffffffffffffffffffffffffffffff\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "out": [
+                "{\"timestamp\":\"1787194500\",\"author\":\"author@example.com\",\"description\":\"Fixed in the next commit.\",\"parent\":\"ffffffffffffffffffffffffffffffffffffffff\",\"location\":{\"commit\":\"worktree\",\"path\":\"sub/f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "renames": {
+                "959eea85e090aa9093070832418aa434a51a7885": "454469b2015a944f15f151733a8d6260dc6af72f"
+            }
+        },
+        {
+            "name": "broken-line",
+            "prefix": "sub",
+            "lines": [
+                "{\"timestamp\":\"1787194427\"",
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "out": [
+                "{\"timestamp\":\"1787194427\"",
+                "{\"timestamp\":\"1787194427\",\"author\":\"reviewer@example.com\",\"description\":\"This branch never runs when the input is empty.\",\"location\":{\"commit\":\"worktree\",\"path\":\"sub/f.txt\",\"range\":{\"startLine\":3,\"endLine\":4}}}"
+            ],
+            "renames": {
+                "3f1f7bb975c5eb158360a809812746962dec04c5": "ca0727a9f7fcc3b78635b719b56915a45d8bd67f"
+            }
+        },
+        {
+            "name": "text-kept",
+            "prefix": "sub",
+            "lines": [
+                "{\"timestamp\":\"1787194700\",\"author\":\"reviewer@example.com\",\"description\":\"Check this call.\",\"location\":{\"commit\":\"worktree\",\"path\":\"src/main.kt\",\"range\":{\"startLine\":3,\"endLine\":4},\"text\":\"call()\\n\"}}"
+            ],
+            "out": [
+                "{\"timestamp\":\"1787194700\",\"author\":\"reviewer@example.com\",\"description\":\"Check this call.\",\"location\":{\"commit\":\"worktree\",\"path\":\"sub/src/main.kt\",\"range\":{\"startLine\":3,\"endLine\":4},\"text\":\"call()\\n\"}}"
+            ],
+            "renames": {
+                "be3a6a3129403cc32f7745b8791492dda4730b03": "175f8c303e90581583f0d02c20bc7d1c81be6bef"
+            }
+        }
+    ]
+}
