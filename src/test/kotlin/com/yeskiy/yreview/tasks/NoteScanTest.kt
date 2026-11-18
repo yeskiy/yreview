@@ -8,7 +8,6 @@ import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NotesGateway
 import com.yeskiy.yreview.store.Range
 import java.io.File
-import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -16,12 +15,6 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class NoteScanTest {
-
-    /** Counts every git process of one scan. */
-    private class Counting(private val git: GitRunner, private val answer: GitResult? = null) : GitRunner {
-        val runs = AtomicInteger()
-        override fun run(vararg args: String): GitResult = runs.incrementAndGet().let { answer ?: git.run(*args) }
-    }
 
     private class Canceled : RuntimeException()
 

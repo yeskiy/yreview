@@ -8,11 +8,18 @@ import kotlin.concurrent.withLock
 
 class NotesWriteException(message: String) : RuntimeException(message)
 
+/** A move of [ref] from [from] to [to] by one write. [after] gives the note of [commit] from its note before. */
+data class NoteMove(val ref: String, val from: String?, val to: String, val commit: String, val after: (List<String>) -> List<String>)
+
 /**
  * Reads and writes git notes. A write moves the ref only if no other writer moved it after the
  * read, and one lock for each repository and ref serializes the writers of this IDE.
  */
-class NotesGateway(private val git: GitRunner) : NoteStore {
+class NotesGateway(
+    private val git: GitRunner,
+    private val root: String? = null,
+    private val onMoved: (NoteMove) -> Unit = {},
+) : NoteStore {
 
     /**
      * The records of one note, and no record when the plugin cannot read that note.
@@ -40,12 +47,11 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
 
     override fun append(ref: String, commit: String, line: String) =
         guarded(ref) { tip ->
-            val landed = swap(ref, tip) { scratch ->
+            swap(ref, tip) { scratch ->
                 withFile(line, "git notes append failed") { path ->
                     listOf("notes", "--ref", scratch, "append", "-F", path, commit)
                 }
-            }
-            if (landed) Unit else null
+            }?.let { built -> onMoved(NoteMove(ref, tip, built, commit) { before -> before + line }) }
         }
 
     /**
@@ -61,7 +67,10 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
         guarded(ref) { tip ->
             val before = readOrRefuse(ref, commit)
             val after = change(before)
-            before.takeIf { after == before || swap(ref, tip) { scratch -> store(scratch, commit, after) } }
+            if (after == before) return@guarded before
+            swap(ref, tip) { scratch -> store(scratch, commit, after) }
+                ?.let { built -> onMoved(NoteMove(ref, tip, built, commit) { after }) }
+                ?.let { before }
         }
 
     override fun commitsWithNotes(ref: String): List<String> =
@@ -96,18 +105,18 @@ class NotesGateway(private val git: GitRunner) : NoteStore {
 
     /**
      * Builds the new note on a scratch ref that starts at [tip], and moves [ref] from [tip] to it.
-     * False when another writer moved [ref] after [tip] was read.
+     * Gives the new tip, and null when another writer moved [ref] after [tip] was read.
      */
-    private fun swap(ref: String, tip: String?, write: (scratch: String) -> Unit): Boolean {
+    private fun swap(ref: String, tip: String?, write: (scratch: String) -> Unit): String? {
         val scratch = "$SCRATCH_PREFIX${UUID.randomUUID()}"
         try {
             tip?.let { check(git.run("update-ref", scratch, it), "git update-ref failed") }
             write(scratch)
             val built = tip(scratch) ?: throw NotesWriteException("git notes wrote no commit for $ref.")
             val moved = git.run("update-ref", ref, built, tip.orEmpty())
-            if (moved.ok) return true
+            if (moved.ok) return built
             if (tip(ref) == tip) check(moved, "git update-ref failed")
-            return false
+            return null
         } finally {
             git.run("update-ref", "-d", scratch)
         }

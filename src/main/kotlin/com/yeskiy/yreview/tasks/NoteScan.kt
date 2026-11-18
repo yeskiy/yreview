@@ -2,6 +2,7 @@ package com.yeskiy.yreview.tasks
 
 import com.yeskiy.yreview.store.GitDirs
 import com.yeskiy.yreview.store.GitRunner
+import com.yeskiy.yreview.store.NoteMove
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NoteStore
 import com.yeskiy.yreview.store.NoteTips
@@ -64,6 +65,29 @@ object NoteScan {
             },
         )
     }
+
+    /**
+     * A move of a note ref by this IDE. The entry changes only when it holds the tip before the move.
+     * The notes stay sorted by object, the order of the `git grep` answer.
+     */
+    fun moved(root: String, move: NoteMove) {
+        val key = Key(root, move.ref)
+        if (move.from == null) {
+            cache[key] = Entry(move.to, noteOf(move.commit, move.after(emptyList())))
+            return
+        }
+        cache.computeIfPresent(key) { _, entry ->
+            if (entry.tip != move.from) {
+                null
+            } else {
+                Entry(move.to, (entry.notes - move.commit + noteOf(move.commit, move.after(entry.notes[move.commit].orEmpty()))).toSortedMap())
+            }
+        }
+    }
+
+    /** The lines of one note in the form of the grep answer: one line per record, no blank line. */
+    private fun noteOf(commit: String, lines: List<String>): Map<String, List<String>> =
+        lines.flatMap { it.lineSequence() }.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.let { mapOf(commit to it) }.orEmpty()
 
     /** The tip of each ref that exists, in the order of [refs]. */
     private fun tips(git: GitRunner, refs: List<String>): Map<String, String>? {
