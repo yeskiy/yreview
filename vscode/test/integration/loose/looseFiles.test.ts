@@ -71,7 +71,7 @@ describe('comments on loose files in an empty window', () => {
         .forEach((entry) => chmodSync(path.join(entry.parentPath, entry.name), 0o666))
     }
     // On Windows the file watcher of the window can hold the folder for a short time.
-    ;[folder, child].forEach((dir) =>
+    ;[folder, child, `${folder}-locked`].forEach((dir) =>
       rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }),
     )
   })
@@ -179,7 +179,8 @@ describe('comments on loose files in an empty window', () => {
 
   it('a save into a read-only folder fails with a message that names the folder', async function readOnly() {
     if (process.platform === 'win32') this.skip()
-    const locked = path.join(folder, 'locked')
+    // A folder beside the other cases, so the store of the scratch folder does not take the comment.
+    const locked = `${folder}-locked`
     mkdirSync(locked)
     writeFileSync(path.join(locked, 'three.md'), '# Three\n')
     chmodSync(locked, 0o555)
