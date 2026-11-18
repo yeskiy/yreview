@@ -9,6 +9,7 @@ import { registerDiagnostics } from './diagnostic/host'
 import { SessionLog } from './diagnostic/sessionLog'
 import { gitMissingNotice } from './git/gitMissing'
 import { checkGit, findGitPath } from './git/gitPath'
+import { inBackground } from './git/runner'
 import { type HandoffApi, registerHandoff } from './handoff/register'
 import { offerIntellijKey } from './keyOffer'
 import type { BridgeHost } from './bridge/host'
@@ -27,6 +28,7 @@ import { ReviewService } from './store/reviewService'
 import { projectCompletionHost } from './tasks/completionHost'
 import { TaskCompletion } from './tasks/taskCompletion'
 import { type TaskViews, createTaskViews, placeholderViews } from './views/taskViews'
+import { gitApi, repositoryRoots, watchFirstCommits, workspaceFolders } from './views/repositories'
 import { registerViewCommands } from './views/viewCommands'
 import { type TaskWrites, createTaskWrites, registerTaskWrites } from './views/taskWrites'
 import { vscodeHost } from './vscodeHost'
@@ -169,13 +171,41 @@ export const activate = async (context: vscode.ExtensionContext): Promise<Yrevie
     gitPath: git,
     log,
   })
+  const { service } = held
+  const moveFailed = (error: unknown): void =>
+    log.error('The move of a folder store failed.', error)
+  // A migration runs in the background, so the git count of an editor read does not take it.
+  const settleRoot = (root: string): void => {
+    inBackground(() => service.settleRepository(root)).catch(moveFailed)
+  }
   const settle = (): void => {
-    held.service
-      ?.folderStoreRoots(true)
-      .catch((error: unknown) => log.error('The move of a folder store failed.', error))
+    inBackground(async () => {
+      await service.folderStoreRoots(true)
+      ;(await repositoryRoots(await gitApi(), git, await workspaceFolders())).forEach(settleRoot)
+    }).catch(moveFailed)
   }
   settle()
-  context.subscriptions.push(vscode.workspace.onDidChangeWorkspaceFolders(settle))
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(settle),
+    vscode.window.tabGroups.onDidChangeTabs((event) =>
+      event.opened.forEach((tab) => {
+        if (tab.input instanceof vscode.TabInputText && tab.input.uri.scheme === 'file') {
+          const file = tab.input.uri.fsPath
+          inBackground(() => service.settleFile(file)).catch(moveFailed)
+        }
+      }),
+    ),
+  )
+  gitApi()
+    .then((api) => {
+      context.subscriptions.push(
+        watchFirstCommits(api, settleRoot),
+        ...(api === undefined
+          ? []
+          : [api.onDidOpenRepository((repository) => settleRoot(repository.rootUri.fsPath))]),
+      )
+    })
+    .catch(moveFailed)
   offerIntellijKey(context.globalState).catch((error: unknown) =>
     log.error('The key offer failed.', error),
   )

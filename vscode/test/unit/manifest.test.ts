@@ -81,6 +81,48 @@ describe('manifest', () => {
     )
   })
 
+  it('offers only Save Local in an empty box of a local only thread', () => {
+    const empty = 'commentController == yreview && commentThreadIsEmpty'
+    assert.deepEqual(
+      contributes.menus['comments/commentThread/context']
+        ?.filter((item) => item.command !== 'yreview.discard')
+        .map(({ command, group, when }) => ({ command, group, when })),
+      [
+        {
+          command: 'yreview.saveLocal',
+          group: 'inline@1',
+          when: `${empty} && (commentThread == localOnly || config.yreview.newComments != shared)`,
+        },
+        {
+          command: 'yreview.saveShared',
+          group: 'inline@2',
+          when: `${empty} && commentThread != localOnly && config.yreview.newComments != shared`,
+        },
+        {
+          command: 'yreview.saveShared',
+          group: 'inline@1',
+          when: `${empty} && commentThread != localOnly && config.yreview.newComments == shared`,
+        },
+        {
+          command: 'yreview.saveLocal',
+          group: 'inline@2',
+          when: `${empty} && commentThread != localOnly && config.yreview.newComments == shared`,
+        },
+      ],
+    )
+  })
+
+  it('hides Save Shared of a draft whose source has a folder store', () => {
+    const shared = 'resourceScheme == yreview-draft && resource not in yreview.localDrafts'
+    ;['editor/title', 'commandPalette'].forEach((place) =>
+      assert.equal(
+        contributes.menus[place]?.find((item) => item.command === 'yreview.draft.saveShared')?.when,
+        shared,
+        place,
+      ),
+    )
+  })
+
   it('colors an overlap with one color that differs from the range color', () => {
     const ids = contributes.colors.map((color) => color.id)
     assert.deepEqual(ids, [

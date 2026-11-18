@@ -68,6 +68,10 @@ rmSync(webviewUser, { recursive: true, force: true })
 mkdirSync(path.join(webviewUser, 'User'), { recursive: true })
 writeFileSync(path.join(webviewUser, 'User', 'settings.json'), '{ "window.menuStyle": "custom" }\n')
 
+// An empty window restores no folder only when its profile has no window from an earlier run.
+const looseUser = path.join(scratch, 'loose-user-data')
+rmSync(looseUser, { recursive: true, force: true })
+
 const common = {
   version: process.env.VSCODE_TEST_VERSION ?? 'stable',
   launchArgs: ['--disable-workspace-trust'],
@@ -92,6 +96,13 @@ export default defineConfig([
     label: 'plain',
     files: ['out/test/integration/plain/*.test.js', 'out/test/integration/realHome.test.js'],
     workspaceFolder: plainFolder(),
+  },
+  {
+    // An empty window: no workspace folder, so each file is a loose file.
+    ...common,
+    label: 'loose',
+    files: 'out/test/integration/loose/*.test.js',
+    launchArgs: [...common.launchArgs, `--user-data-dir=${looseUser}`],
   },
   {
     // A keymap takes keys of other tests, so it installs into a profile of its own.

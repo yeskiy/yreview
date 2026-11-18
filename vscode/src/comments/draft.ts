@@ -9,6 +9,7 @@ export const DRAFT_SCHEME = 'yreview-draft'
 const DISCARD_QUESTION = 'Discard this review comment?'
 const DISCARD = 'Discard'
 const EMPTY = new Uint8Array()
+const LOCAL_DRAFTS = 'yreview.localDrafts'
 
 /** Writes one new comment on a selection of a source file. A failure rejects. */
 export type DraftWrite = (
@@ -23,6 +24,8 @@ interface Draft {
   readonly source: vscode.Uri
   readonly selection: vscode.Selection
   readonly column: vscode.ViewColumn | undefined
+  /** The source has a folder store, so the draft takes only a local comment. */
+  readonly localOnly: boolean
 }
 
 const missing = (uri: vscode.Uri): never => {
@@ -82,6 +85,7 @@ export class CommentDrafts implements vscode.Disposable {
   constructor(
     private readonly write: DraftWrite,
     private readonly sharedFirst: (source: vscode.Uri) => boolean,
+    private readonly localOnly: (source: vscode.Uri) => Promise<boolean>,
     private readonly closed: (source: vscode.Uri, selection: vscode.Selection) => void,
     private readonly log: Log,
   ) {
@@ -149,7 +153,14 @@ export class CommentDrafts implements vscode.Disposable {
     this.count += 1
     const name = `Comment on ${path.posix.basename(source.path)} lines ${lines.start}-${lines.end}.md`
     const uri = vscode.Uri.from({ scheme: DRAFT_SCHEME, path: `/${this.count}/${name}` })
-    this.drafts.set(uri.toString(), { key, source, selection, column })
+    this.drafts.set(uri.toString(), {
+      key,
+      source,
+      selection,
+      column,
+      localOnly: await this.localOnly(source),
+    })
+    await this.showLocalDrafts()
     await this.files.writeFile(uri, EMPTY)
     return uri
   }
@@ -164,7 +175,7 @@ export class CommentDrafts implements vscode.Disposable {
       return
     }
     const { source, selection } = found.draft
-    await this.write(source, selection, text, shared ?? this.sharedFirst(source))
+    await this.write(source, selection, text, shared ?? this.firstShared(found.draft))
     await this.close(found.document, found.draft)
   }
 
@@ -174,7 +185,7 @@ export class CommentDrafts implements vscode.Disposable {
     const text = new TextDecoder().decode(content).trim()
     if (draft === undefined || this.quiet.has(uri.toString()) || text === '') return
     try {
-      await this.write(draft.source, draft.selection, text, this.sharedFirst(draft.source))
+      await this.write(draft.source, draft.selection, text, this.firstShared(draft))
     } catch (error) {
       this.log.error('Save failed.', error)
       vscode.window
@@ -239,5 +250,21 @@ export class CommentDrafts implements vscode.Disposable {
     this.drafts.delete(uri.toString())
     this.files.delete(uri)
     this.closed(draft.source, draft.selection)
+    this.showLocalDrafts().then(undefined, (error: unknown) =>
+      this.log.error('The draft menus did not update.', error),
+    )
+  }
+
+  private firstShared(draft: Draft): boolean {
+    return !draft.localOnly && this.sharedFirst(draft.source)
+  }
+
+  /** The menus of a local only draft hide Save Shared. */
+  private async showLocalDrafts(): Promise<void> {
+    await vscode.commands.executeCommand(
+      'setContext',
+      LOCAL_DRAFTS,
+      [...this.drafts].filter(([, draft]) => draft.localOnly).map(([uri]) => uri),
+    )
   }
 }

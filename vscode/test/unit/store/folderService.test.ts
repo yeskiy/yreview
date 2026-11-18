@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 
 import { WORKTREE, slashPath } from '../../../src/core/anchor'
@@ -7,10 +14,10 @@ import { FolderNotes } from '../../../src/store/folderNotes'
 import { DISCUSS, LOCAL } from '../../../src/store/noteRefs'
 import {
   type Anchor,
-  FOLDER_SHARED,
   NO_REVISION,
   ReviewService,
   type ServiceHost,
+  HOME_FILE,
   folderFirstNotice,
 } from '../../../src/store/reviewService'
 import { git, makeRepo, removeDir, scratchDir } from '../../fixtures/scratch'
@@ -26,6 +33,7 @@ const host = (folders: readonly string[]) => {
     declinedRoots: () => [],
     saveDeclinedRoots: () => Promise.resolve(),
     workspaceFolders: () => folders,
+    home: () => undefined,
     toldFolders: () => store.told,
     saveToldFolders: (roots) => {
       store.told = [...roots]
@@ -74,6 +82,50 @@ describe('ReviewService with folder stores and diff sides', function folderServi
         anchor: { store: 'folder', root: slashPath(dir), head: 'worktree', path: 'notes/one.md' },
       },
     )
+  })
+
+  it('anchors a loose file at its own folder', async () => {
+    const dir = scratchDir()
+    dirs.push(dir)
+    writeFileSync(path.join(dir, 'f.txt'), 'one\n')
+    const service = new ReviewService(host([]).value)
+    const root = slashPath(realpathSync.native(dir))
+    assert.deepEqual(await service.anchorOf(path.join(dir, 'f.txt')), {
+      kind: 'found',
+      anchor: { store: 'folder', root, head: WORKTREE, path: 'f.txt' },
+    })
+    assert.ok(service.knownRoots().includes(root))
+  })
+
+  it('takes the nearest store above a loose file', async () => {
+    const top = scratchDir()
+    dirs.push(top)
+    mkdirSync(path.join(top, '.y-review', 'notes'), { recursive: true })
+    mkdirSync(path.join(top, 'a'))
+    writeFileSync(path.join(top, 'a', 'f.txt'), 'one\n')
+    const found = await new ReviewService(host([]).value).anchorOf(path.join(top, 'a', 'f.txt'))
+    assert.equal(found.kind === 'found' && found.anchor.path, 'a/f.txt')
+  })
+
+  it('refuses a file directly in home', async () => {
+    const home = scratchDir()
+    dirs.push(home)
+    writeFileSync(path.join(home, 'f.txt'), 'one\n')
+    const value = { ...host([]).value, home: () => slashPath(realpathSync.native(home)) }
+    assert.deepEqual(await new ReviewService(value).anchorOf(path.join(home, 'f.txt')), {
+      kind: 'homeFile',
+    })
+    assert.match(HOME_FILE, /home folder/)
+  })
+
+  it('keeps a store between git init and the first commit', async () => {
+    const repo = scratchDir()
+    dirs.push(repo)
+    git(repo, 'init', '-q')
+    mkdirSync(path.join(repo, '.y-review', 'notes'), { recursive: true })
+    writeFileSync(path.join(repo, 'f.txt'), 'one\n')
+    const found = await new ReviewService(host([]).value).anchorOf(path.join(repo, 'f.txt'))
+    assert.equal(found.kind === 'found' && found.anchor.store, 'folder')
   })
 
   it('a file of an inner repository goes to the notes of that repository', async () => {
@@ -139,15 +191,16 @@ describe('ReviewService with folder stores and diff sides', function folderServi
     )
   })
 
-  it('a shared comment in a folder store pushes nothing and says why', async () => {
+  it('a shared comment in a folder store goes to the local ref', async () => {
     const dir = plain()
     const service = new ReviewService(host([dir]).value)
     const anchor = await folderAnchor(service, dir)
     const written = await service.addComment(anchor, { startLine: 1, endLine: 1 }, 'Shared.', true)
-    assert.equal(written.stored.ref, DISCUSS)
+    assert.equal(written.stored.ref, LOCAL)
     assert.equal(written.shareError, undefined)
-    assert.ok(written.notices?.includes(FOLDER_SHARED))
-    assert.ok(existsSync(storeFile(dir, DISCUSS)))
+    assert.deepEqual(written.notices, [folderFirstNotice(slashPath(dir))])
+    assert.ok(existsSync(storeFile(dir, LOCAL)))
+    assert.equal(existsSync(storeFile(dir, DISCUSS)), false)
   })
 
   it('resolves and deletes a comment of a folder store', async () => {
@@ -276,7 +329,7 @@ describe('ReviewService with folder stores and diff sides', function folderServi
     assert.deepEqual(made.said, [])
   })
 
-  it('a repository rooted above the workspace folder leaves its folder store in place', async () => {
+  it('a repository rooted above the workspace folder takes its folder store with new paths', async () => {
     const outer = makeRepo()
     dirs.push(outer)
     const dir = path.join(outer, 'site')
@@ -285,11 +338,12 @@ describe('ReviewService with folder stores and diff sides', function folderServi
     })
     writeFileSync(
       path.join(dir, '.y-review', 'notes', 'refs-notes-y-review-local', 'worktree.jsonl'),
-      '{"description":"x"}\n',
+      '{"timestamp":"2026-11-18T10:00:00Z","author":"a","description":"x","location":{"commit":"worktree","path":"one.md"}}\n',
     )
     const service = new ReviewService(host([dir]).value)
-    assert.deepEqual(await service.folderStoreRoots(true), [slashPath(dir)])
-    assert.ok(existsSync(path.join(dir, '.y-review')))
+    assert.deepEqual(await service.folderStoreRoots(true), [])
+    assert.equal(existsSync(path.join(dir, '.y-review')), false)
+    assert.match(git(outer, 'notes', '--ref', LOCAL, 'show', 'HEAD'), /"path":"site\/one.md"/)
   })
 
   it('anchors a diff side to its revision', async () => {

@@ -51,10 +51,12 @@ export const toolFixture = () => {
     showFile: [] as { file: string; line: number }[],
     showDiff: [] as { root: string; path: string; revision: string; line: number }[],
   }
-  const state = { diffShown: true }
+  // A set root makes the anchor name a store outside the workspace, as a loose file does.
+  const state: { diffShown: boolean; anchorRoot?: string } = { diffShown: true }
   const host: ToolHost = {
     stores: async () => [git, folder],
     folders: () => [gitRoot, folderRoot],
+    workspaceRoots: async () => [gitRoot, folderRoot],
     containedPath,
     anchorOf: async (file) => {
       calls.anchorOf.push(file)
@@ -63,7 +65,7 @@ export const toolFixture = () => {
             kind: 'found',
             anchor: {
               store: 'git',
-              root: gitRoot,
+              root: state.anchorRoot ?? gitRoot,
               head: COMMIT_A,
               path: path.relative(gitRoot, file).replaceAll('\\', '/'),
             },
