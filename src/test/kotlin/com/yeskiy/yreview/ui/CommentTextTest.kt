@@ -94,20 +94,11 @@ class CommentTextTest {
     }
 
     @Test
-    fun `the share tooltip of a git repository names the push`() {
+    fun `the share tooltip names the push`() {
         assertEquals(
             "The plugin pushes a shared comment to the remote that the settings name. " +
                 "A comment that you do not share stays in this repository.",
-            CommentText.shareTooltip(canPush = true),
-        )
-    }
-
-    @Test
-    fun `the share tooltip of a folder store says that the push waits`() {
-        assertEquals(
-            "No git repository covers this file, so the plugin cannot push yet. " +
-                "A shared comment reaches the remote after the comments move into the git notes.",
-            CommentText.shareTooltip(canPush = false),
+            CommentText.SHARE_TOOLTIP,
         )
     }
 

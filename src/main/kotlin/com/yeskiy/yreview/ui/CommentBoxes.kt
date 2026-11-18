@@ -177,7 +177,7 @@ object ReadBox {
 class WriteBox(
     project: Project,
     header: String,
-    canPush: Boolean,
+    private val canPush: Boolean,
     private val close: () -> Unit,
     private val save: (String, Boolean) -> Unit,
 ) {
@@ -187,7 +187,7 @@ class WriteBox(
     private val share = JBCheckBox(
         "Share this comment with the remote",
         ReviewSettings.getInstance(project).sharing.shareByDefault,
-    ).also { it.toolTipText = CommentText.shareTooltip(canPush) }
+    ).also { it.toolTipText = CommentText.SHARE_TOOLTIP }
 
     private val error = BoxParts.small("").also {
         it.foreground = JBColor.RED
@@ -221,7 +221,7 @@ class WriteBox(
         return JPanel(BorderLayout(0, JBUI.scale(6))).also {
             it.isOpaque = false
             it.add(error, BorderLayout.NORTH)
-            it.add(share, BorderLayout.CENTER)
+            if (canPush) it.add(share, BorderLayout.CENTER)
             it.add(BoxParts.row(saveButton, closeButton), BorderLayout.SOUTH)
         }
     }
@@ -245,7 +245,7 @@ class WriteBox(
             panel.revalidate()
             return
         }
-        save(text, share.isSelected)
+        save(text, canPush && share.isSelected)
     }
 
     private companion object {

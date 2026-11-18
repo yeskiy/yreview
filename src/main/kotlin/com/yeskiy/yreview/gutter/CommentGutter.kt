@@ -164,9 +164,7 @@ class CommentGutter(private val project: Project) : Disposable {
 
     /**
      * Opens the box that writes a new comment under [line]. A second call replaces the open box.
-     *
-     * [canPush] is false for a folder store, and the box then states that a shared comment
-     * reaches the remote only after the comments move into the git notes.
+     * [canPush] is false for a folder store, and the box then shows no share check box.
      */
     fun openWriteBox(
         editor: Editor,

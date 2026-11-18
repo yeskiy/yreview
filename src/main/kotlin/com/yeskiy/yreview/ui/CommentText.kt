@@ -27,18 +27,9 @@ object CommentText {
     fun diffHeader(path: String, range: Range, commit: String, dirty: Boolean): String =
         "${header(path, range)} @${short(commit)}${if (dirty) " (working tree)" else ""}"
 
-    /**
-     * The tooltip of the share box. A folder store reaches no remote, so the box states when
-     * a shared comment gets there.
-     */
-    fun shareTooltip(canPush: Boolean): String =
-        if (canPush) {
-            "The plugin pushes a shared comment to the remote that the settings name. " +
-                "A comment that you do not share stays in this repository."
-        } else {
-            "No git repository covers this file, so the plugin cannot push yet. " +
-                "A shared comment reaches the remote after the comments move into the git notes."
-        }
+    /** The tooltip of the share box. A folder store shows no share box. */
+    const val SHARE_TOOLTIP = "The plugin pushes a shared comment to the remote that the settings name. " +
+        "A comment that you do not share stays in this repository."
 
     /** Returns the message to show, or null when the plugin can save the text. */
     fun errorOf(text: String): String? = if (text.isBlank()) EMPTY_MESSAGE else null

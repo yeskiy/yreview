@@ -32,7 +32,7 @@ object CommentWriter {
     /** The words of the progress window that runs git while the comment reaches the store. */
     const val PROGRESS = "Writing the Review Comment"
 
-    /** Returns true after the comment reaches the store. A write that fails tells the user. */
+    /** Returns true after the comment reaches the store. A folder store takes local comments only. */
     fun write(project: Project, anchor: ReviewAnchor, target: Target, text: String, share: Boolean): Boolean {
         val firstFolderWrite = anchor.kind == StoreKind.FOLDER &&
             !FolderNoticeLog.getInstance(project).told(anchor.root.path)
@@ -44,7 +44,7 @@ object CommentWriter {
         try {
             StoreWrite.run(project, PROGRESS) {
                 ReviewService.getInstance(project)
-                    .addComment(anchor, NoteRefs.refFor(share), target.range, text, lineText)
+                    .addComment(anchor, NoteRefs.refFor(share && anchor.kind == StoreKind.GIT), target.range, text, lineText)
             }.shareError?.let { ShareFailure.report(project, TITLE, it) }
         } catch (failure: NotesWriteException) {
             Messages.showErrorDialog(project, failure.message ?: "The comment was not written.", TITLE)

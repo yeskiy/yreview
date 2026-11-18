@@ -29,8 +29,8 @@ object AddCommentPopup {
      * Opens the box beside the selection of the editor. The Save button hands the text and the
      * share choice to [save]. An empty text stays in the box, and the box states the reason.
      *
-     * [canPush] is false for a folder store. The box then states that a shared comment reaches
-     * the remote only after the comments move into the git notes.
+     * [canPush] is false for a folder store. The box then shows no share check box, and every
+     * comment stays local.
      *
      * [context] opens the box over the component of that context in place of the editor. The
      * preview side of a split editor holds no editor of its own. A hidden text editor gives no
@@ -51,7 +51,7 @@ object AddCommentPopup {
             "Share this comment with the remote",
             ReviewSettings.getInstance(project).sharing.shareByDefault,
         )
-        share.toolTipText = CommentText.shareTooltip(canPush)
+        share.toolTipText = CommentText.SHARE_TOOLTIP
 
         val error = JBLabel("", UIUtil.ComponentStyle.SMALL, UIUtil.FontColor.NORMAL)
         error.foreground = JBColor.RED
@@ -62,7 +62,7 @@ object AddCommentPopup {
 
         val foot = JPanel(BorderLayout(0, JBUI.scale(6)))
         foot.add(error, BorderLayout.NORTH)
-        foot.add(share, BorderLayout.CENTER)
+        if (canPush) foot.add(share, BorderLayout.CENTER)
         foot.add(ReviewPopup.buttons(saveButton, closeButton), BorderLayout.SOUTH)
 
         val panel = JPanel(BorderLayout(0, JBUI.scale(8)))
@@ -83,7 +83,7 @@ object AddCommentPopup {
                 return
             }
             popup.closeOk(null)
-            save(text, share.isSelected)
+            save(text, canPush && share.isSelected)
         }
 
         saveButton.addActionListener { commit() }
