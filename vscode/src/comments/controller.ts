@@ -27,6 +27,7 @@ import {
   type ReviewService,
   type WriteResult,
 } from '../store/reviewService'
+import type { Placed } from '../tasks/placedComments'
 import { gitApi, watchHeads } from '../views/repositories'
 
 import { CommentDrafts } from './draft'
@@ -535,20 +536,17 @@ export class ReviewComments implements vscode.Disposable {
       this.decorate(uri)
       return
     }
-    const placed = (
-      uri.scheme === FILE
-        ? await this.service.placedAt(found.anchor)
-        : (await this.service.openAt(found.anchor)).map((stored) => ({
-            stored,
-            carry: { kind: 'same', range: stored.record.location?.range } as const,
-          }))
-    ).filter(
+    const placed = (await this.placedOf(uri, found.anchor)).filter(
       (entry) =>
         !this.deleting.has(entry.stored.id) &&
         (entry.carry.kind === 'same' || entry.carry.kind === 'outdated'),
     )
     this.carried[
-      placed.some((entry) => entry.stored.commit !== found.anchor.head) ? 'add' : 'delete'
+      placed.some(
+        (entry) => entry.source === found.anchor && entry.stored.commit !== found.anchor.head,
+      )
+        ? 'add'
+        : 'delete'
     ](uri.toString())
     const document = await vscode.workspace.openTextDocument(uri)
     // A write during the read, for example a resolve, makes the read old.
@@ -565,16 +563,16 @@ export class ReviewComments implements vscode.Disposable {
       .filter((entry) => known.has(entry.stored.id) && !ids.has(entry.stored.id))
       .forEach((entry) => entry.thread.dispose())
     this.shown.set(uri.toString(), [
-      ...placed.map(({ stored, carry }) => {
+      ...placed.map(({ stored, carry, source }) => {
         const range = fullRange(shownRange(carry), document)
-        const anchor = { ...found.anchor, head: stored.commit }
+        const anchor = { ...source, head: stored.commit }
         const old = before.find((shown) => shown.stored.id === stored.id)
         const saved = this.saved.delete(stored.id)
         return {
           thread:
             old === undefined
-              ? this.draw(uri, stored, carry, found.anchor, range, expanded || (saved && marks))
-              : refresh(old, stored, carry, range, revisionOf(uri, found.anchor)),
+              ? this.draw(uri, stored, carry, source, range, expanded || (saved && marks))
+              : refresh(old, stored, carry, range, revisionOf(uri, source)),
           stored,
           anchor,
           range,
@@ -584,6 +582,28 @@ export class ReviewComments implements vscode.Disposable {
       ...before.filter((entry) => !known.has(entry.stored.id) && !ids.has(entry.stored.id)),
     ])
     this.decorate(uri)
+  }
+
+  /** The open comments of the file, each with the anchor of its store. A file also reads a store that did not move. */
+  private async placedOf(
+    uri: vscode.Uri,
+    anchor: Anchor,
+  ): Promise<readonly (Placed & { readonly source: Anchor })[]> {
+    if (uri.scheme !== FILE) {
+      return (await this.service.openAt(anchor)).map((stored) => ({
+        stored,
+        carry: { kind: 'same', range: stored.record.location?.range } as const,
+        source: anchor,
+      }))
+    }
+    const leftover = await this.service.leftoverOf(anchor, uri.fsPath)
+    return (
+      await Promise.all(
+        [anchor, ...(leftover === undefined ? [] : [leftover])].map(async (source) =>
+          (await this.service.placedAt(source)).map((entry) => ({ ...entry, source })),
+        ),
+      )
+    ).flat()
   }
 
   /** A `git:` side anchors at the revision of its ref, and a file at HEAD or in a folder store. */
@@ -668,8 +688,15 @@ export class ReviewComments implements vscode.Disposable {
     }
     const found = await this.anchorFor(uri)
     if (found.kind !== 'found') throw new Error(refusalOf(found))
+    const leftover =
+      uri.scheme === FILE ? await this.service.leftoverOf(found.anchor, uri.fsPath) : undefined
+    const source =
+      leftover !== undefined &&
+      (await this.service.openAt(leftover)).some((stored) => stored.id === id)
+        ? leftover
+        : found.anchor
     await this.timed('Resolve', async () => {
-      const result = await this.write(found.anchor, () => this.service.resolve(found.anchor, id))
+      const result = await this.write(source, () => this.service.resolve(source, id))
       await this.reload(uri)
       if (result.shareError !== undefined)
         vscode.window
@@ -697,13 +724,11 @@ export class ReviewComments implements vscode.Disposable {
     }
     const found = await this.anchorFor(uri)
     if (found.kind !== 'found') throw new Error(refusalOf(found))
-    const stored = (await this.service.placedAt(found.anchor)).find(
-      (placed) => placed.stored.id === id,
-    )?.stored
-    if (stored === undefined) return false
+    const hit = (await this.placedOf(uri, found.anchor)).find((placed) => placed.stored.id === id)
+    if (hit === undefined) return false
     await this.timed('Delete', async () => {
-      const result = await this.write(found.anchor, () =>
-        this.service.removeStored(found.anchor, [stored]),
+      const result = await this.write(hit.source, () =>
+        this.service.removeStored(hit.source, [hit.stored]),
       )
       await this.reload(uri)
       if (result.shareError !== undefined)

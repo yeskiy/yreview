@@ -29,10 +29,6 @@ export const prefixOf = (repositoryRoot: string, folderRoot: string): string | u
 export const maySettle = (repositoryRoot: string, folderRoot: string): boolean =>
   prefixOf(repositoryRoot, folderRoot) !== undefined
 
-/** Only a repository rooted at the folder itself takes the records, until the move rewrites each path. */
-export const mayMove = (writes: boolean, repositoryRoot: string, folderRoot: string): boolean =>
-  writes && prefixOf(repositoryRoot, folderRoot) === ''
-
 // --- Record rewrite ---
 
 /** The new identifiers of a store that moves into a repository, and its rewritten lines. */

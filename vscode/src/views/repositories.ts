@@ -81,6 +81,32 @@ export const watchRepositories = (
   return new vscode.Disposable(() => held.forEach((disposable) => disposable.dispose()))
 }
 
+/** Calls back with the root of a repository whose HEAD goes from no commit to a commit. */
+export const watchFirstCommits = (
+  api: GitApi | undefined,
+  onFirst: (root: string) => void,
+): vscode.Disposable => {
+  const heads = new Map<GitRepository, string | undefined>()
+  const follow = (repository: GitRepository): vscode.Disposable => {
+    heads.set(repository, repository.state.HEAD?.commit)
+    return repository.state.onDidChange(() => {
+      const head = repository.state.HEAD?.commit
+      const before = heads.get(repository)
+      heads.set(repository, head)
+      if (before === undefined && head !== undefined) onFirst(repository.rootUri.fsPath)
+    })
+  }
+  const held = (api?.repositories ?? []).map(follow)
+  if (api !== undefined) {
+    held.push(
+      api.onDidOpenRepository((repository) => {
+        held.push(follow(repository))
+      }),
+    )
+  }
+  return new vscode.Disposable(() => held.forEach((disposable) => disposable.dispose()))
+}
+
 /** Calls back when HEAD of a repository that the git extension knows moves to another commit. */
 export const watchHeads = (api: GitApi | undefined, onMove: () => void): vscode.Disposable => {
   const heads = new Map<GitRepository, string | undefined>(

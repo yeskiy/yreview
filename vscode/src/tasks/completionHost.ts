@@ -56,4 +56,5 @@ export const projectCompletionHost = (
   },
   openTodos,
   sent,
+  forward: (given) => service.forward(given),
 })

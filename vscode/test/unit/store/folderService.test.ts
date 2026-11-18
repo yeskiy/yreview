@@ -329,7 +329,7 @@ describe('ReviewService with folder stores and diff sides', function folderServi
     assert.deepEqual(made.said, [])
   })
 
-  it('a repository rooted above the workspace folder leaves its folder store in place', async () => {
+  it('a repository rooted above the workspace folder takes its folder store with new paths', async () => {
     const outer = makeRepo()
     dirs.push(outer)
     const dir = path.join(outer, 'site')
@@ -338,11 +338,12 @@ describe('ReviewService with folder stores and diff sides', function folderServi
     })
     writeFileSync(
       path.join(dir, '.y-review', 'notes', 'refs-notes-y-review-local', 'worktree.jsonl'),
-      '{"description":"x"}\n',
+      '{"timestamp":"2026-11-18T10:00:00Z","author":"a","description":"x","location":{"commit":"worktree","path":"one.md"}}\n',
     )
     const service = new ReviewService(host([dir]).value)
-    assert.deepEqual(await service.folderStoreRoots(true), [slashPath(dir)])
-    assert.ok(existsSync(path.join(dir, '.y-review')))
+    assert.deepEqual(await service.folderStoreRoots(true), [])
+    assert.equal(existsSync(path.join(dir, '.y-review')), false)
+    assert.match(git(outer, 'notes', '--ref', LOCAL, 'show', 'HEAD'), /"path":"site\/one.md"/)
   })
 
   it('anchors a diff side to its revision', async () => {

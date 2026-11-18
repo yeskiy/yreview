@@ -104,6 +104,8 @@ export interface CompletionHost {
   resolve(found: FoundComment): Promise<void>
   openTodos(): Promise<readonly ReviewTask[]>
   sent(open: readonly ReviewTask[]): Promise<ReadonlySet<string>>
+  /** The new identifier of a migrated record for an old identifier or its handle. */
+  forward?(given: string): string
 }
 
 type CommentOutcome =
@@ -151,7 +153,7 @@ export class TaskCompletion {
     ids: readonly string[],
     given: string,
   ): Promise<CommentOutcome> {
-    const key = keyOf(given)
+    const key = keyOf(this.host.forward?.(given) ?? given)
     const match = key === undefined ? undefined : matchKey(key, ids)
     if (match?.kind === 'many') return { kind: 'problem', text: ambiguous(given, match.count) }
     const hit =

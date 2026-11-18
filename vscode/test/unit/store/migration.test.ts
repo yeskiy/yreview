@@ -11,7 +11,6 @@ import { CommentBook } from '../../../src/store/commentBook'
 import { FOLDER, FolderNotes } from '../../../src/store/folderNotes'
 import {
   copyFolder,
-  mayMove,
   maySettle,
   migrationNotice,
   moveStoreFolder,
@@ -260,18 +259,6 @@ describe('folder migration', function migration() {
 
   it('a repository beside the folder may not take the records', () => {
     assert.equal(maySettle('E:/Projects/other', FOLDER_ROOT), false)
-  })
-
-  it('a lookup that may write moves the records', () => {
-    assert.equal(mayMove(true, FOLDER_ROOT, FOLDER_ROOT), true)
-  })
-
-  it('a lookup that may not write leaves the records where they are', () => {
-    assert.equal(mayMove(false, FOLDER_ROOT, FOLDER_ROOT), false)
-  })
-
-  it('a lookup that may write still asks where the repository is rooted', () => {
-    assert.equal(mayMove(true, FOLDER_ROOT, `${FOLDER_ROOT}/api`), false)
   })
 
   it('a copy that failed warns and asks for no new read', () => {

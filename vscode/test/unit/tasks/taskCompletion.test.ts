@@ -4,6 +4,7 @@ import { handleOf } from '../../../src/core/handles'
 import { todoId } from '../../../src/core/taskIds'
 import { NotesWriteError } from '../../../src/git/errors'
 import { LOCAL } from '../../../src/store/noteRefs'
+import { ShareLog } from '../../../src/store/shareLog'
 import type { ReviewTask } from '../../../src/tasks/reviewTask'
 import {
   type CompletionHost,
@@ -78,6 +79,17 @@ describe('TaskCompletion', () => {
     const report = await new TaskCompletion(made.host).close([handleOf(COMMENT_ID)])
     assert.equal(report.closed, 1)
     assert.deepEqual(made.resolved, [COMMENT_ID])
+  })
+
+  it('an old identifier of a migrated comment and its handle close the new record', async () => {
+    const OLD_ID = 'f'.repeat(40)
+    const log = new ShareLog()
+    await log.rename(new Map([[OLD_ID, COMMENT_ID]]), 'E:/repo')
+    const made = fake({ comments: [found(COMMENT_ID)] })
+    const host: CompletionHost = { ...made.host, forward: (given) => log.forward(given) }
+    assert.equal((await new TaskCompletion(host).close([OLD_ID])).closed, 1)
+    assert.equal((await new TaskCompletion(host).close([handleOf(OLD_ID)])).closed, 1)
+    assert.deepEqual(made.resolved, [COMMENT_ID, COMMENT_ID])
   })
 
   it('an unknown id is a problem', async () => {

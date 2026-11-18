@@ -24,10 +24,19 @@ import { type Placed, placedComments } from '../tasks/placedComments'
 import { CommentBook, type StoredComment } from './commentBook'
 import { FOLDER, FolderNotes } from './folderNotes'
 import { mayMigrate } from './folderOwnership'
-import { copyFolder, mayMove, migrationNotice, moveStoreFolder } from './migration'
+import {
+  type MigrationReport,
+  RewrittenNotes,
+  copyFolder,
+  migrationNotice,
+  moveStoreFolder,
+  prefixOf,
+  rewriteRecords,
+} from './migration'
 import { ALL_REFS, isShared, refFor } from './noteRefs'
 import { RefspecAsks } from './refspecAsks'
 import { ShareLog } from './shareLog'
+import { childStores } from './storeSearch'
 
 export type StoreKind = 'git' | 'folder'
 
@@ -125,11 +134,56 @@ const holdsRecords = async (root: string): Promise<boolean> =>
     (keys) => keys.length > 0,
   )
 
+/** Every record line of one folder store. A read that fails stops the caller. */
+const allLines = async (store: FolderNotes): Promise<readonly string[]> =>
+  (
+    await Promise.all(
+      ALL_REFS.map(async (ref) =>
+        (
+          await Promise.all(
+            (await store.commitsOrRefuse(ref)).map((key) => store.readOrRefuse(ref, key)),
+          )
+        ).flat(),
+      ),
+    )
+  ).flat()
+
 /** The new place of the old folder, and undefined while the folder stays where it is. */
-const moveAway = async (runner: ProcessGitRunner, root: string): Promise<string | undefined> => {
+const moveAway = async (
+  runner: ProcessGitRunner,
+  root: string,
+  n: number,
+): Promise<string | undefined> => {
   const folder = await reviewFolderOf(runner)
-  const target = folder === undefined ? undefined : path.join(folder, `migrated-${Date.now()}`)
+  const target = folder === undefined ? undefined : path.join(folder, `migrated-${Date.now()}-${n}`)
   return target !== undefined && (await moveStoreFolder(root, target)) ? target : undefined
+}
+
+/** A store below the root copies with new paths and identifiers. A store at the root copies byte for byte. */
+const copyStore = async (
+  folder: FolderNotes,
+  prefix: string,
+  runner: ProcessGitRunner,
+  head: string,
+): Promise<{ readonly report: MigrationReport; readonly renames: ReadonlyMap<string, string> }> => {
+  try {
+    const { renames } =
+      prefix === ''
+        ? { renames: new Map<string, string>() }
+        : rewriteRecords(await allLines(folder), prefix)
+    return {
+      report: await copyFolder(
+        new RewrittenNotes(folder, prefix, renames),
+        new NotesGateway(runner),
+        ALL_REFS,
+        head,
+      ),
+      renames,
+    }
+  } catch (error) {
+    if (!(error instanceof NotesWriteError)) throw error
+    return { report: { moved: 0, problem: error.message }, renames: new Map() }
+  }
 }
 
 /** Writes, resolves and deletes review comments in git notes or folder stores, and pushes the shared ones. */
@@ -141,6 +195,11 @@ export class ReviewService {
   private readonly books = new Map<string, CommentBook>()
 
   private readonly migrating = new Map<string, Promise<void>>()
+
+  private readonly searching = new Map<string, Promise<void>>()
+
+  /** The untracked stores inside a repository with a commit that did not move yet. */
+  private readonly leftovers = new Set<string>()
 
   private readonly asks: RefspecAsks
 
@@ -309,7 +368,7 @@ export class ReviewService {
     return { removed, shareError: reasons === '' ? undefined : reasons }
   }
 
-  /** Moves each folder store that a repository now covers, then gives the folders that still hold records. */
+  /** Moves each workspace folder store that a repository now covers, then gives every store that still holds records. */
   async folderStoreRoots(writes: boolean): Promise<readonly string[]> {
     const roots = await this.folderRoots()
     await roots.reduce(
@@ -318,7 +377,7 @@ export class ReviewService {
     )
     return (
       await Promise.all(
-        roots.map(async (root) =>
+        [...new Set([...roots, ...this.leftovers])].map(async (root) =>
           !(await this.isRepositoryRoot(root)) && (await holdsRecords(root)) ? [root] : [],
         ),
       )
@@ -333,6 +392,39 @@ export class ReviewService {
     }))
   }
 
+  /** Moves every untracked store inside the work tree of a repository with a commit. One search runs at a time. */
+  async settleRepository(root: string): Promise<void> {
+    const repository = slashPath(await realOf(root))
+    const running = this.searching.get(repository)
+    if (running !== undefined) return running
+    const work = this.searchAndMove(repository).finally(() => this.searching.delete(repository))
+    this.searching.set(repository, work)
+    return work
+  }
+
+  /** Moves the nearest store of one file that holds records, when a repository with a commit covers it. */
+  async settleFile(filePath: string): Promise<void> {
+    const dir = path.posix.dirname(slashPath(await realOf(filePath)))
+    if (!(await isDirectory(dir))) return
+    const repository = topOf(await this.runner(dir).run(['rev-parse', '--show-toplevel']))
+    if (repository === undefined || (await this.headOf(repository)) === undefined) return
+    const folder = await this.nearestStore(dir, repository, () => Promise.resolve(true))
+    if (folder !== undefined) await this.settle(folder, true)
+  }
+
+  /** The folder anchor of an untracked store with records between the file and the root of its git anchor. */
+  async leftoverOf(anchor: Anchor, filePath: string): Promise<Anchor | undefined> {
+    if (anchor.store !== 'git') return undefined
+    const real = slashPath(await realOf(filePath))
+    const folder = await this.nearestStore(path.posix.dirname(real), anchor.root, (store) =>
+      mayMigrate(this.runner(store)),
+    )
+    const relative = folder === undefined ? undefined : relativeTo(real, folder)
+    return folder === undefined || relative === undefined
+      ? undefined
+      : { store: 'folder', root: folder, head: WORKTREE, path: relative }
+  }
+
   /** Every root that this service anchored, for the log redaction. */
   knownRoots(): readonly string[] {
     return [...this.roots]
@@ -341,6 +433,11 @@ export class ReviewService {
   /** True when a push of the comment failed and no later push of its ref worked. */
   unshared(id: string): boolean {
     return this.shareLog.isUnshared(id)
+  }
+
+  /** The new identifier of a migrated record for an old identifier or its handle. */
+  forward(given: string): string {
+    return this.shareLog.forward(given)
   }
 
   onDidChange(listener: () => void): () => void {
@@ -405,36 +502,74 @@ export class ReviewService {
     return told ? [] : [folderFirstNotice(root)]
   }
 
-  /** One migration for each root at a time. A lookup that may not write moves nothing. */
-  private settle(root: string, writes: boolean): Promise<void> {
+  /** The nearest folder of the walk whose store holds records and passes the test. */
+  private async nearestStore(
+    dir: string,
+    ceiling: string,
+    test: (folder: string) => Promise<boolean>,
+  ): Promise<string | undefined> {
+    const walk = storeWalk(dir, ceiling, this.host.home())
+    const hits = await Promise.all(
+      walk.map(
+        async (folder) =>
+          (await isDirectory(storeFolderOf(folder))) &&
+          (await holdsRecords(folder)) &&
+          (await test(folder)),
+      ),
+    )
+    return walk.find((_, n) => hits[n])
+  }
+
+  /** The search and the moves of one repository. The stores move one after the other. */
+  private async searchAndMove(repository: string): Promise<void> {
+    const runner = this.runner(repository)
+    if (topOf(await runner.run(['rev-parse', '--show-toplevel'])) !== repository) return
+    if ((await this.headOf(repository)) === undefined) return
+    const roots = await Promise.all(
+      ((await childStores(runner, repository)) ?? []).map(async (store) =>
+        slashPath(await realOf(store)),
+      ),
+    )
+    await roots.reduce(
+      (done, root, n) => done.then(() => this.settle(root, true, repository, n)),
+      Promise.resolve(),
+    )
+  }
+
+  /** One migration for each folder at a time, so a folder never moves into two repositories. */
+  private settle(root: string, writes: boolean, repository?: string, n = 0): Promise<void> {
     if (!writes) return Promise.resolve()
     const running = this.migrating.get(root)
     if (running !== undefined) return running
-    const work = this.migrate(root).finally(() => this.migrating.delete(root))
+    const work = this.migrate(root, repository, n).finally(() => this.migrating.delete(root))
     this.migrating.set(root, work)
     return work
   }
 
-  /** The copy and its check run first, and the move of the folder last, so a crash loses nothing. */
-  private async migrate(folderRoot: string): Promise<void> {
-    if (!(await holdsRecords(folderRoot))) return
+  /** The copy and its check run first, the renames next, and the move of the folder last. */
+  private async migrate(
+    folderRoot: string,
+    expected: string | undefined,
+    n: number,
+  ): Promise<void> {
+    if (!(await holdsRecords(folderRoot))) {
+      this.leftovers.delete(folderRoot)
+      return
+    }
     const repository = topOf(await this.runner(folderRoot).run(['rev-parse', '--show-toplevel']))
-    if (repository === undefined || !mayMove(true, repository, folderRoot)) return
+    const prefix = repository === undefined ? undefined : prefixOf(repository, folderRoot)
+    // A store moves only into the repository that the search saw.
+    if (repository === undefined || prefix === undefined) return
+    if (expected !== undefined && expected !== repository) return
     const head = await this.headOf(repository)
     if (head === undefined || !(await mayMigrate(this.runner(folderRoot)))) return
+    this.leftovers.add(folderRoot)
     const runner = this.runner(repository)
-    const report = await copyFolder(
-      new FolderNotes(folderRoot),
-      new NotesGateway(runner),
-      ALL_REFS,
-      head,
-    )
-    const notice = migrationNotice(
-      report,
-      folderRoot,
-      path.basename(repository),
-      report.problem === undefined ? await moveAway(runner, folderRoot) : undefined,
-    )
+    const { report, renames } = await copyStore(new FolderNotes(folderRoot), prefix, runner, head)
+    if (report.problem === undefined) await this.shareLog.rename(renames, repository)
+    const movedTo = report.problem === undefined ? await moveAway(runner, folderRoot, n) : undefined
+    if (movedTo !== undefined) this.leftovers.delete(folderRoot)
+    const notice = migrationNotice(report, folderRoot, path.basename(repository), movedTo)
     if (notice.warning) this.host.warn(notice.text)
     else this.host.say(notice.text)
     if (notice.refresh) this.notify()

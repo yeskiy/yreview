@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import {
   chmodSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   rmSync,
@@ -61,8 +63,17 @@ describe('comments on loose files in an empty window', () => {
 
   after(async () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
+    // Git writes its object files read-only, and the test host does not delete a read-only file on Windows.
+    const child = `${folder}-child`
+    if (existsSync(child)) {
+      readdirSync(child, { recursive: true, withFileTypes: true })
+        .filter((entry) => entry.isFile())
+        .forEach((entry) => chmodSync(path.join(entry.parentPath, entry.name), 0o666))
+    }
     // On Windows the file watcher of the window can hold the folder for a short time.
-    rmSync(folder, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
+    ;[folder, child].forEach((dir) =>
+      rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }),
+    )
   })
 
   it('runs with no workspace folder', () => {
@@ -112,6 +123,57 @@ describe('comments on loose files in an empty window', () => {
       assert.equal(existsSync(sharedStore(folder)), false)
     } finally {
       await settings.update('newComments', undefined, vscode.ConfigurationTarget.Global)
+    }
+  })
+
+  it('a child store moves into the git notes after the first commit, with the path from the root', async () => {
+    const { comments } = await api()
+    assert.ok(comments)
+    // A folder beside the other cases, so the store of the scratch folder does not take the comment.
+    const root = `${folder}-child`
+    const sub = path.join(root, 'sub')
+    mkdirSync(sub, { recursive: true })
+    writeFileSync(path.join(sub, 'f.txt'), 'one\n')
+    writeFileSync(path.join(sub, 'g.txt'), 'two\n')
+    // The git extension then does not open the new repository, so only the tab open moves the store.
+    const gitSettings = vscode.workspace.getConfiguration('git')
+    await gitSettings.update('autoRepositoryDetection', false, vscode.ConfigurationTarget.Global)
+    try {
+      await vscode.window.showTextDocument(fileIn(sub, 'f.txt'))
+      await save(fileIn(sub, 'f.txt'), 'Child note.')
+      assert.equal(lines(storeFile(sub)).length, 1)
+      const run = (...args: string[]): string =>
+        execFileSync(
+          'git',
+          ['-c', 'user.name=Yreview Test', '-c', 'user.email=reviewer@example.com', ...args],
+          { cwd: root, encoding: 'utf8' },
+        )
+      run('init', '-q', '-b', 'main')
+      run('add', 'sub/f.txt', 'sub/g.txt')
+      run('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'init')
+      await vscode.window.showTextDocument(fileIn(sub, 'g.txt'))
+      assert.ok(
+        await until(() => !existsSync(path.join(sub, '.y-review')), 80),
+        'the child store did not move',
+      )
+      await vscode.window.showTextDocument(fileIn(sub, 'f.txt'))
+      await comments.reload(fileIn(sub, 'f.txt'))
+      const shown = comments
+        .snapshot(fileIn(sub, 'f.txt'))
+        .find((entry) => entry.stored.record.description === 'Child note.')
+      assert.equal(shown?.anchor.store, 'git')
+      assert.equal(shown?.stored.record.location?.path, 'sub/f.txt')
+      assert.match(
+        run('notes', '--ref', 'refs/notes/y-review/local', 'show', 'HEAD'),
+        /"path":"sub\/f.txt"/,
+      )
+    } finally {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors')
+      await gitSettings.update(
+        'autoRepositoryDetection',
+        undefined,
+        vscode.ConfigurationTarget.Global,
+      )
     }
   })
 
