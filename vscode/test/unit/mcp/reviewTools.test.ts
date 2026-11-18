@@ -3,6 +3,7 @@ import path from 'node:path'
 
 import { handleOf } from '../../../src/core/handles'
 import { encodeRecord, recordId } from '../../../src/core/record'
+import { inWorkspace } from '../../../src/mcp/reviewTools'
 import { DISCUSS, LOCAL } from '../../../src/store/noteRefs'
 import { COMMIT_A, COMMIT_B, WORKTREE, toolFixture } from './toolFixture'
 
@@ -13,6 +14,16 @@ const NOTE_KEY = [DISCUSS, COMMIT_A].join(String.fromCharCode(0))
 
 const ids = (payload: unknown): readonly string[] =>
   (payload as { comments: readonly { id: string }[] }).comments.map((row) => row.id).sort()
+
+describe('inWorkspace', () => {
+  it('keeps the roots above, at and inside a workspace folder', () => {
+    assert.deepEqual(inWorkspace(['C:/w', 'C:/w/sub', 'C:/', 'C:/other', 'C:/wide'], ['C:/w']), [
+      'C:/w',
+      'C:/w/sub',
+      'C:/',
+    ])
+  })
+})
 
 describe('review tools (ReviewToolset.kt)', () => {
   const held: { fixture?: Fixture } = {}
@@ -142,6 +153,15 @@ describe('review tools (ReviewToolset.kt)', () => {
       revision: COMMIT_A,
       shared: true,
     })
+  })
+
+  it('refuses an anchor whose root is outside the workspace', async () => {
+    const { tools, calls, state } = fixture()
+    state.anchorRoot = path.resolve('/outside-the-workspace')
+    assert.deepEqual(await tools.addComment('src/a.ts', 1, 1, 'x'), {
+      error: 'The project holds no review store for src/a.ts.',
+    })
+    assert.deepEqual(calls.add, [])
   })
 
   it('names a file the workspace does not hold', async () => {

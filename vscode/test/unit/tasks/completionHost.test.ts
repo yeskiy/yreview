@@ -16,6 +16,7 @@ const host = (folders: readonly string[]): ServiceHost => ({
   declinedRoots: () => [],
   saveDeclinedRoots: () => Promise.resolve(),
   workspaceFolders: () => folders,
+  home: () => undefined,
   toldFolders: () => [],
   saveToldFolders: () => Promise.resolve(),
   say: () => undefined,

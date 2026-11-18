@@ -13,6 +13,7 @@ const host: ServiceHost = {
   declinedRoots: () => [],
   saveDeclinedRoots: () => Promise.resolve(),
   workspaceFolders: () => [],
+  home: () => undefined,
   toldFolders: () => [],
   saveToldFolders: () => Promise.resolve(),
   say: () => undefined,

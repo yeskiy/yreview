@@ -21,6 +21,7 @@ import { ALL_REFS, isShared } from '../store/noteRefs'
 import {
   type Anchor,
   type AnchorResult,
+  HOME_FILE,
   NO_COMMIT,
   NO_PLACE,
   type ReviewService,
@@ -71,7 +72,9 @@ const scopeOf = (uri: vscode.Uri): vscode.Uri => {
 }
 
 const refusalOf = (result: Exclude<AnchorResult, { kind: 'found' }>): string =>
-  result.kind === 'noCommit' ? NO_COMMIT : (result.reason ?? NO_PLACE)
+  result.kind === 'noPlace'
+    ? (result.reason ?? NO_PLACE)
+    : { noCommit: NO_COMMIT, homeFile: HOME_FILE }[result.kind]
 
 /** A thread on a diff side names the revision of that side in its label. */
 const revisionOf = (uri: vscode.Uri, anchor: Anchor): string | undefined =>

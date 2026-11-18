@@ -1,7 +1,10 @@
 import { realpathSync } from 'node:fs'
 
 /** The real path of a folder, or undefined when the folder does not resolve. */
-const realOf = (folder: string, resolve: (path: string) => string): string | undefined => {
+export const realOf = (
+  folder: string,
+  resolve: (path: string) => string = realpathSync.native,
+): string | undefined => {
   try {
     return resolve(folder)
   } catch {

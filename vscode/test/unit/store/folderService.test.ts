@@ -1,5 +1,12 @@
 import assert from 'node:assert/strict'
-import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  realpathSync,
+  writeFileSync,
+} from 'node:fs'
 import path from 'node:path'
 
 import { WORKTREE, slashPath } from '../../../src/core/anchor'
@@ -11,6 +18,7 @@ import {
   NO_REVISION,
   ReviewService,
   type ServiceHost,
+  HOME_FILE,
   folderFirstNotice,
 } from '../../../src/store/reviewService'
 import { git, makeRepo, removeDir, scratchDir } from '../../fixtures/scratch'
@@ -26,6 +34,7 @@ const host = (folders: readonly string[]) => {
     declinedRoots: () => [],
     saveDeclinedRoots: () => Promise.resolve(),
     workspaceFolders: () => folders,
+    home: () => undefined,
     toldFolders: () => store.told,
     saveToldFolders: (roots) => {
       store.told = [...roots]
@@ -74,6 +83,50 @@ describe('ReviewService with folder stores and diff sides', function folderServi
         anchor: { store: 'folder', root: slashPath(dir), head: 'worktree', path: 'notes/one.md' },
       },
     )
+  })
+
+  it('anchors a loose file at its own folder', async () => {
+    const dir = scratchDir()
+    dirs.push(dir)
+    writeFileSync(path.join(dir, 'f.txt'), 'one\n')
+    const service = new ReviewService(host([]).value)
+    const root = slashPath(realpathSync.native(dir))
+    assert.deepEqual(await service.anchorOf(path.join(dir, 'f.txt')), {
+      kind: 'found',
+      anchor: { store: 'folder', root, head: WORKTREE, path: 'f.txt' },
+    })
+    assert.ok(service.knownRoots().includes(root))
+  })
+
+  it('takes the nearest store above a loose file', async () => {
+    const top = scratchDir()
+    dirs.push(top)
+    mkdirSync(path.join(top, '.y-review', 'notes'), { recursive: true })
+    mkdirSync(path.join(top, 'a'))
+    writeFileSync(path.join(top, 'a', 'f.txt'), 'one\n')
+    const found = await new ReviewService(host([]).value).anchorOf(path.join(top, 'a', 'f.txt'))
+    assert.equal(found.kind === 'found' && found.anchor.path, 'a/f.txt')
+  })
+
+  it('refuses a file directly in home', async () => {
+    const home = scratchDir()
+    dirs.push(home)
+    writeFileSync(path.join(home, 'f.txt'), 'one\n')
+    const value = { ...host([]).value, home: () => slashPath(realpathSync.native(home)) }
+    assert.deepEqual(await new ReviewService(value).anchorOf(path.join(home, 'f.txt')), {
+      kind: 'homeFile',
+    })
+    assert.match(HOME_FILE, /home folder/)
+  })
+
+  it('keeps a store between git init and the first commit', async () => {
+    const repo = scratchDir()
+    dirs.push(repo)
+    git(repo, 'init', '-q')
+    mkdirSync(path.join(repo, '.y-review', 'notes'), { recursive: true })
+    writeFileSync(path.join(repo, 'f.txt'), 'one\n')
+    const found = await new ReviewService(host([]).value).anchorOf(path.join(repo, 'f.txt'))
+    assert.equal(found.kind === 'found' && found.anchor.store, 'folder')
   })
 
   it('a file of an inner repository goes to the notes of that repository', async () => {

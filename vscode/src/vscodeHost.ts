@@ -1,6 +1,9 @@
 import * as vscode from 'vscode'
 
+import { homeDirectory } from './bridge/discoveryFile'
+import { slashPath } from './core/anchor'
 import { FETCH_REFSPEC } from './git/sharing'
+import { realOf } from './places'
 import { readSettings } from './settings'
 import type { RefspecAnswer, ServiceHost } from './store/reviewService'
 
@@ -8,6 +11,9 @@ const DECLINED = 'yreview.refspecDeclined'
 const ADD = 'Add'
 const NEVER = 'Do not ask again'
 const TOLD = 'yreview.folderNoticeRoots'
+
+/** The real form of home, so that it compares with the real paths of files. */
+const realHome = (): string => slashPath(realOf(homeDirectory()) ?? homeDirectory())
 
 const strings = (value: unknown): readonly string[] =>
   Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
@@ -31,6 +37,7 @@ export const vscodeHost = (state: vscode.Memento, git: string): ServiceHost => (
     (vscode.workspace.workspaceFolders ?? [])
       .filter((folder) => folder.uri.scheme === 'file')
       .map((folder) => folder.uri.fsPath),
+  home: realHome,
   toldFolders: () => strings(state.get<unknown>(TOLD)),
   saveToldFolders: (roots) => Promise.resolve(state.update(TOLD, roots)),
   say: (message) => {

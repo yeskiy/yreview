@@ -8,6 +8,7 @@ import {
   relativeTo,
   slashPath,
 } from '../core/anchor'
+import { storeFolderOf, storeWalk } from '../core/storeRules'
 import { lineTextOnDisk } from '../core/lineText'
 import { containedPath, isRelativeUnder, realOf } from '../core/paths'
 import type { RecordRange } from '../core/record'
@@ -44,6 +45,7 @@ export interface Anchor {
 export type AnchorResult =
   | { readonly kind: 'found'; readonly anchor: Anchor }
   | { readonly kind: 'noCommit' }
+  | { readonly kind: 'homeFile' }
   | { readonly kind: 'noPlace'; readonly reason?: string }
 
 /** The comment that was written, the reason the push failed, and messages about the folder store. */
@@ -70,6 +72,8 @@ export interface ServiceHost {
   saveDeclinedRoots(roots: readonly string[]): Promise<void>
   /** The workspace folders, as file system paths. */
   workspaceFolders(): readonly string[]
+  /** The real home folder with "/", or undefined when it is not known. */
+  home(): string | undefined
   /** The folder roots that already got the first folder store notice. */
   toldFolders(): readonly string[]
   saveToldFolders(roots: readonly string[]): Promise<void>
@@ -80,6 +84,8 @@ export interface ServiceHost {
 export const NO_COMMIT = 'This repository has no commit yet.'
 export const NO_PLACE =
   'This file is outside every git repository and every workspace folder, so Yreview has no place for its comments. Open the folder that holds the file.'
+export const HOME_FILE =
+  'Yreview does not keep comments for a file directly in your home folder or in its .y-review folder. Move the file into a folder, then add the comment.'
 export const NO_REVISION =
   'This side of the diff has no revision in git, so a comment has nowhere to anchor.'
 export const FOLDER_SHARED =
@@ -149,7 +155,7 @@ export class ReviewService {
     this.asks = new RefspecAsks(host.declinedRoots())
   }
 
-  /** The store of one file: the innermost repository, else the longest workspace folder. */
+  /** The store of one file: the repository with a commit, else the nearest store of the walk. */
   async anchorOf(filePath: string): Promise<AnchorResult> {
     const real = await realOf(filePath)
     const dir = path.dirname(real)
@@ -168,25 +174,31 @@ export class ReviewService {
       }
     }
     const commit = root !== undefined && isOk(head) ? head.stdout.trim() : undefined
-    const folders = root === undefined ? await this.folderRoots() : []
-    const workspaceRoot = (): string | undefined =>
-      rootOfFolders(slashPath(real), undefined, folders)
+    const home = this.host.home()
+    // A repository with a commit takes no folder store, so its files probe no folder.
+    const ceiling =
+      commit === undefined
+        ? rootOfFolders(slashPath(real), undefined, await this.folderRoots())
+        : undefined
+    const walk = commit === undefined ? storeWalk(slashPath(dir), ceiling, home) : []
+    const stores = new Set(
+      (
+        await Promise.all(
+          walk.map(async (folder) => ((await isDirectory(storeFolderOf(folder))) ? [folder] : [])),
+        )
+      ).flat(),
+    )
     const plan = planAnchor(
       slashPath(real),
       root,
       commit,
-      workspaceRoot,
-      undefined,
-      (folder) => root === undefined && folder === workspaceRoot(),
+      () => ceiling,
+      home,
+      (folder) => stores.has(folder),
     )
     if (plan.kind === 'noCommit') return { kind: 'noCommit' }
-    // A store outside every workspace folder waits for the store discovery.
-    if (
-      plan.kind === 'noPlace' ||
-      plan.kind === 'homeFile' ||
-      (plan.kind === 'folder' && !plan.exists && !folders.includes(plan.root))
-    )
-      return NO_PLACE_RESULT
+    if (plan.kind === 'homeFile') return { kind: 'homeFile' }
+    if (plan.kind === 'noPlace') return NO_PLACE_RESULT
     this.roots.add(plan.root)
     if (plan.kind === 'folder') {
       return found({ store: 'folder', root: plan.root, head: WORKTREE, path: plan.path })

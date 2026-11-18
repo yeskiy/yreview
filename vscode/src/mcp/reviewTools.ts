@@ -3,6 +3,7 @@ import { stat } from 'node:fs/promises'
 import { handleOf, keyOf, matchKey } from '../core/handles'
 import { isKotlinBlank } from '../core/kotlinText'
 import { isRelativeUnder } from '../core/paths'
+import { holds } from '../core/storeRules'
 import type { RecordRange } from '../core/record'
 import { NotesWriteError } from '../git/errors'
 import type { CommentBook, StoredComment } from '../store/commentBook'
@@ -35,6 +36,8 @@ export interface ToolStore {
 export interface ToolHost {
   stores(): Promise<readonly ToolStore[]>
   folders(): readonly string[]
+  /** The repositories and the folders of the workspace. A store at another root is not served. */
+  workspaceRoots(): Promise<readonly string[]>
   containedPath(root: string, relative: string): Promise<string | undefined>
   anchorOf(filePath: string): Promise<AnchorResult>
   addComment(
@@ -48,6 +51,13 @@ export interface ToolHost {
   showFile(filePath: string, line: number): Promise<void>
   showDiff(root: string, path: string, revision: string, line: number): Promise<boolean>
 }
+
+/** The roots that a workspace folder holds or that hold a workspace folder. All paths are real with "/". */
+export const inWorkspace = (
+  roots: readonly string[],
+  folders: readonly string[],
+): readonly string[] =>
+  roots.filter((root) => folders.some((folder) => holds(folder, root) || holds(root, folder)))
 
 type Located =
   | { readonly kind: 'one'; readonly store: ToolStore; readonly stored: StoredComment }
@@ -120,7 +130,10 @@ export class ReviewTools {
     if (result.kind === 'noCommit') {
       return errorPayload(`The repository of ${relative} has no commit yet.`)
     }
-    if (result.kind !== 'found') {
+    if (
+      result.kind !== 'found' ||
+      !(await this.host.workspaceRoots()).includes(result.anchor.root)
+    ) {
       return errorPayload(`The project holds no review store for ${relative}.`)
     }
     const { anchor } = result

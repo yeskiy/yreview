@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { writeFileSync } from 'node:fs'
 import path from 'node:path'
 
+import { WORKTREE, slashPath } from '../../../src/core/anchor'
 import { encodeRecord } from '../../../src/core/record'
 import { NotesWriteError } from '../../../src/git/errors'
 import { FETCH_REFSPEC } from '../../../src/git/sharing'
@@ -35,6 +36,7 @@ const host = (
       return Promise.resolve()
     },
     workspaceFolders: () => [],
+    home: () => undefined,
     toldFolders: () => [],
     saveToldFolders: () => Promise.resolve(),
     say: () => undefined,
@@ -98,12 +100,13 @@ describe('ReviewService', function reviewService() {
     })
   })
 
-  it('refuses a file outside every repository and every workspace folder', async () => {
+  it('anchors a file outside every repository and every workspace folder at its folder', async () => {
     const dir = scratchDir()
     dirs.push(dir)
     writeFileSync(path.join(dir, 'a.txt'), 'x')
     assert.deepEqual(await new ReviewService(host([]).value).anchorOf(path.join(dir, 'a.txt')), {
-      kind: 'noPlace',
+      kind: 'found',
+      anchor: { store: 'folder', root: slashPath(dir), head: WORKTREE, path: 'a.txt' },
     })
   })
 

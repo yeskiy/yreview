@@ -27,6 +27,7 @@ const host = (answers: RefspecAnswer[], remoteName: string) => {
       return Promise.resolve()
     },
     workspaceFolders: () => [],
+    home: () => undefined,
     toldFolders: () => [],
     saveToldFolders: () => Promise.resolve(),
     say: () => undefined,
