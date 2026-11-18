@@ -1,10 +1,15 @@
 package com.yeskiy.yreview.tasks
 
-import com.intellij.openapi.editor.Document
+import com.intellij.ide.todo.TodoConfiguration
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.guessProjectDir
 import com.intellij.openapi.roots.ProjectFileIndex
+import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.TextRange
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VfsUtilCore
@@ -26,9 +31,12 @@ import com.yeskiy.yreview.store.NotesGateway
 import com.yeskiy.yreview.store.ReviewService
 import com.yeskiy.yreview.store.StoreKind
 import com.yeskiy.yreview.store.StoreRoot
+import com.yeskiy.yreview.store.StoreRules
 import com.yeskiy.yreview.store.ideGitRunner
 import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
+import java.nio.file.Files
+import java.nio.file.Path
 
 /** Where one TODO line sits, so the task record names the file and the commit. */
 private data class TodoPlace(val path: String, val filePath: String, val rootPath: String, val commit: String)
@@ -36,8 +44,13 @@ private data class TodoPlace(val path: String, val filePath: String, val rootPat
 /** One TODO item before it gets its identifier, with its place in the file. */
 private data class TodoHit(val offset: Int, val task: ReviewTask)
 
-/** The tasks of one repository, and the commit they belong to. */
-data class RepositoryTasks(val root: VirtualFile, val commit: String, val tasks: List<ReviewTask>)
+/** The tasks of one repository, and the commit they belong to. [outside] is the label of a root outside the project. */
+data class RepositoryTasks(
+    val root: VirtualFile,
+    val commit: String,
+    val tasks: List<ReviewTask>,
+    val outside: String? = null,
+)
 
 /**
  * Reads the open tasks of a project.
@@ -66,12 +79,12 @@ object TaskScan {
         return repositories.mapNotNull { repository ->
             ProgressManager.checkCanceled()
             repositoryTasks(project, repository, roots, onlyFile, showResolved)
-        } + folderTasks(project, onlyFile, showResolved)
+        } + folderTasks(project, onlyFile, showResolved) + outsideTasks(project, roots, onlyFile, showResolved)
     }
 
-    /** The TODO items that are still in the source. */
+    /** The TODO items that are still in the source. A root outside the project never reaches an agent. */
     fun openTodos(project: Project): List<ReviewTask> =
-        read(project, null).flatMap { it.tasks }.filter { it.kind == TaskKind.TODO }
+        read(project, null).filter { it.outside == null }.flatMap { it.tasks }.filter { it.kind == TaskKind.TODO }
 
     private fun repositoryTasks(
         project: Project,
@@ -116,6 +129,87 @@ object TaskScan {
                 )
             }
             .filter { it.tasks.isNotEmpty() }
+
+    /**
+     * The tasks of each store root outside the project that has a file open in the editor.
+     * An entry reads only its open files, so it runs no TODO index walk and no git search.
+     */
+    private fun outsideTasks(
+        project: Project,
+        roots: List<String>,
+        onlyFile: VirtualFile?,
+        showResolved: Boolean,
+    ): List<RepositoryTasks> {
+        val service = ReviewService.getInstance(project)
+        val open = FileEditorManager.getInstance(project).openFiles.toList()
+            .filter { onlyFile == null || it == onlyFile }
+        val inside = roots + listOfNotNull(project.guessProjectDir()?.path) +
+            ReadAction.compute<List<String>, RuntimeException> {
+                ProjectRootManager.getInstance(project).contentRoots.map { it.path }
+            }
+        return OutsideRoots.of(open, inside, service::anchorOf, service.home()).mapNotNull { outside ->
+            ProgressManager.checkCanceled()
+            val root = LocalFileSystem.getInstance().findFileByPath(outside.root) ?: return@mapNotNull null
+            val tasks = outsideComments(project, root, outside, showResolved) + outsideTodos(project, root, outside)
+            tasks.takeIf { it.isNotEmpty() }
+                ?.let { RepositoryTasks(root, outside.commit, it.map { task -> task.copy(outside = true) }, outside.label) }
+        }
+    }
+
+    /** The store reads once, and each open file then takes its own comment rows. */
+    private fun outsideComments(
+        project: Project,
+        root: VirtualFile,
+        outside: OutsideRoot,
+        showResolved: Boolean,
+    ): List<ReviewTask> {
+        val git = ideGitRunner(project, root)
+        val notes = when {
+            outside.kind == StoreKind.GIT -> NoteScan.read(git, root.path, NoteRefs.ALL) { ProgressManager.checkCanceled() }
+                ?: NotesGateway(git)
+            Files.isDirectory(Path.of(StoreRules.storeFolder(root.path))) ->
+                ReviewService.getInstance(project).folderNotesOf(root)
+            else -> return emptyList()
+        }
+        val log = ShareLog.getInstance(project)
+        return outside.files.mapNotNull { VfsUtilCore.getRelativePath(it, root, '/') }.flatMap { path ->
+            placedTasks(git, root.path, outside.commit, path, showResolved, log::isUnshared, notes) {
+                ProgressManager.checkCanceled()
+            }
+        }
+    }
+
+    /** The TODO items of the open files of an outside root, read from the document text with the TODO patterns. */
+    private fun outsideTodos(project: Project, root: VirtualFile, outside: OutsideRoot): List<ReviewTask> {
+        val rules = TodoConfiguration.getInstance().todoPatterns
+            .mapNotNull { pattern -> pattern.indexPattern.pattern?.let { TodoRule(pattern.patternString, it.toRegex()) } }
+        val repository = TodoIds.repositoryOf(project.basePath, root.path)
+        return ReadAction.compute<List<ReviewTask>, RuntimeException> {
+            outside.files.filter { it.isValid }.flatMap { file ->
+                val path = VfsUtilCore.getRelativePath(file, root, '/') ?: return@flatMap emptyList()
+                val text = FileDocumentManager.getInstance().getDocument(file)?.text ?: return@flatMap emptyList()
+                TodoIds.assign(
+                    repository,
+                    TodoLines.of(text, rules).map { hit -> outsideTodo(hit, path, file, root, outside.commit) },
+                )
+            }
+        }
+    }
+
+    private fun outsideTodo(hit: TodoLine, path: String, file: VirtualFile, root: VirtualFile, commit: String): ReviewTask =
+        ReviewTask(
+            id = "",
+            kind = TaskKind.TODO,
+            path = path,
+            startLine = hit.line,
+            endLine = hit.line,
+            text = hit.text,
+            pattern = TodoWord.of(hit.text),
+            patternRule = hit.rule,
+            filePath = file.path,
+            rootPath = root.path,
+            revision = commit,
+        )
 
     private fun folderComments(
         project: Project,
