@@ -14,6 +14,24 @@ import kotlin.test.assertEquals
 class NoteScanRaceTest {
 
     @Test
+    fun `a write during a read keeps the notes of a ref that was not stale`() {
+        TempRepo().use { repo ->
+            val commit = repo.commit("a.txt", "a")
+            val book = CommentBook(NotesGateway(repo.git, repo.dir.path) { NoteScan.moved(repo.dir.path, it) }, author = "a@example.com")
+            val line = Range(startLine = 1, endLine = 1)
+            book.add(NoteRefs.LOCAL, commit, "a.txt", line, "first")
+            NoteScan.forget()
+            NoteScan.read(repo.git, repo.dir.path)
+            val calls = java.util.concurrent.atomic.AtomicInteger()
+            val during = NoteScan.read(repo.git, repo.dir.path) {
+                if (calls.incrementAndGet() == 2) book.add(NoteRefs.LOCAL, commit, "a.txt", line, "second")
+            }!!
+            assertEquals(1, during.readLines(NoteRefs.LOCAL, commit).size)
+            assertEquals(2, NoteScan.read(repo.git, repo.dir.path)!!.readLines(NoteRefs.LOCAL, commit).size)
+        }
+    }
+
+    @Test
     fun `parallel writes and scans leave a cache equal to a cold read`() {
         TempRepo().use { repo ->
             val commits = listOf(repo.commit("a.txt", "a"), repo.commit("b.txt", "b"))

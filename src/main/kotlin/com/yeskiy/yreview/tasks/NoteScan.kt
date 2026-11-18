@@ -54,14 +54,14 @@ object NoteScan {
     ): NoteSnapshot? {
         val tips = GitDirs.commonDir(root)?.let { NoteTips.read(it, refs) } ?: tips(git, refs) ?: return null
         checkCanceled()
-        val stale = tips.filter { (ref, tip) -> cache[Key(root, ref)]?.tip != tip }
+        val known = tips.mapValues { (ref, tip) -> cache[Key(root, ref)]?.takeIf { it.tip == tip } }
+        val stale = tips.filterKeys { known[it] == null }
         val fresh = if (stale.isEmpty()) emptyMap() else notesOf(git, stale.values.distinct()) ?: return null
         checkCanceled()
         refs.filter { it !in tips }.forEach { cache.remove(Key(root, it)) }
         return NoteSnapshot(
             tips.mapValues { (ref, tip) ->
-                (cache[Key(root, ref)]?.takeIf { it.tip == tip } ?: Entry(tip, fresh[tip].orEmpty()).also { cache[Key(root, ref)] = it })
-                    .notes
+                (known[ref] ?: Entry(tip, fresh[tip].orEmpty()).also { cache[Key(root, ref)] = it }).notes
             },
         )
     }
