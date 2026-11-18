@@ -1,0 +1,109 @@
+entry repo outside=null commit=C2 tasks=43
+COMMENT | src/m0/p0/F0.txt | 15 | null | 15 | null | bench comment 1.3 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=15, startColumn=0, endLine=15, endColumn=0) | false
+TODO | src/m0/p0/F0.txt | 20 | null | 20 | null | TODO bench item 0 in src/m0/p0/F0.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p0/F0.txt | 27 | null | 27 | null | bench comment 1.7 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=27, startColumn=0, endLine=27, endColumn=0) | false
+COMMENT | src/m0/p0/F0.txt | 28 | null | 28 | null | bench comment 3.8 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=28, startColumn=0, endLine=28, endColumn=0) | false
+COMMENT | src/m0/p0/F0.txt | 34 | null | 34 | null | bench comment 3.5 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=34, startColumn=0, endLine=34, endColumn=0) | false
+COMMENT | src/m0/p0/F2.txt | 14 | null | 14 | null | bench comment 1.2 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=11, startColumn=0, endLine=11, endColumn=0) | false
+COMMENT | src/m0/p0/F3.txt | 8 | null | 8 | null | bench comment 2.9 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=8, startColumn=0, endLine=8, endColumn=0) | false
+TODO | src/m0/p0/F3.txt | 20 | null | 20 | null | TODO bench item 3 in src/m0/p0/F3.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p0/F3.txt | 28 | null | 28 | null | bench comment 3.3 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=28, startColumn=0, endLine=28, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 12 | null | 12 | null | bench comment 1.8 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 13 | null | 13 | null | bench comment 3.0 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=13, startColumn=0, endLine=13, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 14 | null | 14 | null | bench comment 3.11 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=14, startColumn=0, endLine=14, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 27 | null | 27 | null | bench comment 2.7 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=24, startColumn=0, endLine=24, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 36 | null | 36 | null | bench comment 1.10 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=33, startColumn=0, endLine=33, endColumn=0) | false
+COMMENT | src/m0/p1/F1.txt | 15 | null | 15 | null | bench comment 1.11 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=12, startColumn=0, endLine=12, endColumn=0) | false
+TODO | src/m0/p1/F1.txt | 23 | null | 23 | null | TODO bench item 6 in src/m0/p1/F1.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p1/F2.txt | 6 | null | 6 | null | bench comment 1.6 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=6, startColumn=0, endLine=6, endColumn=0) | false
+COMMENT | src/m0/p1/F2.txt | 11 | null | 11 | null | bench comment 3.2 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=11, startColumn=0, endLine=11, endColumn=0) | false
+COMMENT | src/m0/p1/F3.txt | 12 | null | 12 | null | bench comment 2.1 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m0/p1/F4.txt | 11 | null | 11 | null | bench comment 3.1 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=11, startColumn=0, endLine=11, endColumn=0) | false
+TODO | src/m0/p1/F4.txt | 20 | null | 20 | null | TODO bench item 9 in src/m0/p1/F4.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p1/F4.txt | 22 | null | 22 | null | bench comment 1.9 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=22, startColumn=0, endLine=22, endColumn=0) | false
+COMMENT | src/m0/p1/F4.txt | 31 | null | 31 | null | bench comment 1.1 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=31, startColumn=0, endLine=31, endColumn=0) | false
+COMMENT | src/m1/p0/F0.txt | 18 | null | 18 | null | bench comment 1.4 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=15, startColumn=0, endLine=15, endColumn=0) | false
+COMMENT | src/m1/p0/F1.txt | 15 | null | 15 | null | bench comment 2.11 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=15, startColumn=0, endLine=15, endColumn=0) | false
+COMMENT | src/m1/p0/F1.txt | 29 | null | 29 | null | bench comment 2.2 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=29, startColumn=0, endLine=29, endColumn=0) | false
+COMMENT | src/m1/p0/F2.txt | 9 | null | 9 | null | bench comment 2.10 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m1/p0/F2.txt | 19 | null | 19 | null | bench comment 2.5 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=19, startColumn=0, endLine=19, endColumn=0) | false
+TODO | src/m1/p0/F2.txt | 20 | null | 20 | null | TODO bench item 12 in src/m1/p0/F2.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m1/p0/F3.txt | 6 | null | 6 | null | bench comment 2.8 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=6, startColumn=0, endLine=6, endColumn=0) | false
+COMMENT | src/m1/p0/F3.txt | 12 | null | 12 | null | bench comment 1.5 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m1/p0/F3.txt | 22 | null | 22 | null | bench comment 2.0 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=22, startColumn=0, endLine=22, endColumn=0) | false
+COMMENT | src/m1/p0/F4.txt | 14 | null | 14 | null | bench comment 3.4 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=14, startColumn=0, endLine=14, endColumn=0) | false
+COMMENT | src/m1/p0/F4.txt | 23 | null | 23 | null | bench comment 3.7 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=23, startColumn=0, endLine=23, endColumn=0) | false
+COMMENT | src/m1/p0/F4.txt | 25 | null | 25 | null | bench comment 2.6 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=25, startColumn=0, endLine=25, endColumn=0) | false
+TODO | src/m1/p1/F0.txt | 20 | null | 20 | null | TODO bench item 15 in src/m1/p1/F0.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m1/p1/F0.txt | 22 | null | 22 | null | bench comment 3.9 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=22, startColumn=0, endLine=22, endColumn=0) | false
+COMMENT | src/m1/p1/F1.txt | 18 | null | 18 | null | bench comment 3.10 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=18, startColumn=0, endLine=18, endColumn=0) | false
+COMMENT | src/m1/p1/F2.txt | 23 | null | 23 | null | bench comment 2.4 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=20, startColumn=0, endLine=20, endColumn=0) | false
+COMMENT | src/m1/p1/F2.txt | 37 | null | 37 | null | bench comment 2.3 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=34, startColumn=0, endLine=34, endColumn=0) | false
+TODO | src/m1/p1/F3.txt | 20 | null | 20 | null | TODO bench item 18 in src/m1/p1/F3.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m1/p1/F3.txt | 28 | null | 28 | null | bench comment 1.0 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=28, startColumn=0, endLine=28, endColumn=0) | false
+COMMENT | src/m1/p1/F4.txt | 27 | null | 27 | null | bench comment 3.6 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=27, startColumn=0, endLine=27, endColumn=0) | false
+entry work outside=null commit=worktree tasks=5
+COMMENT | loose/L0.txt | 3 | null | 3 | null | folder comment 0 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L1.txt | 3 | null | 3 | null | folder comment 1 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L2.txt | 3 | null | 3 | null | folder comment 2 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L3.txt | 3 | null | 3 | null | folder comment 3 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L4.txt | 3 | null | 3 | null | folder comment 4 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+entry outside outside=outside (BASE/outside) commit=C3 tasks=3
+COMMENT | O0.txt | 2 | null | 2 | null | outside comment 0 | null | bench | local |  |  | SAME | C3 | Range(startLine=2, startColumn=0, endLine=2, endColumn=0) | true
+COMMENT | O0.txt | 5 | null | 5 | null | outside comment 3 | null | bench | local |  |  | SAME | C3 | Range(startLine=5, startColumn=0, endLine=5, endColumn=0) | true
+TODO | O0.txt | 31 | null | 31 | null | TODO outside 0 | TODO | null |  |  | \btodo\b.* | null | null | null | true
+---
+entry repo outside=null commit=C2 tasks=43
+COMMENT | src/m0/p0/F0.txt | 15 | null | 15 | null | bench comment 1.3 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=15, startColumn=0, endLine=15, endColumn=0) | false
+TODO | src/m0/p0/F0.txt | 20 | null | 20 | null | TODO bench item 0 in src/m0/p0/F0.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p0/F0.txt | 27 | null | 27 | null | bench comment 1.7 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=27, startColumn=0, endLine=27, endColumn=0) | false
+COMMENT | src/m0/p0/F0.txt | 28 | null | 28 | null | bench comment 3.8 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=28, startColumn=0, endLine=28, endColumn=0) | false
+COMMENT | src/m0/p0/F0.txt | 34 | null | 34 | null | bench comment 3.5 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=34, startColumn=0, endLine=34, endColumn=0) | false
+COMMENT | src/m0/p0/F2.txt | 14 | null | 14 | null | bench comment 1.2 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=11, startColumn=0, endLine=11, endColumn=0) | false
+COMMENT | src/m0/p0/F3.txt | 8 | null | 8 | null | bench comment 2.9 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=8, startColumn=0, endLine=8, endColumn=0) | false
+TODO | src/m0/p0/F3.txt | 20 | null | 20 | null | TODO bench item 3 in src/m0/p0/F3.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p0/F3.txt | 28 | null | 28 | null | bench comment 3.3 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=28, startColumn=0, endLine=28, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 12 | null | 12 | null | bench comment 1.8 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 13 | null | 13 | null | bench comment 3.0 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=13, startColumn=0, endLine=13, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 14 | null | 14 | null | bench comment 3.11 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=14, startColumn=0, endLine=14, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 27 | null | 27 | null | bench comment 2.7 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=24, startColumn=0, endLine=24, endColumn=0) | false
+COMMENT | src/m0/p0/F4.txt | 36 | null | 36 | null | bench comment 1.10 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=33, startColumn=0, endLine=33, endColumn=0) | false
+COMMENT | src/m0/p1/F1.txt | 15 | null | 15 | null | bench comment 1.11 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=12, startColumn=0, endLine=12, endColumn=0) | false
+TODO | src/m0/p1/F1.txt | 23 | null | 23 | null | TODO bench item 6 in src/m0/p1/F1.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p1/F2.txt | 6 | null | 6 | null | bench comment 1.6 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=6, startColumn=0, endLine=6, endColumn=0) | false
+COMMENT | src/m0/p1/F2.txt | 11 | null | 11 | null | bench comment 3.2 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=11, startColumn=0, endLine=11, endColumn=0) | false
+COMMENT | src/m0/p1/F3.txt | 12 | null | 12 | null | bench comment 2.1 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m0/p1/F4.txt | 11 | null | 11 | null | bench comment 3.1 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=11, startColumn=0, endLine=11, endColumn=0) | false
+TODO | src/m0/p1/F4.txt | 20 | null | 20 | null | TODO bench item 9 in src/m0/p1/F4.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m0/p1/F4.txt | 22 | null | 22 | null | bench comment 1.9 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=22, startColumn=0, endLine=22, endColumn=0) | false
+COMMENT | src/m0/p1/F4.txt | 31 | null | 31 | null | bench comment 1.1 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=31, startColumn=0, endLine=31, endColumn=0) | false
+COMMENT | src/m1/p0/F0.txt | 18 | null | 18 | null | bench comment 1.4 | null | bench | shared | MODULE |  | SAME | C0 | Range(startLine=15, startColumn=0, endLine=15, endColumn=0) | false
+COMMENT | src/m1/p0/F1.txt | 15 | null | 15 | null | bench comment 2.11 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=15, startColumn=0, endLine=15, endColumn=0) | false
+COMMENT | src/m1/p0/F1.txt | 29 | null | 29 | null | bench comment 2.2 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=29, startColumn=0, endLine=29, endColumn=0) | false
+COMMENT | src/m1/p0/F2.txt | 9 | null | 9 | null | bench comment 2.10 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m1/p0/F2.txt | 19 | null | 19 | null | bench comment 2.5 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=19, startColumn=0, endLine=19, endColumn=0) | false
+TODO | src/m1/p0/F2.txt | 20 | null | 20 | null | TODO bench item 12 in src/m1/p0/F2.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m1/p0/F3.txt | 6 | null | 6 | null | bench comment 2.8 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=6, startColumn=0, endLine=6, endColumn=0) | false
+COMMENT | src/m1/p0/F3.txt | 12 | null | 12 | null | bench comment 1.5 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=9, startColumn=0, endLine=9, endColumn=0) | false
+COMMENT | src/m1/p0/F3.txt | 22 | null | 22 | null | bench comment 2.0 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=22, startColumn=0, endLine=22, endColumn=0) | false
+COMMENT | src/m1/p0/F4.txt | 14 | null | 14 | null | bench comment 3.4 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=14, startColumn=0, endLine=14, endColumn=0) | false
+COMMENT | src/m1/p0/F4.txt | 23 | null | 23 | null | bench comment 3.7 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=23, startColumn=0, endLine=23, endColumn=0) | false
+COMMENT | src/m1/p0/F4.txt | 25 | null | 25 | null | bench comment 2.6 | null | bench | local | MODULE |  | SAME | C1 | Range(startLine=25, startColumn=0, endLine=25, endColumn=0) | false
+TODO | src/m1/p1/F0.txt | 20 | null | 20 | null | TODO bench item 15 in src/m1/p1/F0.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m1/p1/F0.txt | 22 | null | 22 | null | bench comment 3.9 | null | bench | shared | MODULE |  | SAME | C2 | Range(startLine=22, startColumn=0, endLine=22, endColumn=0) | false
+COMMENT | src/m1/p1/F1.txt | 18 | null | 18 | null | bench comment 3.10 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=18, startColumn=0, endLine=18, endColumn=0) | false
+COMMENT | src/m1/p1/F2.txt | 23 | null | 23 | null | bench comment 2.4 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=20, startColumn=0, endLine=20, endColumn=0) | false
+COMMENT | src/m1/p1/F2.txt | 37 | null | 37 | null | bench comment 2.3 | null | bench | shared | MODULE |  | SAME | C1 | Range(startLine=34, startColumn=0, endLine=34, endColumn=0) | false
+TODO | src/m1/p1/F3.txt | 20 | null | 20 | null | TODO bench item 18 in src/m1/p1/F3.txt | TODO | null |  | MODULE | \btodo\b.* | null | null | null | false
+COMMENT | src/m1/p1/F3.txt | 28 | null | 28 | null | bench comment 1.0 | null | bench | local | MODULE |  | SAME | C0 | Range(startLine=28, startColumn=0, endLine=28, endColumn=0) | false
+COMMENT | src/m1/p1/F4.txt | 27 | null | 27 | null | bench comment 3.6 | null | bench | local | MODULE |  | SAME | C2 | Range(startLine=27, startColumn=0, endLine=27, endColumn=0) | false
+entry work outside=null commit=worktree tasks=5
+COMMENT | loose/L0.txt | 3 | null | 3 | null | folder comment 0 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L1.txt | 3 | null | 3 | null | folder comment 1 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L2.txt | 3 | null | 3 | null | folder comment 2 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L3.txt | 3 | null | 3 | null | folder comment 3 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+COMMENT | loose/L4.txt | 3 | null | 3 | null | folder comment 4 | null | bench | local | MODULE |  | SAME | worktree | Range(startLine=3, startColumn=0, endLine=3, endColumn=0) | false
+entry outside outside=outside (BASE/outside) commit=C3 tasks=3
+COMMENT | O0.txt | 2 | null | 2 | null | outside comment 0 | null | bench | local |  |  | SAME | C3 | Range(startLine=2, startColumn=0, endLine=2, endColumn=0) | true
+COMMENT | O0.txt | 5 | null | 5 | null | outside comment 3 | null | bench | local |  |  | SAME | C3 | Range(startLine=5, startColumn=0, endLine=5, endColumn=0) | true
+TODO | O0.txt | 31 | null | 31 | null | TODO outside 0 | TODO | null |  |  | \btodo\b.* | null | null | null | true
