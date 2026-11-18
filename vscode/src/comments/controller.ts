@@ -274,11 +274,11 @@ const visibleUris = (): readonly vscode.Uri[] =>
 /** The event that fires when an editor asks for the commenting ranges of a document. */
 export type RangeAsk = vscode.Event<vscode.Uri>
 
-/** Resolves after VS Code gets the answer to the first ask for the ranges of `uri`, or at the limit. */
 /** A folder store has no remote, so its file takes only local comments. */
 const localOnly = (found: AnchorResult): boolean =>
   found.kind === 'found' && found.anchor.store === 'folder'
 
+/** Resolves after VS Code gets the answer to the first ask for the ranges of `uri`, or at the limit. */
 export const firstAsk = async (
   asked: RangeAsk,
   uri: vscode.Uri,
