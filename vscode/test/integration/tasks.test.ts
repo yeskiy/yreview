@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { appendFileSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { setTimeout as wait } from 'node:timers/promises'
@@ -220,12 +220,19 @@ describe('task views', function views() {
   it('the Local Changes view lists the tasks of a changed file', async () => {
     const tasks = await taskViews()
     const changes = tasks.view('changes')
+    // A file that no editor holds, so no late reload from the disk drops an edit of a later case.
+    const changed = fileOf('changed.ts').fsPath
     try {
-      appendFileSync(fileOf('todo.ts').fsPath, '// TODO: third task\n')
+      writeFileSync(changed, '// TODO: third task\n')
       await tasks.model.refresh()
-      await until(() => changes.rows().tasks.length === 3)
+      await until(() =>
+        changes
+          .rows()
+          .tasks.map((task) => `${task.path} ${task.text}`)
+          .includes('src/changed.ts TODO: third task'),
+      )
     } finally {
-      git('checkout', '--', 'src/todo.ts')
+      rmSync(changed, { force: true })
       await tasks.model.refresh()
     }
     await until(
@@ -240,7 +247,10 @@ describe('task views', function views() {
     const project = tasks.view('project')
     const editor = await open('todo.ts')
     try {
-      await editor.edit((edit) => edit.insert(new vscode.Position(0, 0), '// TODO: unsaved\n'))
+      assert.ok(
+        await editor.edit((edit) => edit.insert(new vscode.Position(0, 0), '// TODO: unsaved\n')),
+        'the edit did not apply',
+      )
       await until(() => todoTexts(project.rows().tasks).includes('TODO: unsaved'))
     } finally {
       await vscode.window.showTextDocument(editor.document)
