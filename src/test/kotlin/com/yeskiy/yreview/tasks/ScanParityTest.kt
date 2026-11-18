@@ -13,6 +13,7 @@ import com.yeskiy.yreview.bench.BenchSize
 import com.yeskiy.yreview.bench.mapInto
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.store.DiffCache
+import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.ProcessGitRunner
 import com.yeskiy.yreview.store.ReviewService
 import java.io.File
@@ -87,5 +88,19 @@ class ScanParityTest : HeavyPlatformTestCase() {
     fun testAWarmScanEqualsAColdScan() {
         cold()
         assertEquals(dump(), dump())
+    }
+
+    fun testAnOutsideNoteWriteShowsAtTheNextScan() {
+        cold()
+        TaskScan.read(project, null)
+        // A file keeps the quotes of the record, which a Windows command line can lose.
+        val note = File(base, "outside-note.txt").apply { writeText(fixture.outsideNote(fixture.sourceFiles[3]) + "\n") }
+        val write = ProcessGitRunner(fixture.repo, checkCanceled = {})
+            .run("notes", "--ref", NoteRefs.LOCAL, "append", "-F", note.absolutePath, fixture.heads.last())
+        check(write.ok) { write.stderr }
+        val warm = dump()
+        cold()
+        assertEquals(dump(), warm)
+        assertTrue(warm.contains("outside note"))
     }
 }

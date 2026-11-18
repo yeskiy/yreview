@@ -115,6 +115,30 @@ class NoteScanTest {
         assertTrue(git.runs.get() > before + 1)
     }
 
+    @Test
+    fun `a warm scan of a real repository root starts no git process`() {
+        TempRepo().use { repo ->
+            reviewed(repo, commits = 6)
+            NoteScan.forget()
+            NoteScan.read(repo.git, repo.dir.path)
+            val git = Counting(repo.git)
+            assertEquals(slow(repo, repo.dir.path, false), TaskScan.placedTasks(git, repo.dir.path, null, null, false, { false }))
+            assertEquals(0, git.runs.get())
+        }
+    }
+
+    @Test
+    fun `a note written by git outside the scan shows at the next scan`() {
+        TempRepo().use { repo ->
+            val book = reviewed(repo, commits = 3)
+            NoteScan.forget()
+            NoteScan.read(repo.git, repo.dir.path)
+            val commit = repo.commit("late.txt", "late")
+            book.add(NoteRefs.LOCAL, commit, "late.txt", Range(startLine = 1, endLine = 1), "late comment")
+            assertTrue(rows(repo.git, repo.dir.path, false).any { it.text == "late comment" })
+        }
+    }
+
     private companion object {
         val NO_GIT = object : GitRunner {
             override fun run(vararg args: String): GitResult = error("never runs")

@@ -1,8 +1,10 @@
 package com.yeskiy.yreview.tasks
 
+import com.yeskiy.yreview.store.GitDirs
 import com.yeskiy.yreview.store.GitRunner
 import com.yeskiy.yreview.store.NoteRefs
 import com.yeskiy.yreview.store.NoteStore
+import com.yeskiy.yreview.store.NoteTips
 import java.util.concurrent.ConcurrentHashMap
 
 /** Every note of the review refs of one repository, held in memory. It takes no write. */
@@ -26,8 +28,8 @@ class NoteSnapshot(private val notes: Map<String, Map<String, List<String>>>) : 
 }
 
 /**
- * Reads every note of the review refs with `git for-each-ref` and one `git grep` of the moved tips.
- * A ref whose tip did not move comes from the cache, so a scan with no new note costs one process.
+ * Reads the tips from the git folder, or with `git for-each-ref`, and the moved tips with one `git grep`.
+ * A ref whose tip did not move comes from the cache, so a scan of a repository root with no new note starts no git.
  */
 object NoteScan {
 
@@ -49,7 +51,7 @@ object NoteScan {
         refs: List<String> = NoteRefs.ALL,
         checkCanceled: () -> Unit = {},
     ): NoteSnapshot? {
-        val tips = tips(git, refs) ?: return null
+        val tips = GitDirs.commonDir(root)?.let { NoteTips.read(it, refs) } ?: tips(git, refs) ?: return null
         checkCanceled()
         val stale = tips.filter { (ref, tip) -> cache[Key(root, ref)]?.tip != tip }
         val fresh = if (stale.isEmpty()) emptyMap() else notesOf(git, stale.values.distinct()) ?: return null
