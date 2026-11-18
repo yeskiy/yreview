@@ -6,7 +6,7 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-## [1.1.0] - 2026-11-16
+## [1.2.0] - 2026-11-18
 
 ### Added
 
@@ -21,6 +21,13 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Show comments of earlier commits at their mapped lines
 - Mark comment rows outdated or file removed
 - Comment on the selection of the Markdown preview
+- Add the store walk and the record rewrite rules
+- Find the store of a file outside the project
+- Write only local comments to a folder store
+- Find the child stores of a repository
+- Move child folder stores into the git notes with new identifiers
+- Scan the open files outside the project
+- Show open files outside the project in the tool window
 
 ### Fixed
 
@@ -33,6 +40,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Link the login keychain into the temporary test home on macOS
 - Keep a commit refused only when git says it does not exist
 - Read the rows of the newest scan after a refresh
+- Run an agent command with its arguments
+- Reload the review tab only for real files of a store
 
 ## [1.0.2] - 2026-11-13
 
@@ -215,8 +224,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Mark gradlew executable
 - Stop two tests from reading the platform they run on
 
-[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/yeskiy/yreview/compare/v1.0.2...v1.1.0
+[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/yeskiy/yreview/compare/v1.0.2...v1.2.0
 [1.0.2]: https://github.com/yeskiy/yreview/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/yeskiy/yreview/compare/v1.0.0...v1.0.1
 [1.0.0]: https://github.com/yeskiy/yreview/commits/v1.0.0
