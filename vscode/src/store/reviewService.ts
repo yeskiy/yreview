@@ -92,7 +92,7 @@ export interface ServiceHost {
 
 export const NO_COMMIT = 'This repository has no commit yet.'
 export const NO_PLACE =
-  'This file is outside every git repository and every workspace folder, so Yreview has no place for its comments. Open the folder that holds the file.'
+  'Yreview keeps comments only for a saved local file in a folder that exists. Save the file in a local folder, then add the comment.'
 export const HOME_FILE =
   'Yreview does not keep comments for a file directly in your home folder or in its .y-review folder. Move the file into a folder, then add the comment.'
 export const NO_REVISION =

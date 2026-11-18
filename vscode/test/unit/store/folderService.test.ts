@@ -18,6 +18,7 @@ import {
   ReviewService,
   type ServiceHost,
   HOME_FILE,
+  NO_PLACE,
   folderFirstNotice,
 } from '../../../src/store/reviewService'
 import { git, makeRepo, removeDir, scratchDir } from '../../fixtures/scratch'
@@ -116,6 +117,17 @@ describe('ReviewService with folder stores and diff sides', function folderServi
       kind: 'homeFile',
     })
     assert.match(HOME_FILE, /home folder/)
+  })
+
+  it('refuses a file in a folder that is gone, and names a local file as the need', async () => {
+    const dir = scratchDir()
+    dirs.push(dir)
+    assert.deepEqual(
+      await new ReviewService(host([]).value).anchorOf(path.join(dir, 'gone', 'a.txt')),
+      { kind: 'noPlace' },
+    )
+    assert.match(NO_PLACE, /local file/)
+    assert.doesNotMatch(NO_PLACE, /workspace folder/)
   })
 
   it('keeps a store between git init and the first commit', async () => {
