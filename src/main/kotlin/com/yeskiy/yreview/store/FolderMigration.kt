@@ -31,12 +31,9 @@ object FolderMigration {
     /** True when this repository holds the folder, so its records can move with a path prefix. */
     fun maySettle(repositoryRoot: String, folderRoot: String): Boolean = prefixOf(repositoryRoot, folderRoot) != null
 
-    /**
-     * True when one lookup that may write can move the store. The move does not rewrite paths
-     * yet, so only a repository rooted at the folder itself takes the records.
-     */
+    /** True when one lookup that may write can move the store. A folder at or below the repository root moves. */
     fun mayMove(writes: Boolean, repositoryRoot: String, folderRoot: String): Boolean =
-        writes && prefixOf(repositoryRoot, folderRoot) == ""
+        writes && maySettle(repositoryRoot, folderRoot)
 
     /** New identifiers for every record of one store. A parent gets its new identifier before its child. */
     fun rewrite(lines: List<String>, prefix: String): Rewrite {

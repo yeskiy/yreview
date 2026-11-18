@@ -7,6 +7,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.vfs.VirtualFile
 import com.yeskiy.yreview.bridge.ResolveRequest
 import com.yeskiy.yreview.handoff.SentTasks
+import com.yeskiy.yreview.settings.ShareLog
 import com.yeskiy.yreview.store.CommentBook
 import com.yeskiy.yreview.store.NotesWriteException
 import com.yeskiy.yreview.store.ReviewService
@@ -209,17 +210,22 @@ class TaskCompletion(private val project: Project) {
             service.bookForRoot(store.root).tasks().map { store.root to it }
         }
         val ids = found.map { it.second.id }
-        return given.map { text -> outcomeOf(service, found, ids, text) }
+        val log = ShareLog.getInstance(project)
+        return given.map { text -> outcomeOf(service, found, ids, text, log.forward(text)) }
     }
 
-    /** [given] is the text the agent sent. Every sentence names it, and never the long value. */
+    /**
+     * [given] is the text the agent sent. Every sentence names it, and never the long value.
+     * [value] is the identifier that [given] names after a move into the git notes.
+     */
     private fun outcomeOf(
         service: ReviewService,
         found: List<Pair<VirtualFile, StoredComment>>,
         ids: List<String>,
         given: String,
+        value: String,
     ): CommentOutcome {
-        val key = TaskHandles.keyOf(given) ?: return CommentOutcome.Problem("$UNKNOWN $given.")
+        val key = TaskHandles.keyOf(value) ?: return CommentOutcome.Problem("$UNKNOWN $given.")
         return when (val match = TaskHandles.match(key, ids)) {
             is HandleMatch.None -> CommentOutcome.Problem("$UNKNOWN $given.")
             is HandleMatch.Many -> CommentOutcome.Problem(ambiguous(given, match.count))

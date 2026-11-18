@@ -8,6 +8,8 @@ import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.project.guessProjectDir
@@ -31,6 +33,7 @@ import git4idea.repo.GitRepositoryManager
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Future
 
 /** The comment that was written, and the reason the push failed when it did. */
 data class CommentWriteResult(val stored: StoredComment, val shareError: String?)
@@ -43,6 +46,16 @@ class ReviewService(private val project: Project) : Disposable {
 
     private val migrating = ConcurrentHashMap.newKeySet<String>()
 
+    private val settling = ConcurrentHashMap.newKeySet<String>()
+
+    private val settled = ConcurrentHashMap.newKeySet<String>()
+
+    /** For each repository root, true when the last look found a commit. */
+    private val hadCommit = ConcurrentHashMap<String, Boolean>()
+
+    /** The store roots that a child store search found and that did not move. */
+    private val leftovers = ConcurrentHashMap.newKeySet<String>()
+
     private val facts = StoreFacts(::probe)
 
     private val realHome by lazy { StoreRules.homeOf(System.getProperty("user.home")) }
@@ -50,10 +63,38 @@ class ReviewService(private val project: Project) : Disposable {
     /** A test sets this to use a fake home folder. */
     internal var homeOverride: String? = null
 
+    /** A test sets this to watch the git runs of the migration. */
+    internal var runnerOverride: ((VirtualFile) -> GitRunner)? = null
+
+    /** A test sets this to give the migration another target store. */
+    internal var notesOverride: ((VirtualFile) -> NoteStore)? = null
+
     init {
         val bus = project.messageBus.connect(this)
-        bus.subscribe(GitRepository.GIT_REPO_CHANGE, GitRepositoryChangeListener { facts.forget() })
-        bus.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { facts.forget() })
+        bus.subscribe(
+            GitRepository.GIT_REPO_CHANGE,
+            GitRepositoryChangeListener { repository ->
+                facts.forget()
+                if (gotFirstCommit(repository)) settleRepository(repository.root)
+            },
+        )
+        bus.subscribe(
+            VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED,
+            VcsRepositoryMappingListener {
+                facts.forget()
+                GitRepositoryManager.getInstance(project).repositories
+                    .filter { it.root.path !in settled }
+                    .forEach { settleRepository(it.root) }
+            },
+        )
+        bus.subscribe(
+            FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : FileEditorManagerListener {
+                override fun fileOpened(source: FileEditorManager, file: VirtualFile) {
+                    settleFile(file)
+                }
+            },
+        )
         bus.subscribe(
             VirtualFileManager.VFS_CHANGES,
             object : BulkFileListener {
@@ -198,7 +239,7 @@ class ReviewService(private val project: Project) : Disposable {
             folderStoreRoots(migrate).map { StoreRoot(StoreKind.FOLDER, it) }
 
     /**
-     * Every folder root that still holds records.
+     * Every folder root that still holds records, and every child store that did not move.
      *
      * The migration runs first, over every candidate root, and it runs before the filter that
      * drops a root which a repository now covers. A root that the filter dropped first would
@@ -206,62 +247,149 @@ class ReviewService(private val project: Project) : Disposable {
      */
     fun folderStoreRoots(migrate: Boolean = true): List<VirtualFile> {
         val roots = candidateFolderRoots()
-        roots.forEach { migrateFolderIfNeeded(it, migrate) }
-        return roots
+        roots.forEachIndexed { n, root -> migrateFolderIfNeeded(root, migrate, n) }
+        val local = LocalFileSystem.getInstance()
+        return (roots + leftovers.mapNotNull { local.findFileByPath(it) })
+            .distinct()
             .filter { storeAt(it).kind == StoreKind.FOLDER }
-            .filter { root -> NoteRefs.ALL.any { folderNotesOf(root).commitsWithNotes(it).isNotEmpty() } }
+            .filter { holdsRecords(it.path) }
     }
 
     /**
      * Moves a folder store into the git notes after a repository covers its root.
      *
      * The check runs on every read, so a repository that appeared while the project was
-     * closed still reaches this path. The guard keeps two reads from moving the same folder
-     * at once, and the copy itself repeats without harm.
+     * closed still reaches this path.
      *
-     * The copy and the check run first. The move runs last. A crash between them leaves both
-     * copies, and the next read repeats the copy without a duplicate.
-     *
-     * [FolderOwnership] answers whether the folder belongs to the plugin at all. A folder
-     * that git tracks came with the repository, so it stays where it is.
-     *
-     * [FolderMigration.mayMove] answers whether this lookup may move the records at all, and
-     * whether this repository is the right target. A repository that is rooted above the
-     * folder reads every record path from its own root, so the records stay in the folder
-     * and the tool window reads them there.
+     * [FolderMigration.mayMove] answers whether this lookup may move the records. A folder at
+     * or below the repository root moves, and each path of it gets the prefix of the folder.
      *
      * A caller that answers a read of an agent passes false for [writes], because this
      * method writes the git notes and moves a folder.
      */
-    fun migrateFolderIfNeeded(root: VirtualFile, writes: Boolean = true) {
+    fun migrateFolderIfNeeded(root: VirtualFile, writes: Boolean = true, n: Int = 0) {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(root) ?: return
         if (!FolderMigration.mayMove(writes, repository.root.path, root.path)) return
-        val head = repository.currentRevision ?: return
-        val folder = folderNotesOf(root)
-        if (NoteRefs.ALL.none { folder.commitsWithNotes(it).isNotEmpty() }) return
-        if (!FolderOwnership.mayMigrate(ideGitRunner(project, root))) return
-        if (!migrating.add(root.path)) return
+        migrateInto(repository.root, repository.currentRevision ?: return, root, n)
+    }
+
+    /** Finds every child store of one repository and moves each one into its git notes, off the EDT. */
+    fun settleRepository(root: VirtualFile): Future<*> =
+        ApplicationManager.getApplication().executeOnPooledThread { settleNow(root) }
+
+    /** Moves the nearest store of one open file into the git notes of its repository, off the EDT. */
+    fun settleFile(file: VirtualFile): Future<*> =
+        ApplicationManager.getApplication().executeOnPooledThread { settleFileNow(file) }
+
+    /** A folder anchor for the nearest untracked store with records between the file and its repository root. */
+    fun leftoverOf(file: VirtualFile): ReviewAnchor? {
+        val dir = file.parent?.takeIf { file.isInLocalFileSystem } ?: return null
+        val root = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)?.root?.path
+            ?: facts.repositoryOf(dir.path)?.root
+            ?: return null
+        val local = LocalFileSystem.getInstance()
+        return StoreRules.walk(dir.path, root, home()).asSequence()
+            .filter(::holdsRecords)
+            .mapNotNull { local.findFileByPath(it) }
+            .firstOrNull { !FolderOwnership.tracked(runnerOf(it)) }
+            ?.let { store ->
+                AnchorRules.relative(file.path, store.path)
+                    ?.let { ReviewAnchor(StoreKind.FOLDER, store, FolderStore.WORKTREE, it) }
+            }
+    }
+
+    private fun settleNow(root: VirtualFile) {
+        if (project.isDisposed || !settling.add(root.path)) return
         try {
-            val runner = ideGitRunner(project, repository.root)
-            val report = FolderMigration.copy(folder, NotesGateway(runner), NoteRefs.ALL, head)
-            val notice = FolderMigration.notice(
-                report,
-                Path.of(root.path),
-                repository.root.name,
-                movedTo(runner, report, root),
-            )
-            if (notice.warning) ReviewNotice.warn(project, notice.text) else ReviewNotice.say(project, notice.text)
-            if (notice.refresh) notifyChanged()
+            val head = repositoryFactOf(root)?.takeIf { it.root == root.path }?.head
+            hadCommit[root.path] = head != null
+            if (head == null) return
+            val stores = StoreSearch.childStores(runnerOf(root), root.path) ?: return
+            settled.add(root.path)
+            val local = LocalFileSystem.getInstance()
+            stores.mapNotNull { local.refreshAndFindFileByPath(it) }
+                .forEachIndexed { n, store -> migrateInto(root, head, store, n) }
+            stores.forEach { if (holdsRecords(it)) leftovers.add(it) else leftovers.remove(it) }
         } finally {
-            migrating.remove(root.path)
+            settling.remove(root.path)
         }
     }
 
+    /** A repository outside the project has no [GitRepository], so its root and head come from [StoreFacts]. */
+    private fun settleFileNow(file: VirtualFile) {
+        val dir = file.parent?.takeIf { file.isInLocalFileSystem && !project.isDisposed } ?: return
+        val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)
+        val fact = repository?.let { RepositoryFact(it.root.path, it.currentRevision) }
+            ?: facts.repositoryOf(dir.path)
+            ?: return
+        val head = fact.head ?: return
+        val local = LocalFileSystem.getInstance()
+        val root = repository?.root ?: local.findFileByPath(fact.root) ?: return
+        val store = StoreRules.walk(dir.path, fact.root, home()).firstOrNull(::holdsRecords) ?: return
+        local.findFileByPath(store)?.let { migrateInto(root, head, it, 0) }
+    }
+
+    private fun repositoryFactOf(root: VirtualFile): RepositoryFact? =
+        GitRepositoryManager.getInstance(project).getRepositoryForRootQuick(root)
+            ?.let { RepositoryFact(it.root.path, it.currentRevision) }
+            ?: probe(root.path)
+
+    private fun gotFirstCommit(repository: GitRepository): Boolean {
+        val now = repository.currentRevision != null
+        return hadCommit.put(repository.root.path, now) == false && now
+    }
+
+    private fun holdsRecords(dir: String): Boolean =
+        NoteRefs.ALL.any { FolderNotes(Path.of(dir)).commitsWithNotes(it).isNotEmpty() }
+
+    private fun runnerOf(root: VirtualFile): GitRunner = runnerOverride?.invoke(root) ?: ideGitRunner(project, root)
+
+    /**
+     * Copies one store into the notes of [repository], writes the renames, then moves the folder.
+     * A crash between the copy and the move repeats the copy with the same new identifiers.
+     */
+    private fun migrateInto(repository: VirtualFile, head: String, store: VirtualFile, n: Int) {
+        val prefix = FolderMigration.prefixOf(repository.path, store.path) ?: return
+        if (!holdsRecords(store.path)) return
+        if (!FolderOwnership.mayMigrate(runnerOf(store))) return
+        if (!migrating.add(store.path)) return
+        try {
+            val runner = runnerOf(repository)
+            val target = notesOverride?.invoke(repository) ?: NotesGateway(runner)
+            val (report, renames) = copyRewritten(folderNotesOf(store), prefix, target, head)
+            if (report.problem == null) ShareLog.getInstance(project).rename(renames, repository.path)
+            val notice = FolderMigration.notice(report, Path.of(store.path), repository.name, movedTo(runner, report, store, n))
+            if (notice.warning) ReviewNotice.warn(project, notice.text) else ReviewNotice.say(project, notice.text)
+            if (notice.refresh) notifyChanged()
+        } finally {
+            migrating.remove(store.path)
+        }
+    }
+
+    /** Every read goes through a door that refuses, so a failed read stops the move. */
+    private fun copyRewritten(
+        folder: FolderNotes,
+        prefix: String,
+        target: NoteStore,
+        head: String,
+    ): Pair<MigrationReport, Map<String, String>> {
+        val renames = try {
+            FolderMigration.rewrite(
+                NoteRefs.ALL.flatMap { ref -> folder.commitsOrRefuse(ref).flatMap { folder.readOrRefuse(ref, it) } },
+                prefix,
+            ).renames
+        } catch (refused: NotesWriteException) {
+            return MigrationReport(0, refused.message.orEmpty()) to emptyMap()
+        }
+        val source = if (prefix.isEmpty()) folder else RewrittenNotes(folder, prefix, renames)
+        return FolderMigration.copy(source, target, NoteRefs.ALL, head) to renames
+    }
+
     /** The new place of the old folder, and null while the folder stays where it is. */
-    private fun movedTo(runner: GitRunner, report: MigrationReport, root: VirtualFile): Path? {
+    private fun movedTo(runner: GitRunner, report: MigrationReport, root: VirtualFile, n: Int): Path? {
         if (report.problem != null) return null
         return GitDir.reviewFolder(runner)
-            ?.resolve("migrated-${System.currentTimeMillis()}")
+            ?.resolve("migrated-${System.currentTimeMillis()}-$n")
             ?.takeIf { moveFolder(root, it) }
     }
 

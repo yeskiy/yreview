@@ -292,8 +292,13 @@ class FolderMigrationTest {
     }
 
     @Test
-    fun `a lookup that may write still asks where the repository is rooted`() {
-        assertFalse(FolderMigration.mayMove(writes = true, "E:/Projects/site", "E:/Projects/site/api"))
+    fun `a lookup that may write moves a folder below the repository root`() {
+        assertTrue(FolderMigration.mayMove(writes = true, "E:/Projects/site", "E:/Projects/site/api"))
+    }
+
+    @Test
+    fun `a lookup that may write leaves a folder above the repository root`() {
+        assertFalse(FolderMigration.mayMove(writes = true, "E:/Projects/site/api", "E:/Projects/site"))
     }
 
     // --- What the user reads after the copy ---

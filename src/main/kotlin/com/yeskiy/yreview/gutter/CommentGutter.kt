@@ -84,6 +84,9 @@ class CommentGutter(private val project: Project) : Disposable {
     /** True for the absolute path of a file whose editor shows a comment of another commit. */
     private val carried = ConcurrentHashMap<String, Boolean>()
 
+    /** The folder root of each record that a git editor shows from a store that did not move. */
+    private val leftoverRoots = ConcurrentHashMap<String, VirtualFile>()
+
     init {
         val bus = project.messageBus.connect(this)
         bus.subscribe(REVIEW_COMMENTS, ReviewCommentListener { repaintAll() })
@@ -153,7 +156,7 @@ class CommentGutter(private val project: Project) : Disposable {
         val close = { inlays.close(key) }
         val resolve = { stored: StoredComment ->
             close()
-            CommentResolve.run(project, root, stored)
+            CommentResolve.run(project, leftoverRoots[stored.id] ?: root, stored)
         }
         val delete = { stored: StoredComment -> CommentDelete.run(project, stored, close) }
         val card = ReadBox.build(project, comments, resolve, delete, close, placed.associate { it.stored.id to it.carry })
@@ -267,9 +270,21 @@ class CommentGutter(private val project: Project) : Disposable {
                 .map { Placed(it, Carry.Same(it.comment.location?.range)) }
             anchor.kind == StoreKind.FOLDER ->
                 PlacedComments.of(git, anchor.root.path, FolderStore.WORKTREE, anchor.path, service.folderNotesOf(anchor.root))
-            else -> PlacedComments.of(git, anchor.root.path, anchor.key, anchor.path)
+            else -> PlacedComments.of(git, anchor.root.path, anchor.key, anchor.path) + leftoverPlaced(service, anchor)
         }
         return CommentMarks.of(placed) to placed.any { it.stored.commit != anchor.key }
+    }
+
+    /** The placed comments of a folder store below the git root of the file that did not move. */
+    private fun leftoverPlaced(service: ReviewService, anchor: ReviewAnchor): List<Placed> {
+        val left = anchor.root.findFileByRelativePath(anchor.path)?.let(service::leftoverOf) ?: return emptyList()
+        return PlacedComments.of(
+            ideGitRunner(project, left.root),
+            left.root.path,
+            FolderStore.WORKTREE,
+            left.path,
+            service.folderNotesOf(left.root),
+        ).onEach { leftoverRoots[it.stored.id] = left.root }
     }
 
     /**
