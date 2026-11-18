@@ -249,17 +249,18 @@ const REMOTE_EXTENSIONS = {
 }
 
 const results = path.join(root, 'results.json')
+const emptyResults = path.join(root, 'results-empty.json')
 const bridgeRecord = path.join(root, 'bridge.json')
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'))
 
-const writeConfig = (files, second) =>
+const writeConfig = (files, second, resultFile = results) =>
   writeFileSync(
     path.join(bundle, 'config.json'),
     `${JSON.stringify(
       {
         setup,
         files,
-        results: remotePath(results),
+        results: remotePath(resultFile),
         userData: remotePath(userData),
         expectedHost: HOSTS[mode],
         second,
@@ -318,8 +319,11 @@ const bridgeGone = async (file, waited = 0) => {
 // These checks need real mouse input or the panel, so a first-run screen over the window blocks them.
 const INPUT_CHECKS = new Set([1, 6, 7, 9])
 
-/** The result of each check from the test records of the run. */
-const checkResults = async (records, failure, blocked) => {
+// These checks run in a second window with no folder.
+const EMPTY_CHECKS = new Set([14])
+
+/** The seconds until the bridge file of the first window goes, or undefined. */
+const firstBridgeGone = async () => {
   const bridge = existsSync(bridgeRecord)
     ? JSON.parse(readFileSync(bridgeRecord, 'utf8')).path
     : undefined
@@ -340,42 +344,45 @@ const checkResults = async (records, failure, blocked) => {
         },
       ).stdout,
     )
-  return Promise.all(
-    CHECKS.map(async ([check, name]) => {
-      if (SKIPPED.has(check)) return { check, name, status: 'not checked yet', reason: '' }
-      const file = `check${String(check).padStart(2, '0')}.test.js`
-      const own = records.filter((record) => record.file === file)
-      const failed = own.find((record) => record.state === 'failed')
-      const skipped = own.find((record) => record.state === 'skipped')
-      if (failed !== undefined && blocked !== undefined && INPUT_CHECKS.has(check))
-        return { check, name, status: 'not automated', reason: blocked }
-      if (failed !== undefined) return { check, name, status: 'failed', reason: failed.error }
-      if (skipped !== undefined)
-        return {
-          check,
-          name,
-          status: 'not automated',
-          reason: /\((?:not automated|skipped): (.*)\)$/u.exec(skipped.title)?.[1] ?? skipped.title,
-        }
-      if (!own.some((record) => record.state === 'passed'))
-        return {
-          check,
-          name,
-          status: 'failed',
-          reason: `the test did not run: ${failure ?? 'no record'}`,
-        }
-      if (check === 11 && gone === undefined)
-        return {
-          check,
-          name,
-          status: 'failed',
-          reason: `the bridge file stays ${BRIDGE_WAIT_S} s after the window closes`,
-        }
-      const note = own.map((record) => /\(note: (.*)\)$/u.exec(record.title)?.[1]).find(Boolean)
-      return { check, name, status: 'passed', reason: note ?? '' }
-    }),
-  )
+  return gone
 }
+
+/** The result of each check from the test records of the runs. */
+const checkResults = (records, failures, blocked, gone) =>
+  CHECKS.map(([check, name]) => {
+    const failure = EMPTY_CHECKS.has(check) ? failures.empty : failures.main
+    if (SKIPPED.has(check)) return { check, name, status: 'not checked yet', reason: '' }
+    const file = `check${String(check).padStart(2, '0')}.test.js`
+    const own = records.filter((record) => record.file === file)
+    const failed = own.find((record) => record.state === 'failed')
+    const skipped = own.find((record) => record.state === 'skipped')
+    if (failed !== undefined && blocked !== undefined && INPUT_CHECKS.has(check))
+      return { check, name, status: 'not automated', reason: blocked }
+    if (failed !== undefined) return { check, name, status: 'failed', reason: failed.error }
+    if (skipped !== undefined)
+      return {
+        check,
+        name,
+        status: 'not automated',
+        reason: /\((?:not automated|skipped): (.*)\)$/u.exec(skipped.title)?.[1] ?? skipped.title,
+      }
+    if (!own.some((record) => record.state === 'passed'))
+      return {
+        check,
+        name,
+        status: 'failed',
+        reason: `the test did not run: ${failure ?? 'no record'}`,
+      }
+    if (check === 11 && gone === undefined)
+      return {
+        check,
+        name,
+        status: 'failed',
+        reason: `the bridge file stays ${BRIDGE_WAIT_S} s after the window closes`,
+      }
+    const note = own.map((record) => /\(note: (.*)\)$/u.exec(record.title)?.[1]).find(Boolean)
+    return { check, name, status: 'passed', reason: note ?? '' }
+  })
 
 /** The CLI installs the VSIX, and the extension from it activates. Local setups only. */
 const installCheck = async (editor) => {
@@ -461,6 +468,33 @@ const buildBundle = async () => {
   })
 }
 
+/** Runs the checks of EMPTY_CHECKS in a second window that opens no folder. */
+const emptyWindowRun = async (editor, work) => {
+  writeConfig(
+    [...EMPTY_CHECKS].map((check) => `check${String(check).padStart(2, '0')}.test.js`),
+    '',
+    emptyResults,
+  )
+  rmSync(emptyResults, { force: true })
+  const remote = mode !== 'local'
+  const failure = await runEditor(editor, {
+    extensionDevelopmentPath: remote ? remoteUri(work, extension) : extension,
+    extensionTestsPath: remote
+      ? remoteUri(work, path.join(bundle, 'index.js'))
+      : path.join(bundle, 'index.js'),
+    launchArgs: [
+      ...editor.launch,
+      ...(remote ? [`--remote=${authority(work)}`] : []),
+      `--user-data-dir=${userData}`,
+      `--extensions-dir=${extensions}`,
+      '--remote-debugging-port=0',
+    ],
+  })
+  if (failure !== undefined) say(`the empty window run failed: ${failure}`)
+  const tests = existsSync(emptyResults) ? JSON.parse(readFileSync(emptyResults, 'utf8')).tests : []
+  return { failure, tests }
+}
+
 const main = async () => {
   rmSync(root, { recursive: true, force: true })
   mkdirSync(path.join(userData, 'User'), { recursive: true })
@@ -482,7 +516,10 @@ const main = async () => {
   const { work, second } = prepareWorkspace()
   if (mode === 'devcontainer') writeDevcontainer(work)
   writeConfig(
-    readdirSync(bundle).filter((file) => /^check\d+\.test\.js$/u.test(file)),
+    readdirSync(bundle).filter(
+      (file) =>
+        /^check\d+\.test\.js$/u.test(file) && !EMPTY_CHECKS.has(Number(/\d+/u.exec(file)?.[0])),
+    ),
     second,
   )
   rmSync(results, { force: true })
@@ -503,6 +540,8 @@ const main = async () => {
   if (failure !== undefined) say(`the run failed: ${failure}`)
   const run = existsSync(results) ? JSON.parse(readFileSync(results, 'utf8')) : { tests: [] }
   if ((run.firstRun?.length ?? 0) > 1) say(`first-run screen: ${JSON.stringify(run.firstRun)}`)
+  const gone = await firstBridgeGone()
+  const empty = await emptyWindowRun(editor, work)
   const outcome = {
     setup,
     mode,
@@ -512,8 +551,13 @@ const main = async () => {
     firstRun: run.firstRun,
     date: new Date().toISOString().slice(0, 10),
     install,
-    checks: await checkResults(run.tests, failure, blockedBy(run.firstRun)),
-    tests: run.tests,
+    checks: checkResults(
+      [...run.tests, ...empty.tests],
+      { main: failure, empty: empty.failure },
+      blockedBy(run.firstRun),
+      gone,
+    ),
+    tests: [...run.tests, ...empty.tests],
   }
   mkdirSync(path.resolve(args.out), { recursive: true })
   writeFileSync(

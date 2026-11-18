@@ -13,6 +13,7 @@ export const CHECKS = [
   [11, 'The bridge file goes when the window goes'],
   [12, 'The review preview opens and renders'],
   [13, 'The key in the review preview saves lines'],
+  [14, 'A comment on a loose file in an empty window'],
 ]
 
 // The owner checks these rows by hand, so the workflow leaves them out.
