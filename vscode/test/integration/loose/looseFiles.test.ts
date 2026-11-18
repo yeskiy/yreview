@@ -25,6 +25,8 @@ const api = async (): Promise<YreviewApi> =>
 
 const storeFile = (folder: string): string =>
   path.join(folder, '.y-review', 'notes', 'refs-notes-y-review-local', 'worktree.jsonl')
+const sharedStore = (folder: string): string =>
+  path.join(folder, '.y-review', 'notes', 'refs-notes-devtools-discuss')
 
 /** The folders above the folder, nearest first. */
 const ancestors = (folder: string): readonly string[] =>
@@ -38,11 +40,11 @@ const lines = (file: string): readonly string[] =>
 describe('comments on loose files in an empty window', () => {
   const folder = path.join(realpathSync.native(tmpdir()), `yreview-loose-${randomUUID()}`)
   const fileIn = (dir: string, name: string): vscode.Uri => vscode.Uri.file(path.join(dir, name))
-  const save = async (uri: vscode.Uri, text: string): Promise<void> => {
+  const save = async (uri: vscode.Uri, text: string, command = 'yreview.saveLocal') => {
     const controller = vscode.comments.createCommentController('yreview-loose-test', 'Test')
     const draft = controller.createCommentThread(uri, new vscode.Range(0, 0, 0, 0), [])
     try {
-      await vscode.commands.executeCommand('yreview.saveLocal', { thread: draft, text })
+      await vscode.commands.executeCommand(command, { thread: draft, text })
     } finally {
       controller.dispose()
     }
@@ -97,6 +99,20 @@ describe('comments on loose files in an empty window', () => {
     await save(fileIn(folder, 'two.md'), 'Second note.')
     assert.equal(lines(storeFile(folder)).length, 2)
     assert.equal(existsSync(path.join(path.dirname(folder), '.y-review')), false)
+  })
+
+  it('a shared save on a loose file writes the local ref when shared comments come first', async () => {
+    const settings = vscode.workspace.getConfiguration('yreview')
+    await settings.update('newComments', 'shared', vscode.ConfigurationTarget.Global)
+    try {
+      writeFileSync(path.join(folder, 'four.md'), '# Four\n')
+      await vscode.window.showTextDocument(fileIn(folder, 'four.md'))
+      await save(fileIn(folder, 'four.md'), 'Shared first.', 'yreview.saveShared')
+      assert.match(readFileSync(storeFile(folder), 'utf8'), /"path":"four.md"/)
+      assert.equal(existsSync(sharedStore(folder)), false)
+    } finally {
+      await settings.update('newComments', undefined, vscode.ConfigurationTarget.Global)
+    }
   })
 
   it('a save into a read-only folder fails with a message that names the folder', async function readOnly() {

@@ -453,7 +453,7 @@
         },
         {
           "command": "yreview.draft.saveShared",
-          "when": "resourceScheme == yreview-draft"
+          "when": "resourceScheme == yreview-draft && resource not in yreview.localDrafts"
         },
         {
           "command": "yreview.draft.discard",
@@ -632,7 +632,7 @@
         },
         {
           "command": "yreview.draft.saveShared",
-          "when": "resourceScheme == yreview-draft",
+          "when": "resourceScheme == yreview-draft && resource not in yreview.localDrafts",
           "group": "navigation@2"
         },
         {
@@ -684,22 +684,22 @@
         {
           "command": "yreview.saveLocal",
           "group": "inline@1",
-          "when": "commentController == yreview && commentThreadIsEmpty && config.yreview.newComments != shared"
+          "when": "commentController == yreview && commentThreadIsEmpty && (commentThread == localOnly || config.yreview.newComments != shared)"
         },
         {
           "command": "yreview.saveShared",
           "group": "inline@2",
-          "when": "commentController == yreview && commentThreadIsEmpty && config.yreview.newComments != shared"
+          "when": "commentController == yreview && commentThreadIsEmpty && commentThread != localOnly && config.yreview.newComments != shared"
         },
         {
           "command": "yreview.saveShared",
           "group": "inline@1",
-          "when": "commentController == yreview && commentThreadIsEmpty && config.yreview.newComments == shared"
+          "when": "commentController == yreview && commentThreadIsEmpty && commentThread != localOnly && config.yreview.newComments == shared"
         },
         {
           "command": "yreview.saveLocal",
           "group": "inline@2",
-          "when": "commentController == yreview && commentThreadIsEmpty && config.yreview.newComments == shared"
+          "when": "commentController == yreview && commentThreadIsEmpty && commentThread != localOnly && config.yreview.newComments == shared"
         },
         {
           "command": "yreview.discard",

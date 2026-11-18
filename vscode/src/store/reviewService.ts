@@ -88,8 +88,6 @@ export const HOME_FILE =
   'Yreview does not keep comments for a file directly in your home folder or in its .y-review folder. Move the file into a folder, then add the comment.'
 export const NO_REVISION =
   'This side of the diff has no revision in git, so a comment has nowhere to anchor.'
-export const FOLDER_SHARED =
-  'No git repository covers this file, so Yreview cannot push yet. A shared comment reaches the remote after the comments move into the git notes.'
 
 export const folderFirstNotice = (root: string): string =>
   `No git repository covers this file. The review comments go to ${root}/${FOLDER}. Yreview moves them into the git notes by itself after a repository with a commit exists here.`
@@ -248,7 +246,7 @@ export class ReviewService {
     return placedComments(runner, anchor.root, anchor.head, notes, anchor.path)
   }
 
-  /** A folder store has no remote, so it takes no share step. */
+  /** A folder store has no remote, so it takes only local comments. */
   async addComment(
     anchor: Anchor,
     range: RecordRange,
@@ -257,7 +255,7 @@ export class ReviewService {
     lineText?: string | null,
   ): Promise<WriteResult> {
     const stored = await this.book(anchor).add(
-      refFor(shared),
+      refFor(shared && anchor.store === 'git'),
       anchor.head,
       anchor.path,
       range,
@@ -268,7 +266,7 @@ export class ReviewService {
     )
     this.notify()
     if (anchor.store === 'folder') {
-      return { stored, notices: await this.folderNotices(anchor.root, shared) }
+      return { stored, notices: await this.folderNotices(anchor.root) }
     }
     const shareError = isShared(stored.ref) ? await this.share(anchor.root, stored.ref) : undefined
     if (shareError !== undefined) await this.shareLog.mark(stored.id, anchor.root, stored.ref)
@@ -399,12 +397,12 @@ export class ReviewService {
     return topOf(fromGit(await this.runner(root).run(['rev-parse', '--show-toplevel']))) === root
   }
 
-  private async folderNotices(root: string, shared: boolean): Promise<readonly string[]> {
+  private async folderNotices(root: string): Promise<readonly string[]> {
     const told = this.host.toldFolders().includes(root)
     if (!told) {
       await this.host.saveToldFolders([...new Set([...this.host.toldFolders(), root])].sort())
     }
-    return [...(told ? [] : [folderFirstNotice(root)]), ...(shared ? [FOLDER_SHARED] : [])]
+    return told ? [] : [folderFirstNotice(root)]
   }
 
   /** One migration for each root at a time. A lookup that may not write moves nothing. */

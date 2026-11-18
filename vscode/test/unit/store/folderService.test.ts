@@ -14,7 +14,6 @@ import { FolderNotes } from '../../../src/store/folderNotes'
 import { DISCUSS, LOCAL } from '../../../src/store/noteRefs'
 import {
   type Anchor,
-  FOLDER_SHARED,
   NO_REVISION,
   ReviewService,
   type ServiceHost,
@@ -192,15 +191,16 @@ describe('ReviewService with folder stores and diff sides', function folderServi
     )
   })
 
-  it('a shared comment in a folder store pushes nothing and says why', async () => {
+  it('a shared comment in a folder store goes to the local ref', async () => {
     const dir = plain()
     const service = new ReviewService(host([dir]).value)
     const anchor = await folderAnchor(service, dir)
     const written = await service.addComment(anchor, { startLine: 1, endLine: 1 }, 'Shared.', true)
-    assert.equal(written.stored.ref, DISCUSS)
+    assert.equal(written.stored.ref, LOCAL)
     assert.equal(written.shareError, undefined)
-    assert.ok(written.notices?.includes(FOLDER_SHARED))
-    assert.ok(existsSync(storeFile(dir, DISCUSS)))
+    assert.deepEqual(written.notices, [folderFirstNotice(slashPath(dir))])
+    assert.ok(existsSync(storeFile(dir, LOCAL)))
+    assert.equal(existsSync(storeFile(dir, DISCUSS)), false)
   })
 
   it('resolves and deletes a comment of a folder store', async () => {

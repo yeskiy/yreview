@@ -37,6 +37,9 @@ const OPEN = 'yreview.open'
 const RESOLVED = 'yreview.resolved'
 const COMMENT = 'yreview.comment'
 const SAVING = 'yreview.saving'
+const LOCAL_ONLY = 'localOnly'
+export const SAVED_LOCAL =
+  'This file is outside every git repository, so Yreview saved a local comment.'
 const NATIVE_ADD = 'workbench.action.addComment'
 const RELOAD_DELAY_MS = 300
 const ASK_LIMIT_MS = 2000
@@ -271,6 +274,10 @@ const visibleUris = (): readonly vscode.Uri[] =>
 export type RangeAsk = vscode.Event<vscode.Uri>
 
 /** Resolves after VS Code gets the answer to the first ask for the ranges of `uri`, or at the limit. */
+/** A folder store has no remote, so its file takes only local comments. */
+const localOnly = (found: AnchorResult): boolean =>
+  found.kind === 'found' && found.anchor.store === 'folder'
+
 export const firstAsk = async (
   asked: RangeAsk,
   uri: vscode.Uri,
@@ -396,6 +403,7 @@ export class ReviewComments implements vscode.Disposable {
     this.drafts = new CommentDrafts(
       (source, selection, text, shared) => this.addRange(source, selection, text, shared),
       (source) => readSettings(scopeOf(source)).newComments === 'shared',
+      async (source) => localOnly(await this.anchorFor(source)),
       (source, selection) => {
         if (this.pending.get(pendingKey(source, selection.start.line))?.isEqual(selection))
           this.pending.delete(pendingKey(source, selection.start.line))
@@ -999,6 +1007,7 @@ export class ReviewComments implements vscode.Disposable {
       this.box.input ??= inputOf(vscode.window.activeTextEditor)
       return
     }
+    const anchored = found ?? (await this.anchorFor(document.uri))
     this.box = {
       uri: document.uri,
       line: at,
@@ -1007,6 +1016,7 @@ export class ReviewComments implements vscode.Disposable {
         {
           canReply: true,
           collapsibleState: vscode.CommentThreadCollapsibleState.Expanded,
+          contextValue: localOnly(anchored) ? LOCAL_ONLY : undefined,
           label: found === undefined ? undefined : revisionOf(document.uri, found.anchor),
         },
       ),
@@ -1089,6 +1099,9 @@ export class ReviewComments implements vscode.Disposable {
       ),
     )
     this.author = result.stored.record.author
+    // A box that VS Code opens has no context value, so it still shows Save Shared.
+    if (shared && localOnly(found))
+      vscode.window.showInformationMessage(SAVED_LOCAL).then(undefined, () => undefined)
     return { result, anchor: found.anchor }
   }
 
@@ -1107,6 +1120,7 @@ export class ReviewComments implements vscode.Disposable {
       this.pending.get(key) ?? thread.range ?? new vscode.Range(0, 0, 0, 0),
     )
     const range = rangeOf(document, selected)
+    const { contextValue } = thread
     Object.assign(thread, {
       comments: [
         {
@@ -1155,7 +1169,7 @@ export class ReviewComments implements vscode.Disposable {
       Object.assign(thread, {
         comments: [],
         canReply: true,
-        contextValue: undefined,
+        contextValue,
         label: undefined,
         collapsibleState: vscode.CommentThreadCollapsibleState.Expanded,
       })
