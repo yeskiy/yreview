@@ -25,6 +25,20 @@ export interface ToolbarFacts {
 
 const NO_TASK = 'This workspace has no open review task.'
 
+export const OUTSIDE_REASON =
+  'The agent works in the workspace folder, so it does not take this task.'
+
+/** The agent works in the workspace folder, so a task outside the workspace never goes out. */
+export const agentTasks = (tasks: readonly ReviewTask[]): readonly ReviewTask[] =>
+  tasks.filter((task) => task.outside !== true)
+
+/** The checked tasks for the agent, else the selected tasks for the agent. */
+export const chosenOf = (
+  checked: readonly ReviewTask[],
+  selected: readonly ReviewTask[],
+): readonly ReviewTask[] =>
+  agentTasks(checked).length > 0 ? agentTasks(checked) : agentTasks(selected)
+
 /** A check box beats a selected row, and a selected row beats the whole tree. */
 export const sendTarget = (
   checked: readonly ReviewTask[],
@@ -134,7 +148,7 @@ export const toolbarFacts = (
   checked: readonly ReviewTask[],
   checkCount: number,
 ): ToolbarFacts => ({
-  send: sendTarget(checked, selected, all),
+  send: sendTarget(agentTasks(checked), agentTasks(selected), agentTasks(all)),
   write: writeTarget(checked, selected),
   anyTask: all.length > 0,
   anyCheck: checkCount > 0,

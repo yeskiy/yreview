@@ -17,6 +17,7 @@ import path from 'node:path'
 import * as vscode from 'vscode'
 
 import type { YreviewApi } from '../../../src/extension'
+import type { Row } from '../../../src/tasks/viewRows'
 
 import { until } from '../window'
 
@@ -65,13 +66,16 @@ describe('comments on loose files in an empty window', () => {
     await vscode.commands.executeCommand('workbench.action.closeAllEditors')
     // Git writes its object files read-only, and the test host does not delete a read-only file on Windows.
     const child = `${folder}-child`
-    if (existsSync(child)) {
-      readdirSync(child, { recursive: true, withFileTypes: true })
-        .filter((entry) => entry.isFile())
-        .forEach((entry) => chmodSync(path.join(entry.parentPath, entry.name), 0o666))
-    }
+    ;[child, `${folder}-tree-repo`]
+      .filter((dir) => existsSync(dir))
+      .forEach((dir) =>
+        readdirSync(dir, { recursive: true, withFileTypes: true })
+          .filter((entry) => entry.isFile())
+          .forEach((entry) => chmodSync(path.join(entry.parentPath, entry.name), 0o666)),
+      )
+    rmSync(`${folder}-tree-repo`, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 })
     // On Windows the file watcher of the window can hold the folder for a short time.
-    ;[folder, child, `${folder}-locked`].forEach((dir) =>
+    ;[folder, child, `${folder}-locked`, `${folder}-tree-a`, `${folder}-tree-b`].forEach((dir) =>
       rmSync(dir, { recursive: true, force: true, maxRetries: 20, retryDelay: 250 }),
     )
   })
@@ -194,6 +198,115 @@ describe('comments on loose files in an empty window', () => {
       assert.equal(existsSync(path.join(locked, '.y-review')), false)
     } finally {
       chmodSync(locked, 0o755)
+    }
+  })
+
+  it('the task views show one branch for each root of an open tab', async () => {
+    const { tasks } = await api()
+    assert.ok(tasks)
+    const project = tasks.view('project')
+    const [first, second, repo] = ['a', 'b', 'repo'].map((name) => `${folder}-tree-${name}`)
+    ;[first, second, repo].forEach((dir) => mkdirSync(dir ?? '', { recursive: true }))
+    writeFileSync(path.join(first ?? '', 'x.md'), '# X\n')
+    writeFileSync(path.join(second ?? '', 'y.md'), '# Y\n')
+    writeFileSync(path.join(repo ?? '', 'z.md'), '# Z\n')
+    const run = (...args: string[]): string =>
+      execFileSync(
+        'git',
+        ['-c', 'user.name=Yreview Test', '-c', 'user.email=reviewer@example.com', ...args],
+        { cwd: repo, encoding: 'utf8' },
+      )
+    run('init', '-q', '-b', 'main')
+    run('add', 'z.md')
+    run('-c', 'commit.gpgsign=false', 'commit', '-q', '-m', 'init')
+    const branches = (): readonly Row[] =>
+      project.topRows().filter((row) => row.kind === 'folder' && row.folder.kind === 'outside')
+    const branchOf = (dir: string): Row | undefined =>
+      branches().find(
+        (row) => row.kind === 'folder' && row.folder.name.startsWith(`${path.basename(dir)} (`),
+      )
+    // The git extension then does not open the repository, so it stays a root outside the workspace.
+    const gitSettings = vscode.workspace.getConfiguration('git')
+    await gitSettings.update('autoRepositoryDetection', false, vscode.ConfigurationTarget.Global)
+    const shown: string[] = []
+    const original = vscode.window.showWarningMessage
+    try {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors')
+      await vscode.window.showTextDocument(fileIn(first ?? '', 'x.md'), { preview: false })
+      await save(fileIn(first ?? '', 'x.md'), 'Tree note A.')
+      await tasks.model.refresh()
+      assert.ok(await until(() => branches().length === 1), 'no branch for the loose folder')
+      const branch = branchOf(first ?? '') ?? assert.fail('no branch of the first folder')
+      assert.deepEqual(
+        branch.tasks.map((task) => [task.path, task.text]),
+        [['x.md', 'Tree note A.']],
+      )
+      const task = branch.tasks[0] ?? assert.fail('no task')
+      const row = project.rowOf(task) ?? assert.fail('no row')
+      const item = project.getTreeItem(row)
+      assert.equal(item.checkboxState, undefined)
+      assert.equal(project.getTreeItem(branch).checkboxState, undefined)
+      const tooltip = item.tooltip as vscode.MarkdownString
+      // The tooltip text is escaped Markdown, so the check drops the escape marks.
+      assert.ok(
+        tooltip.value
+          .replaceAll('\\', '')
+          .replaceAll('&nbsp;', ' ')
+          .endsWith('The agent works in the workspace folder, so it does not take this task.'),
+        tooltip.value,
+      )
+      assert.equal(project.view.badge, undefined)
+      assert.ok(
+        tasks
+          .view('currentFile')
+          .rows()
+          .tasks.some((entry) => entry.text === 'Tree note A.'),
+        'the Current File view does not show the loose file',
+      )
+
+      await vscode.window.showTextDocument(fileIn(second ?? '', 'y.md'), { preview: false })
+      await save(fileIn(second ?? '', 'y.md'), 'Tree note B.')
+      await vscode.window.showTextDocument(fileIn(repo ?? '', 'z.md'), { preview: false })
+      await save(fileIn(repo ?? '', 'z.md'), 'Tree note repo.')
+      await tasks.model.refresh()
+      assert.ok(await until(() => branches().length === 3), `${branches().length} branches`)
+      assert.ok(branchOf(repo ?? '')?.tasks.some((entry) => entry.revision !== 'worktree'))
+
+      Object.assign(vscode.window, {
+        showWarningMessage: (text: string) => {
+          shown.push(text)
+          return Promise.resolve(undefined)
+        },
+      })
+      await vscode.commands.executeCommand(
+        'yreview.sendTasks',
+        branches().flatMap((each) => each.tasks),
+      )
+      assert.deepEqual(shown, [
+        'The agent works in the workspace folder, so it does not take these tasks.',
+      ])
+      assert.deepEqual(tasks.chosenTasks(), [])
+
+      const tab = vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .find(
+          (each) =>
+            each.input instanceof vscode.TabInputText &&
+            each.input.uri.fsPath === fileIn(second ?? '', 'y.md').fsPath,
+        )
+      await vscode.window.tabGroups.close(tab ?? assert.fail('no tab of the second file'))
+      assert.ok(
+        await until(() => branches().length === 2 && branchOf(second ?? '') === undefined),
+        'the branch of the closed tab stays',
+      )
+    } finally {
+      Object.assign(vscode.window, { showWarningMessage: original })
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors')
+      await gitSettings.update(
+        'autoRepositoryDetection',
+        undefined,
+        vscode.ConfigurationTarget.Global,
+      )
     }
   })
 })

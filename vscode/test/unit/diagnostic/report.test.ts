@@ -48,6 +48,7 @@ const facts: ReportFacts = {
   sessionLocation: 'panel',
   agent: 'claude',
   agentCommand: 'default',
+  outsideRoots: 2,
 }
 const poisoned = sessionRecord(
   {
@@ -100,6 +101,8 @@ describe('the diagnostic report', () => {
       assert.match(report, /channel/)
       assert.match(report, /sharing {8}local/)
     })
+    it('names the count of open roots outside the workspace', () =>
+      assert.ok(report.includes(factLine('outside roots', '2')), report))
     it('keeps the counts, the routes and the kinds', () => {
       assert.match(report, /channel/)
       assert.match(report, /git/)

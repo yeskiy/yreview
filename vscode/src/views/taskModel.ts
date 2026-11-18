@@ -206,6 +206,11 @@ export class TaskModel implements vscode.Disposable {
     }
   }
 
+  /** The count of open tab roots outside the workspace in the last scan. */
+  outsideRoots(): number {
+    return this.base.outside.length
+  }
+
   snapshot(): ModelSnapshot {
     return {
       repositories: withOverlays(

@@ -27,6 +27,8 @@ export interface ReportFacts {
   readonly sessionLocation: string
   readonly agent: string
   readonly agentCommand: CommandKind
+  /** Only a count, so the report names no path of a root outside the workspace. */
+  readonly outsideRoots: number
 }
 
 /** The report names only the kind of the command. A custom command can carry a password. */
@@ -73,6 +75,7 @@ export const reportText = (
       factLine('session window', facts.sessionLocation),
       factLine('agent', facts.agent),
       factLine('agent command', facts.agentCommand),
+      factLine('outside roots', String(facts.outsideRoots)),
       '',
       `Records, newest first (${records.length} of ${LIMIT})`,
       records.length === 0 ? '  none' : records.map(recordText).join('\n\n'),

@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import type { ReviewTask } from '../../../src/tasks/reviewTask'
 import {
+  OUTSIDE_REASON,
+  chosenOf,
   deleteQuestion,
   hasComments,
   isEmptyTarget,
@@ -11,6 +13,7 @@ import {
   sendTarget,
   sendText,
   todoNotice,
+  toolbarFacts,
   writeTarget,
 } from '../../../src/tasks/taskChoice'
 import { task, todo } from './fixtures'
@@ -42,6 +45,35 @@ const TODO_QUESTION =
   'The files stay unsaved, and an undo in each file puts the text back.'
 
 describe('task choice', () => {
+  describe('tasks outside the workspace', () => {
+    const outside = { ...item('o'), outside: true }
+
+    it('the chosen tasks drop an outside task from the checked tasks', () => {
+      assert.deepEqual(ids(chosenOf([outside, item('a')], [])), ['a'])
+    })
+
+    it('the chosen tasks drop an outside task from the selected tasks', () => {
+      assert.deepEqual(ids(chosenOf([], [item('b'), outside])), ['b'])
+    })
+
+    it('only outside tasks give no chosen task', () => {
+      assert.deepEqual(chosenOf([outside], [outside]), [])
+    })
+
+    it('the send target of the toolbar leaves out outside tasks', () => {
+      const facts = toolbarFacts([item('a'), outside], [outside], [], 0)
+      assert.equal(facts.send.scope, 'all')
+      assert.deepEqual(ids(facts.send.tasks), ['a'])
+    })
+
+    it('the reason names the workspace folder', () => {
+      assert.equal(
+        OUTSIDE_REASON,
+        'The agent works in the workspace folder, so it does not take this task.',
+      )
+    })
+  })
+
   it('sends the checked tasks first', () => {
     const target = sendTarget([item('a')], [item('b')], all)
 

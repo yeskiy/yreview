@@ -10,6 +10,7 @@ import {
   type TaskLayout,
   groupTasks,
   layoutTasks,
+  outsideFolder,
   tasksOfFolder,
   tasksOfLayout,
 } from './taskTree'
@@ -69,29 +70,42 @@ export const rulesOf = (
   return filter === undefined ? undefined : new Set(filter.patterns)
 }
 
-export const deriveView = (input: ViewInput): DerivedView => {
-  const all = input.repositories
+/** The tasks of some repositories that the view keeps after its switches and filters. */
+const keptTasks = (
+  input: ViewInput,
+  repositories: readonly RepositoryTasks[],
+): readonly ReviewTask[] => {
+  const all = repositories
     .flatMap((repo) => repo.tasks)
     .map((task) => ({ ...task, folder: input.folderOf(task) }))
     .filter((task) => acceptsResolved(task, input.tab.showResolved) && input.keep(task))
-  const layout = layoutTasks(
-    groupTasks(
-      applyFilter(
-        input.changed === undefined ? all : keepChanged(all, input.changed),
-        rulesOf(input.tab, input.filters),
-        input.tab.kindFilter,
-      ),
-      (task) => labelOf(task, input.repositories.length > 1),
-    ),
+  return applyFilter(
+    input.changed === undefined ? all : keepChanged(all, input.changed),
+    rulesOf(input.tab, input.filters),
+    input.tab.kindFilter,
+  )
+}
+
+/** The workspace part has the plain layout. Each root outside the workspace adds one branch, last. */
+export const deriveView = (input: ViewInput): DerivedView => {
+  const inside = input.repositories.filter((repo) => repo.outside === undefined)
+  const plain = layoutTasks(
+    groupTasks(keptTasks(input, inside), (task) => labelOf(task, inside.length > 1)),
     input.tab,
   )
+  const branches = input.repositories
+    .flatMap((repo) => (repo.outside === undefined ? [] : [{ repo, label: repo.outside }]))
+    .map(({ repo, label }) => ({ label, groups: groupTasks(keptTasks(input, [repo])) }))
+    .filter(({ groups }) => groups.length > 0)
+    .map(({ label, groups }) => outsideFolder(label, groups, input.tab))
+  const layout = { folders: [...plain.folders, ...branches], files: plain.files }
   return { layout, tasks: tasksOfLayout(layout) }
 }
 
 export const rowsOfLayout = (parent: string, layout: TaskLayout): readonly Row[] => [
   ...layout.folders.map((folder): Row => ({
     kind: 'folder',
-    id: `${parent}/d:${folder.name}`,
+    id: `${parent}/${folder.kind === 'outside' ? 'o' : 'd'}:${folder.name}`,
     folder,
     tasks: tasksOfFolder(folder),
   })),
