@@ -1,12 +1,16 @@
 package com.yeskiy.yreview.toolwindow
 
+import com.intellij.dvcs.repo.VcsRepositoryManager
+import com.intellij.dvcs.repo.VcsRepositoryMappingListener
 import com.intellij.openapi.application.WriteAction
 import com.intellij.openapi.command.WriteCommandAction
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.vcs.ProjectLevelVcsManager
 import com.intellij.openapi.vcs.VcsDirectoryMapping
+import com.intellij.openapi.vcs.VcsMappingListener
 import com.intellij.openapi.vcs.changes.ChangeListManagerImpl
 import com.intellij.openapi.vcs.impl.ProjectLevelVcsManagerImpl
 import com.intellij.openapi.vfs.LocalFileSystem
@@ -19,6 +23,7 @@ import com.intellij.psi.PsiTreeChangeAdapter
 import com.intellij.psi.PsiTreeChangeEvent
 import com.intellij.testFramework.HeavyPlatformTestCase
 import com.intellij.testFramework.IndexingTestUtil
+import com.intellij.testFramework.PlatformTestUtil
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.runInEdtAndGet
 import com.intellij.testFramework.runInEdtAndWait
@@ -34,6 +39,7 @@ import git4idea.GitVcs
 import git4idea.repo.GitRepositoryManager
 import java.io.File
 import java.nio.file.Files
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -80,7 +86,11 @@ class ReloadSignalTest : HeavyPlatformTestCase() {
         ProjectLevelVcsManager.getInstance(project).directoryMappings =
             listOf(VcsDirectoryMapping(fixture.repo.path.replace('\\', '/'), GitVcs.NAME))
         assertNotNull(GitRepositoryManager.getInstance(project).getRepositoryForRoot(vfs(fixture.repo)))
+        // The new mapping also starts a background update that sends a repository mapping signal.
+        // A tab that opens before that signal reads its scope twice, so the setup waits for it.
+        VcsRepositoryManager.getInstance(project).waitForAsyncTaskCompletion()
         IndexingTestUtil.waitUntilIndexesAreReady(project)
+        runInEdtAndWait { PlatformTestUtil.dispatchAllEventsInIdeEventQueue() }
     }
 
     private fun showPreview(on: Boolean) =
@@ -138,19 +148,33 @@ class ReloadSignalTest : HeavyPlatformTestCase() {
     fun `test the preview card makes one read per open and none while the tab is idle`() {
         showPreview(true)
         val light = AtomicInteger()
+        val signals = ConcurrentLinkedQueue<String>()
         PsiManager.getInstance(project).addPsiTreeChangeListener(
             object : PsiTreeChangeAdapter() {
                 override fun childrenChanged(event: PsiTreeChangeEvent) {
-                    if (event.file?.virtualFile?.isInLocalFileSystem == false) light.incrementAndGet()
+                    when (event.file?.virtualFile?.isInLocalFileSystem) {
+                        false -> light.incrementAndGet()
+                        true -> signals.add("psi ${event.file?.name}")
+                        null -> Unit
+                    }
                 }
             },
             testRootDisposable,
         )
+        project.messageBus.connect(testRootDisposable).apply {
+            subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { signals.add("repository mapping") })
+            subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { signals.add("vcs configuration") })
+            subscribe(DumbService.DUMB_MODE, object : DumbService.DumbModeListener {
+                override fun exitDumbMode() {
+                    signals.add("index ready")
+                }
+            })
+        }
         val panel = open()
         Thread.sleep(IDLE)
         waitFor(30_000) { ready(panel) }
         assertTrue("the preview card changed no in-memory file, so the test proves nothing", light.get() > 0)
-        assertEquals("reads per open", 1L, ticketOf(panel))
+        assertEquals("reads per open, after the signals $signals", 1L, ticketOf(panel))
         assertEquals("reads while idle", 0L, readsFor(panel) {})
     }
 
