@@ -60,10 +60,9 @@ import com.intellij.openapi.vcs.changes.ChangeListListener
 import com.intellij.openapi.vcs.changes.ChangeListManager
 import com.intellij.openapi.vfs.VirtualFile
 import com.intellij.pom.Navigatable
-import com.intellij.psi.PsiDirectory
 import com.intellij.psi.PsiDocumentManager
 import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiFile
+import com.intellij.psi.PsiFileSystemItem
 import com.intellij.psi.PsiManager
 import com.intellij.psi.PsiTreeChangeAdapter
 import com.intellij.psi.PsiTreeChangeEvent
@@ -1243,12 +1242,13 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         override fun childrenChanged(event: PsiTreeChangeEvent) = scheduleFor(event, null)
 
         override fun propertyChanged(event: PsiTreeChangeEvent) {
-            if (SourceSignal.readAgain(event.propertyName)) scheduleReload()
+            val item = event.element as? PsiFileSystemItem
+            if (SourceSignal.readAgain(event.propertyName) && (item == null || SourceSignal.watched(project, item))) scheduleReload()
         }
 
-        /** A change inside a file, of a whole file or of a whole folder needs a new read. */
+        /** A change inside a file, of a whole file or of a whole folder of a store needs a new read. */
         private fun scheduleFor(event: PsiTreeChangeEvent, child: PsiElement?) {
-            if (event.file != null || child is PsiFile || child is PsiDirectory) scheduleReload()
+            if (SourceSignal.watched(project, event.file ?: child as? PsiFileSystemItem)) scheduleReload()
         }
     }
 

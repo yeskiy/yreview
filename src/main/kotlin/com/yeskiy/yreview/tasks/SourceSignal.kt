@@ -1,6 +1,13 @@
 package com.yeskiy.yreview.tasks
 
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.guessProjectDir
+import com.intellij.openapi.roots.ProjectFileIndex
+import com.intellij.openapi.vfs.VfsUtilCore
+import com.intellij.psi.PsiFileSystemItem
 import com.intellij.psi.PsiTreeChangeEvent
+import git4idea.repo.GitRepositoryManager
 
 /**
  * The signals of the source files that ask the review tree to read its scope again.
@@ -20,6 +27,18 @@ object SourceSignal {
      * listener of the tab, so the tab reads the scope once and not twice.
      */
     fun readAgain(property: String?): Boolean = property in WATCHED
+
+    /**
+     * True when [item] is a real file or folder on disk that a store of the tab can show.
+     * An editor text field, such as the comment card, edits an in-memory file that no task comes from.
+     */
+    fun watched(project: Project, item: PsiFileSystemItem?): Boolean {
+        val file = item?.takeIf { it.isPhysical }?.virtualFile?.takeIf { it.isInLocalFileSystem } ?: return false
+        return ProjectFileIndex.getInstance(project).isInContent(file) ||
+            project.guessProjectDir()?.let { VfsUtilCore.isAncestor(it, file, false) } == true ||
+            GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file) != null ||
+            !file.isDirectory && FileEditorManager.getInstance(project).isFileOpen(file)
+    }
 
     private val WATCHED = setOf(
         PsiTreeChangeEvent.PROP_ROOTS,
