@@ -4,6 +4,7 @@ import com.intellij.ide.util.treeView.NodeRenderer
 import com.intellij.util.ui.ThreeStateCheckBox
 import com.intellij.util.ui.tree.TreeUtil
 import com.yeskiy.yreview.tasks.CheckState
+import com.yeskiy.yreview.tasks.TaskLabels
 import java.awt.BorderLayout
 import java.awt.Component
 import javax.swing.JPanel
@@ -52,10 +53,12 @@ class TaskCheckRenderer(private val state: (TaskHolder) -> CheckState) : JPanel(
     ): Component {
         invalidate()
         val holder = TreeUtil.getUserObject(value) as? TaskHolder
+        val outside = holder != null && holder.tasks.isNotEmpty() && holder.tasks.all { it.outside }
         box.isVisible = holder != null
+        box.isEnabled = !outside
         if (holder != null) box.state = swing(state(holder))
         text.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus)
-        toolTipText = text.toolTipText
+        toolTipText = text.toolTipText ?: TaskLabels.OUTSIDE_CHECK.takeIf { outside }
         revalidate()
         return this
     }

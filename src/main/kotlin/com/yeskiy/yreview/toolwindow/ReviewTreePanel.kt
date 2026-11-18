@@ -43,6 +43,7 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.DumbAware
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.ui.Messages
 import com.intellij.openapi.ui.SimpleToolWindowPanel
 import com.intellij.openapi.ui.popup.JBPopupFactory
@@ -127,6 +128,7 @@ import com.yeskiy.yreview.tasks.ClosePlan
 import com.yeskiy.yreview.tasks.CloseReport
 import com.yeskiy.yreview.tasks.RemoveReport
 import com.yeskiy.yreview.tasks.RepositoryTasks
+import com.yeskiy.yreview.tasks.OutsideGroups
 import com.yeskiy.yreview.tasks.ReviewTask
 import com.yeskiy.yreview.tasks.ScanRuns
 import com.yeskiy.yreview.tasks.ScanState
@@ -428,8 +430,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
     /** The rows of the scope, or null when the project went away before the read ended. */
     private fun scan(onlyFile: VirtualFile?, chosen: SearchScope?): TreeContent? {
         if (project.isDisposed) return null
-        val changes = readChangeList()
         val found = TaskScan.read(project, onlyFile, tab().showResolved)
+        val changes = readChangeList().let { facts ->
+            if (scope == TaskScope.CHANGE_LIST) facts.copy(files = facts.files + outsideChanges(found)) else facts
+        }
         return TreeContent(found, layoutOf(found, chosen, changes), changes)
     }
 
@@ -520,14 +524,29 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         chosen: SearchScope?,
         changes: ChangeListFacts,
     ): TaskLayout {
-        val several = found.size > 1
+        val (outside, own) = found.partition { it.outside != null }
+        val kept = { tasks: List<ReviewTask> ->
+            inside(chosen, changes, TaskFilter.apply(tasks, filterRules(), kindFilter()))
+        }
         return TaskTree.layout(
-            TaskTree.group(
-                inside(chosen, changes, TaskFilter.apply(found.flatMap { it.tasks }, filterRules(), kindFilter()))
-            ) { label(it, several) },
+            TaskTree.group(kept(own.flatMap { it.tasks })) { label(it, own.size > 1) },
             tab().grouping(),
+            outside.map { OutsideGroups(it.outside.orEmpty(), TaskTree.group(kept(it.tasks))) },
         )
     }
+
+    /** The open files that git names as changed, in each repository outside the project. */
+    private fun outsideChanges(found: List<RepositoryTasks>): Set<String> =
+        found.filter { it.outside != null && ReviewService.getInstance(project).storeAt(it.root).kind == StoreKind.GIT }
+            .flatMap { entry ->
+                ProgressManager.checkCanceled()
+                ideGitRunner(project, entry.root)
+                    .run(*ChangeListTab.statusArguments(entry.tasks.map { it.path }.distinct()).toTypedArray())
+                    .takeIf { it.ok }
+                    ?.let { ChangeListTab.statusFiles(entry.root.path, it.stdout) }
+                    .orEmpty()
+            }
+            .toSet()
 
     /**
      * The rows the tab keeps.
@@ -629,9 +648,10 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
      * the plugin writes the files of the file protocol and copies a short prompt instead.
      */
     private fun send() {
-        val chosen = target().tasks
+        val target = target()
+        val chosen = target.tasks
         if (chosen.isEmpty()) {
-            ReviewNotice.warn(project, NO_TASK)
+            ReviewNotice.warn(project, if (target.outside > 0) TaskLabels.OUTSIDE_SEND else NO_TASK)
             return
         }
         val roots = chosen.map { it.rootPath }.distinct()
@@ -1094,14 +1114,18 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         onProject.subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { scheduleReload() })
         onProject.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { scheduleReload() })
         onProject.subscribe(DumbService.DUMB_MODE, IndexWatch())
-        if (scope == TaskScope.CURRENT_FILE) {
-            onProject.subscribe(
-                FileEditorManagerListener.FILE_EDITOR_MANAGER,
-                object : FileEditorManagerListener {
-                    override fun selectionChanged(event: FileEditorManagerEvent) = scheduleReload()
-                },
-            )
-        }
+        onProject.subscribe(
+            FileEditorManagerListener.FILE_EDITOR_MANAGER,
+            object : FileEditorManagerListener {
+                override fun selectionChanged(event: FileEditorManagerEvent) {
+                    if (scope == TaskScope.CURRENT_FILE) scheduleReload()
+                }
+
+                override fun fileOpened(source: FileEditorManager, file: VirtualFile) = reloadForTab(file)
+
+                override fun fileClosed(source: FileEditorManager, file: VirtualFile) = reloadForTab(file)
+            },
+        )
         if (scope == TaskScope.CHANGE_LIST) {
             ChangeListManager.getInstance(project).addChangeListListener(ChangeListWatch(), this)
         }
@@ -1118,6 +1142,14 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         )
 
         PsiManager.getInstance(project).addPsiTreeChangeListener(SourceWatch(), this)
+    }
+
+    /** A tab of a file outside the project content adds or removes a branch of the tree. */
+    private fun reloadForTab(file: VirtualFile) {
+        if (!file.isInLocalFileSystem) return
+        if (!ReadAction.compute<Boolean, RuntimeException> { ProjectFileIndex.getInstance(project).isInContent(file) }) {
+            scheduleReload()
+        }
     }
 
     // --- The toolbar and the menu ---

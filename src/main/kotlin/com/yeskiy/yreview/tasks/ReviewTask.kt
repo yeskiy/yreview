@@ -52,6 +52,7 @@ data class ReviewTask(
     @Transient val module: String = "",
     @Transient val patternRule: String = "",
     @Transient val carry: TaskCarry? = null,
+    @Transient val outside: Boolean = false,
 )
 
 /** Where a comment of another commit stands in the working tree. */

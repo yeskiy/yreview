@@ -190,6 +190,35 @@ class TaskLayoutTest {
 
     private fun depthOf(folder: TaskFolder): Int = 1 + (folder.folders.maxOfOrNull { depthOf(it) } ?: 0)
 
+    @Test
+    fun `an outside entry takes one outside folder row after the project rows for every toggle`() {
+        val loose = task("x", "notes/loose.txt").copy(rootPath = "/loose", filePath = "/loose/notes/loose.txt", outside = true)
+        val inside = groups(task("a", "src/A.kt", module = "core"), task("b", "README.md"))
+        listOf(
+            flat,
+            byDirectory,
+            TaskGrouping(byDirectory = true, flatten = true),
+            TaskGrouping(byModule = true, byDirectory = true),
+        ).forEach { grouping ->
+            val alone = TaskTree.layout(inside, grouping)
+            val layout = TaskTree.layout(inside, grouping, listOf(OutsideGroups("loose (~/loose)", groups(loose))))
+
+            assertEquals(alone.folders, layout.folders)
+            assertEquals(alone.files, layout.files)
+            val row = layout.outside.single()
+            assertEquals("loose (~/loose)", row.name)
+            assertEquals(FolderKind.OUTSIDE, row.kind)
+            assertEquals(TaskTree.layout(groups(loose), grouping).rows, row.folders.size + row.files.size)
+            assertEquals(listOf("a", "b", "x"), TaskTree.tasksOf(layout).map { it.id }.sorted())
+            assertEquals(alone.rows + 1, layout.rows)
+        }
+    }
+
+    @Test
+    fun `an outside entry with no task left after the filters takes no row`() {
+        assertEquals(0, TaskTree.layout(emptyList(), flat, listOf(OutsideGroups("loose", emptyList()))).rows)
+    }
+
     private fun deepest(layout: TaskLayout): TaskFolder = deepest(layout.folders.single())
 
     private fun deepest(folder: TaskFolder): TaskFolder =

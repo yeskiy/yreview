@@ -23,6 +23,26 @@ class ChangeListTabTest {
         filePath = filePath,
     )
 
+    // --- The changed files of a repository outside the project ---
+
+    @Test
+    fun `reads the files of a git status answer under the root`() {
+        assertEquals(
+            setOf("C:/loose/a.txt", "C:/loose/new name.txt", "C:/loose/fresh.txt"),
+            ChangeListTab.statusFiles("C:/loose", " M a.txt\u0000R  new name.txt\u0000old name.txt\u0000?? fresh.txt\u0000"),
+        )
+    }
+
+    @Test
+    fun `an empty git status answer names no file`() {
+        assertEquals(emptySet(), ChangeListTab.statusFiles("C:/loose", ""))
+    }
+
+    @Test
+    fun `a git status path that leaves the root names no file`() {
+        assertEquals(emptySet(), ChangeListTab.statusFiles("C:/loose", " M ../other/a.txt\u0000"))
+    }
+
     // --- The files the tab selects ---
 
     @Test

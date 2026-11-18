@@ -7,7 +7,7 @@ enum class SendScope { CHECKED, SELECTED, ALL, NONE }
 enum class WriteScope { CHECKED, SELECTED, NONE }
 
 /** The tasks one send carries, and the words the button shows before the user clicks it. */
-data class SendTarget(val scope: SendScope, val tasks: List<ReviewTask>) {
+data class SendTarget(val scope: SendScope, val tasks: List<ReviewTask>, val outside: Int = 0) {
 
     val text: String
         get() = when (scope) {
@@ -23,7 +23,7 @@ data class SendTarget(val scope: SendScope, val tasks: List<ReviewTask>) {
             SendScope.SELECTED -> "Send the ${TaskLabels.count(tasks.size, "selected row")} to the agent."
             SendScope.ALL ->
                 "No row is checked, so the whole tree goes out. It holds ${TaskLabels.count(tasks.size, "task")}."
-            SendScope.NONE -> "This project has no open review task."
+            SendScope.NONE -> if (outside > 0) TaskLabels.OUTSIDE_SEND else "This project has no open review task."
         }
 
     /** The words of the copy button. The copy takes the same rows the send takes. */
@@ -44,7 +44,7 @@ data class SendTarget(val scope: SendScope, val tasks: List<ReviewTask>) {
             SendScope.ALL ->
                 "No row is checked, so the whole tree goes to the clipboard. " +
                     "It holds ${TaskLabels.count(tasks.size, "task")}."
-            SendScope.NONE -> "This project has no open review task."
+            SendScope.NONE -> description
         }
 }
 
@@ -106,15 +106,20 @@ data class WriteTarget(
  */
 object TaskChoice {
 
+    /** The scope comes first. A task outside the project then drops out, because the agent cannot reach it. */
     fun sendTarget(
         checked: List<ReviewTask>,
         selected: List<ReviewTask>,
         all: List<ReviewTask>,
-    ): SendTarget = when {
-        checked.isNotEmpty() -> SendTarget(SendScope.CHECKED, checked)
-        selected.isNotEmpty() -> SendTarget(SendScope.SELECTED, selected)
-        all.isNotEmpty() -> SendTarget(SendScope.ALL, all)
-        else -> SendTarget(SendScope.NONE, emptyList())
+    ): SendTarget {
+        val (scope, tasks) = when {
+            checked.isNotEmpty() -> SendScope.CHECKED to checked
+            selected.isNotEmpty() -> SendScope.SELECTED to selected
+            all.isNotEmpty() -> SendScope.ALL to all
+            else -> SendScope.NONE to emptyList()
+        }
+        val (outside, open) = tasks.partition { it.outside }
+        return SendTarget(if (open.isEmpty()) SendScope.NONE else scope, open, outside.size)
     }
 
     /** The rows of a resolve or a delete. The whole tree is never one of the answers. */

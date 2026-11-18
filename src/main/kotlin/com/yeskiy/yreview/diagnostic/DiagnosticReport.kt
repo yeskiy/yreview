@@ -9,6 +9,7 @@ import com.yeskiy.yreview.session.AgentCatalog
 import com.yeskiy.yreview.session.AgentId
 import com.yeskiy.yreview.settings.ProductName
 import com.yeskiy.yreview.settings.ReviewSettings
+import com.yeskiy.yreview.tasks.TaskScan
 
 /** The versions of the machine. No project is needed to read them. */
 data class MachineFacts(
@@ -33,6 +34,8 @@ data class ReportFacts(
     val sessionWindow: String,
     val agent: String,
     val customCommand: Boolean,
+    /** A root outside the project shows only as this count, never as a path. */
+    val outsideRoots: Int = 0,
 )
 
 /**
@@ -81,6 +84,7 @@ object DiagnosticReport {
             line("session window", facts.sessionWindow),
             line("agent", facts.agent),
             line("agent command", if (facts.customCommand) "custom" else "default"),
+            line("outside roots", "${facts.outsideRoots}"),
             "",
             "Records, newest first (${records.size} of ${SessionLog.LIMIT})",
             if (records.isEmpty()) "  none" else records.joinToString("\n\n") { it.text() },
@@ -105,6 +109,7 @@ object DiagnosticReport {
             sessionWindow = choice(settings.sessionWindow),
             agent = settings.agent?.name?.lowercase() ?: "not chosen",
             customCommand = customCommand(settings, settings.agentOrDefault()),
+            outsideRoots = TaskScan.outsideCount(project),
         )
     }
 

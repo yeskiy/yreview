@@ -83,6 +83,7 @@ class FolderNode(project: Project, folder: TaskFolder) :
         presentation.setIcon(icon())
         presentation.addText(TaskLabels.folderTitle(value), SimpleTextAttributes.REGULAR_ATTRIBUTES)
         presentation.addText("  ${TaskLabels.folderCount(value)}", SimpleTextAttributes.GRAYED_ATTRIBUTES)
+        if (value.kind == FolderKind.OUTSIDE) presentation.tooltip = "${value.name}. ${TaskLabels.OUTSIDE_CHECK}"
     }
 
     private fun icon(): Icon =
@@ -148,7 +149,8 @@ object TaskNodes {
     private val COMMENT_ICON = IconLoader.getIcon("/icons/comment.svg", TaskNodes::class.java)
 
     fun children(project: Project, layout: TaskLayout): List<AbstractTreeNode<*>> =
-        layout.folders.map { FolderNode(project, it) } + layout.files.map { FileNode(project, it) }
+        layout.folders.map { FolderNode(project, it) } + layout.files.map { FileNode(project, it) } +
+            layout.outside.map { FolderNode(project, it) }
 
     /**
      * The file of one task, while that file stands under the root of its repository.

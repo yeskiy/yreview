@@ -23,6 +23,19 @@ class TaskChecksTest {
     private val second = task("b")
 
     @Test
+    fun `an outside task never takes a check`() {
+        val checks = TaskChecks()
+        val loose = task("x", root = "/loose").copy(outside = true)
+
+        checks.set(listOf(first, loose), true)
+
+        assertTrue(checks.isChecked(first))
+        assertFalse(checks.isChecked(loose))
+        assertEquals(CheckState.ALL, checks.state(listOf(first, loose)))
+        assertEquals(CheckState.NONE, checks.state(listOf(loose)))
+    }
+
+    @Test
     fun `checks no task at the start`() {
         val checks = TaskChecks()
 

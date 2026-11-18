@@ -222,6 +222,14 @@ class DiagnosticReportTest {
     }
 
     @Test
+    fun `the report counts the outside roots and names no path of them`() {
+        val text = DiagnosticReport.text(facts.copy(outsideRoots = 2), emptyList(), listOf(home), project)
+
+        assertTrue(text.contains(Regex("outside roots +2")), text)
+        assertFalse(text.contains("loose"), text)
+    }
+
+    @Test
     fun `the report names the default agent command when no custom command is stored`() {
         assertFalse(DiagnosticReport.customCommand(ReviewSettings(), AgentId.CLAUDE))
         assertTrue(report.contains(Regex("agent command +default")), report)

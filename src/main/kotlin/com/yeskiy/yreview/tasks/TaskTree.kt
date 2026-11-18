@@ -4,7 +4,10 @@ package com.yeskiy.yreview.tasks
 data class TaskGroup(val path: String, val tasks: List<ReviewTask>, val name: String = path)
 
 /** What a folder row stands for. */
-enum class FolderKind { MODULE, DIRECTORY }
+enum class FolderKind { MODULE, DIRECTORY, OUTSIDE }
+
+/** The file groups of one store root outside the project, and the label of its row. */
+data class OutsideGroups(val label: String, val groups: List<TaskGroup>)
 
 /** One folder row, with the folders and the files under it. */
 data class TaskFolder(
@@ -14,14 +17,15 @@ data class TaskFolder(
     val files: List<TaskGroup> = emptyList(),
 )
 
-/** The rows under one parent. The hidden root of the tree is one of these. */
+/** The rows under one parent. The hidden root of the tree is one of these, and only it has [outside] rows. */
 data class TaskLayout(
     val folders: List<TaskFolder> = emptyList(),
     val files: List<TaskGroup> = emptyList(),
+    val outside: List<TaskFolder> = emptyList(),
 ) {
 
     /** How many rows stand under this parent. A layout of no row leaves the tree empty. */
-    val rows: Int get() = folders.size + files.size
+    val rows: Int get() = folders.size + files.size + outside.size
 }
 
 /** The three group toggles of the toolbar. The flatten toggle works with byDirectory only. */
@@ -58,18 +62,12 @@ object TaskTree {
             .toSortedMap()
             .map { (path, found) -> TaskGroup(path, found.sortedWith(ORDER)) }
 
-    fun layout(groups: List<TaskGroup>, grouping: TaskGrouping): TaskLayout {
-        if (!grouping.byModule) return directories(groups, grouping)
-        val (known, unknown) = groups.partition { moduleOf(it).isNotEmpty() }
-        val outside = directories(unknown, grouping)
-        return TaskLayout(
-            known.groupBy { moduleOf(it) }
-                .toSortedMap()
-                .map { (name, inside) -> folder(name, FolderKind.MODULE, directories(inside, grouping)) } +
-                outside.folders,
-            outside.files,
+    /** Each entry of [outside] takes one folder row after every row of the project. */
+    fun layout(groups: List<TaskGroup>, grouping: TaskGrouping, outside: List<OutsideGroups> = emptyList()): TaskLayout =
+        project(groups, grouping).copy(
+            outside = outside.filter { it.groups.isNotEmpty() }
+                .map { folder(it.label, FolderKind.OUTSIDE, project(it.groups, grouping)) },
         )
-    }
 
     fun flatten(groups: List<TaskGroup>): List<ReviewTask> = groups.flatMap { it.tasks }
 
@@ -77,7 +75,20 @@ object TaskTree {
         folder.folders.flatMap { tasksOf(it) } + flatten(folder.files)
 
     fun tasksOf(layout: TaskLayout): List<ReviewTask> =
-        layout.folders.flatMap { tasksOf(it) } + flatten(layout.files)
+        (layout.folders + layout.outside).flatMap { tasksOf(it) } + flatten(layout.files)
+
+    private fun project(groups: List<TaskGroup>, grouping: TaskGrouping): TaskLayout {
+        if (!grouping.byModule) return directories(groups, grouping)
+        val (known, unknown) = groups.partition { moduleOf(it).isNotEmpty() }
+        val rest = directories(unknown, grouping)
+        return TaskLayout(
+            known.groupBy { moduleOf(it) }
+                .toSortedMap()
+                .map { (name, inside) -> folder(name, FolderKind.MODULE, directories(inside, grouping)) } +
+                rest.folders,
+            rest.files,
+        )
+    }
 
     private fun directories(groups: List<TaskGroup>, grouping: TaskGrouping): TaskLayout = when {
         !grouping.byDirectory -> TaskLayout(files = groups.sortedBy { it.path })
