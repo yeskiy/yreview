@@ -2,7 +2,7 @@
   "name": "yreview",
   "displayName": "Yreview",
   "description": "Comment on any line as in a pull request review, then send the comments to Claude Code, Codex or another AI agent to fix. Comments live in git notes: no server, no account.",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "publisher": "yeskiy",
   "license": "Apache-2.0",
   "icon": "images/icon.png",
