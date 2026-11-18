@@ -32,7 +32,9 @@ object PlacedComments {
             .flatMap { book.open(it, NoteRefs.ALL) }
             .filter { shows(it, root) && (path == null || it.comment.location?.path == path) }
             .groupBy { it.commit }
-            .flatMap { (commit, comments) -> place(git, root, head, commit, comments) }
+            .toList()
+            .let { groups -> ParallelReads.map(groups, checkCanceled) { (commit, comments) -> place(git, root, head, commit, comments) } }
+            .flatten()
     }
 
     private fun shows(stored: StoredComment, root: String): Boolean {
