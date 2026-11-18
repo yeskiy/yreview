@@ -6,8 +6,10 @@ starts, and every setting. Read [README.md](../README.md) first for what the plu
 
 ## Where the comments are stored
 
-Yreview writes into your git repository. It writes git notes, and it never writes a commit
-and never touches a file of your working tree.
+Yreview writes into your git repository. It writes git notes, and it never writes a commit.
+Yreview changes no file of your working tree, except the folder `.y-review/`. It creates that
+folder in a workspace folder outside git, and in the folder of a file that you comment on
+outside every repository and workspace.
 
 ### The note refs
 
@@ -24,15 +26,37 @@ plugin ever names it.
 
 ### A file outside a git repository
 
-A file that no git repository covers still takes a comment. The plugin then writes a
-`.y-review` folder in the project folder, or in the content root that holds the file. That
-folder holds one directory per note ref, and one line of a file holds one record, in the
-format below.
+A file that no git repository covers still takes a comment, also a file outside the
+project. The plugin keeps that comment in a `.y-review` folder, the folder store. That folder
+holds one directory per note ref, and one line of a file holds one record, in the format
+below. A folder store has no remote, so it takes local comments only.
 
-The plugin moves those records into the git notes as soon as a git repository covers the
-folder. It then puts the old folder at `<git directory>/y-review/migrated-<milliseconds>`,
-and it says so in a balloon. A file that an inner repository covers always goes to the notes
-of that repository, and never to the folder.
+The plugin finds the store the way git finds a repository. It walks up from the folder of
+the file and uses the first folder that holds `.y-review/notes/`. The walk stops at the first
+of these limits:
+
+| Limit                                                      | The walk                                      |
+|------------------------------------------------------------|-----------------------------------------------|
+| The project folder or the content root that holds the file | Checks that folder and goes no higher         |
+| Your home folder                                           | Checks the folders below home, and never home |
+| The root of the drive or of the file system                | Checks every folder up to the root            |
+
+When the walk finds no store, the first saved comment creates one. Inside the project, the
+store goes in the project folder, or in the content root that holds the file. Outside the
+project, or when the project folder is your home folder, the store goes in the folder of the
+file. A file directly in your home folder, or in `~/.y-review`, gets no store. The plugin then
+shows a message that asks you to move the file into a folder.
+
+The plugin moves those records into the git notes as soon as a git repository with a commit
+covers the folder. It searches the work tree of that repository for every store, and it skips
+`.git`, `node_modules`, the nested repositories, and the folders that git ignores. An ignored
+`.y-review` folder still counts. A store in a
+folder below the repository root gets new paths, relative to that root, and each record gets
+a new identifier. The plugin then puts the old folder at
+`<git directory>/y-review/migrated-<milliseconds>-<n>`, and it says so in a balloon. A failed
+move leaves the folder in place. Until a store moves, the tool window and the editor still
+show its comments. A `.y-review` folder that git tracks never moves. A file that an inner
+repository covers always goes to the notes of that repository, and never to the folder.
 
 ### The record
 
@@ -89,25 +113,25 @@ git notes --ref refs/notes/devtools/discuss show <commit>
 
 ### Everything the plugin writes
 
-| Place                                              | Content                                                                                                                                                         | When                                                                                                                             |
-|----------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
-| `refs/notes/y-review/local`                        | A local comment                                                                                                                                                 | You write a local comment                                                                                                        |
-| `refs/notes/devtools/discuss`                      | A shared comment                                                                                                                                                | You write a shared comment                                                                                                       |
-| `<folder root>/.y-review/notes/`                   | A comment of a file that no git repository covers                                                                                                               | You write a comment outside a repository                                                                                         |
-| `<git directory>/y-review/migrated-<milliseconds>` | The folder store, after the records reach the git notes                                                                                                         | A git repository starts to cover a folder store                                                                                  |
-| `remote.<name>.fetch` in the git configuration     | The line `refs/notes/devtools/*:refs/notes/devtools/*`, added once. The forced form with a leading `+` is removed.                                              | You click Add in the question that follows the first share                                                                       |
-| A push to your git remote                          | The shared note ref only                                                                                                                                        | You write a shared comment                                                                                                       |
-| `<git directory>/y-review/<window>/AGENT.md`       | The rules an agent reads                                                                                                                                        | Every send                                                                                                                       |
-| `<git directory>/y-review/<window>/tasks.json`     | The open tasks of the repository                                                                                                                                | Every send                                                                                                                       |
-| `<git directory>/y-review/<window>/done.txt`       | Read only. An agent appends the tasks it finished. The plugin never writes this file.                                                                           | Never                                                                                                                            |
-| `<git directory>/y-review/done.txt`                | Read only. The done file that an earlier version wrote, outside any window folder. The plugin still reads it, so a task an agent already reported still closes. | Never                                                                                                                            |
-| `~/.y-review/bridge/<mangled project path>.json`   | The loopback address of the bridge and a fresh secret. Owner rights only, where the file system knows them.                                                     | The project opens and the channel switch stands on                                                                               |
-| `~/.y-review/mcp/<agent>-<build code>.json`        | The Model Context Protocol configuration of one agent. It holds no secret.                                                                                      | A session of Claude Code, OpenCode, Gemini CLI, or GitHub Copilot CLI starts, and the file there does not hold that text already |
-| `<project>/.cursor/mcp.json`                       | The review server, in the file that Cursor CLI reads                                                                                                            | You press Add on the settings page while Cursor CLI is the chosen agent                                                          |
-| The Model Context Protocol file of Antigravity CLI | The review server. The plugin runs `agy mcp add`, and Antigravity CLI writes the file.                                                                          | You press Add on the settings page while Antigravity CLI is the chosen agent                                                     |
-| `<project>/.idea/y-review.xml`                     | The settings of this plugin for this project                                                                                                                    | You change a setting                                                                                                             |
-| `<IDE configuration>/options/y-review.xml`         | The maximize switch and the editor size it replaced. The switch belongs to the whole IDE, so it stands beside the IDE and not beside a project.                 | You move the maximize switch                                                                                                     |
-| The IDE registry key `ide.mainSplitter.min.size`   | The value `0`                                                                                                                                                   | Only while the maximize switch stands on                                                                                         |
+| Place                                                  | Content                                                                                                                                                         | When                                                                                                                             |
+|--------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------------|
+| `refs/notes/y-review/local`                            | A local comment                                                                                                                                                 | You write a local comment                                                                                                        |
+| `refs/notes/devtools/discuss`                          | A shared comment                                                                                                                                                | You write a shared comment                                                                                                       |
+| `<folder root>/.y-review/notes/`                       | A comment of a file that no git repository covers. The folder root is the project folder or a content root, or the folder of a file outside the project.        | You write a comment outside a repository. A file directly in your home folder gets no store.                                     |
+| `<git directory>/y-review/migrated-<milliseconds>-<n>` | The folder store, after the records reach the git notes                                                                                                         | A git repository starts to cover a folder store                                                                                  |
+| `remote.<name>.fetch` in the git configuration         | The line `refs/notes/devtools/*:refs/notes/devtools/*`, added once. The forced form with a leading `+` is removed.                                              | You click Add in the question that follows the first share                                                                       |
+| A push to your git remote                              | The shared note ref only                                                                                                                                        | You write a shared comment                                                                                                       |
+| `<git directory>/y-review/<window>/AGENT.md`           | The rules an agent reads                                                                                                                                        | Every send                                                                                                                       |
+| `<git directory>/y-review/<window>/tasks.json`         | The open tasks of the repository                                                                                                                                | Every send                                                                                                                       |
+| `<git directory>/y-review/<window>/done.txt`           | Read only. An agent appends the tasks it finished. The plugin never writes this file.                                                                           | Never                                                                                                                            |
+| `<git directory>/y-review/done.txt`                    | Read only. The done file that an earlier version wrote, outside any window folder. The plugin still reads it, so a task an agent already reported still closes. | Never                                                                                                                            |
+| `~/.y-review/bridge/<mangled project path>.json`       | The loopback address of the bridge and a fresh secret. Owner rights only, where the file system knows them.                                                     | The project opens and the channel switch stands on                                                                               |
+| `~/.y-review/mcp/<agent>-<build code>.json`            | The Model Context Protocol configuration of one agent. It holds no secret.                                                                                      | A session of Claude Code, OpenCode, Gemini CLI, or GitHub Copilot CLI starts, and the file there does not hold that text already |
+| `<project>/.cursor/mcp.json`                           | The review server, in the file that Cursor CLI reads                                                                                                            | You press Add on the settings page while Cursor CLI is the chosen agent                                                          |
+| The Model Context Protocol file of Antigravity CLI     | The review server. The plugin runs `agy mcp add`, and Antigravity CLI writes the file.                                                                          | You press Add on the settings page while Antigravity CLI is the chosen agent                                                     |
+| `<project>/.idea/y-review.xml`                         | The settings of this plugin for this project, and the map from the old to the new identifier of each moved record                                               | You change a setting                                                                                                             |
+| `<IDE configuration>/options/y-review.xml`             | The maximize switch and the editor size it replaced. The switch belongs to the whole IDE, so it stands beside the IDE and not beside a project.                 | You move the maximize switch                                                                                                     |
+| The IDE registry key `ide.mainSplitter.min.size`       | The value `0`                                                                                                                                                   | Only while the maximize switch stands on                                                                                         |
 
 The git directory is `.git` in a normal repository. Git never tracks that folder, so no
 review file reaches a commit.
@@ -187,6 +211,10 @@ Two more pages carry settings of this plugin.
 |--------------------------------|-----------------------------------------------------------------|
 | Settings, Editor, Color Scheme | The color of the lines an open comment covers                   |
 | Settings, Keymap               | The keystroke of Add Review Comment, Control Shift G by default |
+
+An open tab of a file outside the project adds one more branch to the tool window, for the
+repository or the folder store of that file. The branch shows only the tasks of the open
+files. Its check boxes stay off, because the agent works in the project folder.
 
 The tool window toolbar holds the per-tab view state: group by module, group by directory,
 flatten the directories, the preview pane, the kind filter, and the resolved switch. The

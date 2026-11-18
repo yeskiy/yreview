@@ -127,12 +127,14 @@ and every place it writes.
 - The plugin needs no server and no account.
 - A local comment and a shared comment go to separate note refs.
 - The plugin pushes the shared note ref to your git remote.
-- A file that no git repository covers still takes a comment. The plugin keeps that comment
-  in a `.y-review` folder, and it moves the records into the git notes later.
+- A file that no git repository covers still takes a comment, also a file outside the
+  project. The plugin keeps that comment in the nearest `.y-review` folder, and it moves the
+  records into the git notes after a repository with a commit covers the folder.
 
 **The task list**
 
 - The tool window lists every open comment and every TODO item of the project.
+- An open file outside the project adds one more branch, with the tasks of the open files only.
 - The window holds four tabs, Project, Current File, Scope Based, and Changelist.
 - Each tab groups by module or by directory, filters by kind, and opens a preview pane.
 

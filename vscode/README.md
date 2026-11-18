@@ -147,6 +147,10 @@ Click a row to open the file at the task. A click on a comment row also expands 
 task view, run Filter and type a glob, such as `src/**/*.ts`, to show the tasks of some files
 only.
 
+A tab of a file outside the workspace adds one more branch, for the repository or the
+`.y-review` folder of that file. The branch shows only the tasks of the open files. Its tasks
+have no check box and do not go to the agent, because the agent works in the workspace folder.
+
 ![The three task views in the activity bar](https://raw.githubusercontent.com/yeskiy/yreview/main/docs/images/vscode/task-views.png)
 
 Yreview finds a TODO item with `git grep` and the patterns of `yreview.todoPatterns`. It reads the
@@ -155,13 +159,14 @@ with no time limit, so a slow pattern makes the scan slow.
 
 ## Requirements
 
-| Item      | Requirement                                                                                                                 |
-| --------- | --------------------------------------------------------------------------------------------------------------------------- |
-| VS Code   | 1.101 or later                                                                                                              |
-| git       | 2.24 or later, on the PATH or in the user setting `git.path`. With an older git, the comment commands stay off.             |
-| Folder    | A git repository, or a folder outside git. Outside git, Yreview keeps the comments in `.y-review/` of the workspace folder. |
-| Workspace | Trusted. Yreview runs git, and git reads the repository configuration.                                                      |
-| File      | Inside a git repository that has at least one commit, or inside a workspace folder                                          |
+| Item      | Requirement                                                                                                                     |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| VS Code   | 1.101 or later                                                                                                                  |
+| git       | 2.24 or later, on the PATH or in the user setting `git.path`. With an older git, the comment commands stay off.                 |
+| Folder    | A git repository, a folder outside git, or no folder. Outside git, Yreview keeps local comments only, in a `.y-review/` folder. |
+| Workspace | Trusted. Yreview runs git, and git reads the repository configuration.                                                          |
+| File      | A saved local file. In a git repository, the repository needs at least one commit.                                              |
+| Home      | A file directly in your home folder gets no comment. Move the file into a folder first.                                         |
 
 The extension is also on [Open VSX](https://open-vsx.org/extension/yeskiy/yreview).
 
@@ -206,10 +211,18 @@ To make the session panel larger, use the Maximize Panel Size command of VS Code
 | `refs/notes/devtools/discuss`, and a push of that ref | You save a shared comment                                                                                                        |
 | `remote.<name>.fetch` in `.git/config`                | You click Add in the question after a share                                                                                      |
 | `.y-review/notes/` in the workspace folder            | You save a comment on a file outside every git repository                                                                        |
+| `.y-review/notes/` in the folder of the file          | You save a comment on a file outside every git repository and every workspace folder                                             |
 | `<git dir>/y-review/migrated-<time>`                  | A repository with a commit now holds that folder. Yreview copies the comments into the git notes, then moves the old folder here |
 
-Yreview changes no file of your working tree, except the folder `.y-review/` of a workspace
-folder outside git.
+Yreview changes no file of your working tree, except the folder `.y-review/`. It creates that
+folder in a workspace folder outside git, and in the folder of a file that you comment on outside
+every repository and workspace.
+
+Yreview finds the comments of a file outside git the way git finds a repository. It walks up
+from the folder of the file and uses the nearest `.y-review/notes/` folder. The walk stops at the
+workspace folder, below your home folder, or at the root of the drive. When a repository with a
+commit covers such a folder, Yreview moves the comments into the git notes. A comment from a
+folder below the repository root then gets a new path and a new identifier.
 
 Do not open one folder outside git in two editors at the same time, for example two VS Code
 windows, or VS Code and IntelliJ IDEA. Each editor locks the comment file only inside its own
