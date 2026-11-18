@@ -1,6 +1,9 @@
 package com.yeskiy.yreview.store
 
 import com.intellij.codeInsight.daemon.DaemonCodeAnalyzer
+import com.intellij.dvcs.repo.VcsRepositoryManager
+import com.intellij.dvcs.repo.VcsRepositoryMappingListener
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.components.Service
@@ -12,11 +15,18 @@ import com.intellij.openapi.roots.ProjectRootManager
 import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.openapi.vfs.VirtualFile
+import com.intellij.openapi.vfs.VirtualFileManager
+import com.intellij.openapi.vfs.newvfs.BulkFileListener
+import com.intellij.openapi.vfs.newvfs.events.VFileCreateEvent
+import com.intellij.openapi.vfs.newvfs.events.VFileDeleteEvent
+import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.yeskiy.yreview.bridge.BridgeService
 import com.yeskiy.yreview.handoff.GitDir
 import com.yeskiy.yreview.settings.ReviewSettings
 import com.yeskiy.yreview.settings.ShareLog
 import com.yeskiy.yreview.ui.ReviewNotice
+import git4idea.repo.GitRepository
+import git4idea.repo.GitRepositoryChangeListener
 import git4idea.repo.GitRepositoryManager
 import java.nio.file.Files
 import java.nio.file.Path
@@ -29,9 +39,32 @@ data class CommentWriteResult(val stored: StoredComment, val shareError: String?
 data class CommentDeleteResult(val removed: Int, val shareError: String?)
 
 @Service(Service.Level.PROJECT)
-class ReviewService(private val project: Project) {
+class ReviewService(private val project: Project) : Disposable {
 
     private val migrating = ConcurrentHashMap.newKeySet<String>()
+
+    private val facts = StoreFacts(::probe)
+
+    private val realHome by lazy { StoreRules.homeOf(System.getProperty("user.home")) }
+
+    /** A test sets this to use a fake home folder. */
+    internal var homeOverride: String? = null
+
+    init {
+        val bus = project.messageBus.connect(this)
+        bus.subscribe(GitRepository.GIT_REPO_CHANGE, GitRepositoryChangeListener { facts.forget() })
+        bus.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { facts.forget() })
+        bus.subscribe(
+            VirtualFileManager.VFS_CHANGES,
+            object : BulkFileListener {
+                override fun after(events: List<VFileEvent>) {
+                    if (events.any(::changesAStore)) facts.forget()
+                }
+            },
+        )
+    }
+
+    override fun dispose() = Unit
 
     fun bookForRoot(root: VirtualFile): CommentBook = bookFor(storeAt(root))
 
@@ -41,41 +74,84 @@ class ReviewService(private val project: Project) {
         GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)?.currentRevision
 
     fun relativePath(file: VirtualFile): String? {
-        val root = repositoryRoot(file)?.path ?: return null
-        if (!file.path.startsWith("$root/")) return null
-        return file.path.removePrefix("$root/")
+        val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)
+            ?: return (anchorOf(file) as? AnchorResult.Found)?.anchor?.path
+        return AnchorRules.relative(file.path, repository.root.path)
     }
 
     fun repositoryRoot(file: VirtualFile): VirtualFile? =
         GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)?.root
+            ?: (anchorOf(file) as? AnchorResult.Found)?.anchor?.root
 
-    /** The rule of the project, applied to one file. Every caller asks this and nothing else. */
-    fun anchorOf(file: VirtualFile): AnchorResult {
+    /** The rule of the project, applied to one file. It can start git, so it never runs on the EDT. */
+    fun anchorOf(file: VirtualFile): AnchorResult =
+        resolve(file) { StoreFacts.Cached(facts.repositoryOf(it)) } ?: AnchorResult.NoPlace
+
+    /** The same answer from the cache. It starts no process, and it is null on a cache miss. */
+    fun anchorOfCached(file: VirtualFile): AnchorResult? = resolve(file, facts::cached)
+
+    /** The cached answer, else [anchorOf] under a progress dialog when the caller is on the EDT. */
+    fun anchorWithProgress(file: VirtualFile): AnchorResult {
+        anchorOfCached(file)?.let { return it }
+        val task = ThrowableComputable<AnchorResult, RuntimeException> { anchorOf(file) }
+        if (!ApplicationManager.getApplication().isDispatchThread) return task.compute()
+        return ProgressManager.getInstance()
+            .runProcessWithProgressSynchronously(task, "Finding the Review Store", true, project)
+    }
+
+    fun home(): String? = homeOverride ?: realHome
+
+    /** True for a git root that the project knows, the project folder and each content root. */
+    fun isProjectRoot(root: String): Boolean =
+        root in candidateFolderRoots().map { it.path } ||
+            GitRepositoryManager.getInstance(project).repositories.any { it.root.path == root }
+
+    /** Null only when [lookup] has no answer for the folder of the file. */
+    private fun resolve(file: VirtualFile, lookup: (String) -> StoreFacts.Cached?): AnchorResult? {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)
-        val repositoryRoot = repository?.root?.path
-        val workspaceRoot by lazy { AnchorRules.folderRoot(file.path, projectDirPath(), contentRootPaths()) }
+        val fact = when {
+            repository != null -> RepositoryFact(repository.root.path, repository.currentRevision)
+            !file.isInLocalFileSystem -> return AnchorResult.NoPlace
+            else -> (lookup(file.parent?.path ?: return AnchorResult.NoPlace) ?: return null).fact
+        }
         val plan = AnchorRules.plan(
             file.path,
-            repositoryRoot,
-            repository?.currentRevision,
-            { workspaceRoot },
-            null,
-            { repositoryRoot == null && it == workspaceRoot },
+            fact?.root,
+            fact?.head,
+            { AnchorRules.folderRoot(file.path, projectDirPath(), contentRootPaths()) },
+            home(),
+            { Files.isDirectory(Path.of(StoreRules.storeFolder(it))) },
         )
+        val local = LocalFileSystem.getInstance()
         return when (plan) {
-            is AnchorPlan.Git -> {
-                val root = repository?.root ?: return AnchorResult.NoPlace
-                AnchorResult.Found(ReviewAnchor(StoreKind.GIT, root, plan.commit, plan.path))
-            }
-            is AnchorPlan.Folder -> {
-                if (!plan.exists) return AnchorResult.NoPlace
-                val root = LocalFileSystem.getInstance().findFileByPath(plan.root)
-                    ?: return AnchorResult.NoPlace
-                AnchorResult.Found(ReviewAnchor(StoreKind.FOLDER, root, FolderStore.WORKTREE, plan.path))
-            }
+            is AnchorPlan.Git -> (repository?.root ?: local.findFileByPath(plan.root))
+                ?.let { AnchorResult.Found(ReviewAnchor(StoreKind.GIT, it, plan.commit, plan.path)) }
+            is AnchorPlan.Folder -> local.findFileByPath(plan.root)
+                ?.let { AnchorResult.Found(ReviewAnchor(StoreKind.FOLDER, it, FolderStore.WORKTREE, plan.path)) }
             AnchorPlan.NoCommit -> AnchorResult.NoCommit
-            AnchorPlan.HomeFile, AnchorPlan.NoPlace -> AnchorResult.NoPlace
-        }
+            AnchorPlan.HomeFile -> AnchorResult.HomeFile
+            AnchorPlan.NoPlace -> AnchorResult.NoPlace
+        } ?: AnchorResult.NoPlace
+    }
+
+    /**
+     * Asks git for the repository of a folder that the manager does not know. The root comes
+     * from the parents of the folder, so it keeps the path form of the file system of the IDE.
+     */
+    private fun probe(dir: String): RepositoryFact? {
+        val folder = LocalFileSystem.getInstance().findFileByPath(dir) ?: return null
+        val git = ideGitRunner(project, folder)
+        val up = git.run("rev-parse", "--show-cdup").takeIf { it.ok } ?: return null
+        val levels = up.stdout.trim().split('/').count { it == ".." }
+        val root = generateSequence(folder) { it.parent }.elementAtOrNull(levels) ?: return null
+        val head = git.run("rev-parse", "-q", "--verify", "HEAD^{commit}").takeIf { it.ok }?.stdout?.trim()
+        return RepositoryFact(root.path, head?.ifEmpty { null })
+    }
+
+    private fun changesAStore(event: VFileEvent): Boolean = when (event) {
+        is VFileCreateEvent -> event.childName in STORE_NAMES
+        is VFileDeleteEvent -> event.file.name in STORE_NAMES
+        else -> false
     }
 
     fun bookFor(anchor: ReviewAnchor): CommentBook = bookFor(StoreRoot(anchor.kind, anchor.root))
@@ -101,7 +177,9 @@ class ReviewService(private val project: Project) {
      * signatures of [resolveComment] and [deleteComments], so no caller of those two changes.
      */
     fun storeAt(root: VirtualFile): StoreRoot =
-        if (GitRepositoryManager.getInstance(project).getRepositoryForRootQuick(root) != null) {
+        if (GitRepositoryManager.getInstance(project).getRepositoryForRootQuick(root) != null ||
+            facts.cached(root.path)?.fact?.root == root.path
+        ) {
             StoreRoot(StoreKind.GIT, root)
         } else {
             StoreRoot(StoreKind.FOLDER, root)
@@ -329,6 +407,8 @@ class ReviewService(private val project: Project) {
     }
 
     companion object {
+        private val STORE_NAMES = setOf(".git", FolderStore.FOLDER)
+
         fun getInstance(project: Project): ReviewService = project.service()
     }
 }

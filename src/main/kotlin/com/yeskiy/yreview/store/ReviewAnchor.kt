@@ -20,9 +20,11 @@ data class StoreRoot(val kind: StoreKind, val root: VirtualFile)
  *
  * [NoCommit] and [NoPlace] are two different refusals. A repository with no commit never
  * falls back to a folder store, because a nested repository owns its own files.
+ * [HomeFile] is a file directly in home or in its bridge folder, and the user gets a message.
  */
 sealed interface AnchorResult {
     data class Found(val anchor: ReviewAnchor) : AnchorResult
     data object NoCommit : AnchorResult
     data object NoPlace : AnchorResult
+    data object HomeFile : AnchorResult
 }

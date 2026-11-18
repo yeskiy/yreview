@@ -164,13 +164,9 @@ class ReviewToolset : McpToolset {
             val service = ReviewService.getInstance(project)
             // The rule of the project decides the store. A file inside a git repository goes
             // to the notes of that repository, and every other file goes to a folder store.
-            val anchor = when (val found = service.anchorOf(file)) {
-                is AnchorResult.Found -> found.anchor
-                AnchorResult.NoCommit ->
-                    return@withContext ReviewPayloads.error("The repository of $relative has no commit yet.")
-                AnchorResult.NoPlace ->
-                    return@withContext ReviewPayloads.error("The project holds no review store for $relative.")
-            }
+            val found = service.anchorOf(file)
+            ToolAnchor.problemOf(service, found, relative)?.let { return@withContext ReviewPayloads.error(it) }
+            val anchor = (found as AnchorResult.Found).anchor
 
             // The agent writes where a person writes, so it follows the project setting and it
             // takes the same push path. A shared ref reaches the remote, a local ref does not.

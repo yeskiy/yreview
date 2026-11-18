@@ -17,6 +17,9 @@ object CommentText {
 
     const val EMPTY_MESSAGE = "Write the comment first."
 
+    const val HOME_FILE = "Yreview does not keep comments for a file directly in your home folder or in its " +
+        ".y-review folder. Move the file into a folder, then add the comment."
+
     /** The header of the popup. It names the file and the place of the comment. */
     fun header(path: String, range: Range): String = "${PlainText.of(path)}:${RangeText.compact(range)}"
 

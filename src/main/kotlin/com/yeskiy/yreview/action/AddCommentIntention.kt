@@ -23,13 +23,13 @@ class AddCommentIntention : IntentionAction, DumbAware {
     override fun isAvailable(project: Project, editor: Editor?, file: PsiFile?): Boolean {
         if (editor == null || file == null) return false
         val virtualFile = file.virtualFile ?: return false
-        return ReviewService.getInstance(project).anchorOf(virtualFile) is AnchorResult.Found
+        return ReviewService.getInstance(project).anchorOfCached(virtualFile) is AnchorResult.Found
     }
 
     override fun invoke(project: Project, editor: Editor?, file: PsiFile?) {
         if (editor == null || file == null) return
         val virtualFile = file.virtualFile ?: return
-        val found = ReviewService.getInstance(project).anchorOf(virtualFile)
+        val found = ReviewService.getInstance(project).anchorWithProgress(virtualFile)
         val anchor = (found as? AnchorResult.Found)?.anchor ?: return
         val target = CommentTarget.fromEditor(editor, anchor.path)
 

@@ -98,9 +98,13 @@ class AddCommentAction : AnAction(), DumbAware {
         val editor = EditorPick.of(event) ?: return
         val file: VirtualFile = event.getData(CommonDataKeys.VIRTUAL_FILE) ?: return
 
-        val found = ReviewService.getInstance(project).anchorOf(file)
+        val found = ReviewService.getInstance(project).anchorWithProgress(file)
         if (found is AnchorResult.NoCommit) {
             Messages.showErrorDialog(project, "This repository has no commit yet.", CommentWriter.TITLE)
+            return
+        }
+        if (found is AnchorResult.HomeFile) {
+            Messages.showErrorDialog(project, CommentText.HOME_FILE, CommentWriter.TITLE)
             return
         }
         val anchor = (found as? AnchorResult.Found)?.anchor ?: return
