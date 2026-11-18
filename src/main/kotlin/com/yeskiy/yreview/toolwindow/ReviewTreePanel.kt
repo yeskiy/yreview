@@ -403,6 +403,13 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
         })
     }
 
+    /** A write of this IDE changed the store. A shown tab reads it at once, a hidden tab reads it when it shows. */
+    private fun reloadNow() {
+        if (!queue.isActive) return scheduleReload()
+        queue.cancelAllUpdates()
+        reload()
+    }
+
     /**
      * Reads the tasks of the scope again.
      *
@@ -1109,7 +1116,7 @@ class ReviewTreePanel(private val project: Project, private val scope: TaskScope
 
     private fun subscribe() {
         val onProject = project.messageBus.connect(this)
-        onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener { scheduleReload() })
+        onProject.subscribe(REVIEW_COMMENTS, ReviewCommentListener { reloadNow() })
         onProject.subscribe(ProjectLevelVcsManager.VCS_CONFIGURATION_CHANGED, VcsMappingListener { scheduleReload() })
         onProject.subscribe(VcsRepositoryManager.VCS_REPOSITORY_MAPPING_UPDATED, VcsRepositoryMappingListener { scheduleReload() })
         onProject.subscribe(DumbService.DUMB_MODE, IndexWatch())
