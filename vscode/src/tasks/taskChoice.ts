@@ -27,6 +27,8 @@ const NO_TASK = 'This workspace has no open review task.'
 
 export const OUTSIDE_REASON =
   'The agent works in the workspace folder, so it does not take this task.'
+export const OUTSIDE_TASKS =
+  'The agent works in the workspace folder, so it does not take these tasks.'
 
 /** The agent works in the workspace folder, so a task outside the workspace never goes out. */
 export const agentTasks = (tasks: readonly ReviewTask[]): readonly ReviewTask[] =>

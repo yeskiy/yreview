@@ -20,13 +20,11 @@ import { takesSend } from '../session/sessionReach'
 import type { SessionRegistry } from '../session/sessionRegistry'
 import { readSettings } from '../settings'
 import type { ReviewTask } from '../tasks/reviewTask'
-import { agentTasks } from '../tasks/taskChoice'
+import { OUTSIDE_TASKS, agentTasks } from '../tasks/taskChoice'
 import type { BridgeWiring } from './bridge'
 import { registerMcpAdd, shownText } from './mcpAdd'
 
 export const NO_TASK = 'Check or select the review tasks to send first.'
-export const OUTSIDE_TASKS =
-  'The agent works in the workspace folder, so it does not take these tasks.'
 export const PICK_PLACEHOLDER = 'Send the review tasks to'
 export const SEND_FAILED = 'The send of the review tasks failed.'
 

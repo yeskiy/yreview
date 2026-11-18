@@ -4,6 +4,7 @@ import type { Log } from '../log'
 import type { ReviewService } from '../store/reviewService'
 import { projectCompletionHost } from '../tasks/completionHost'
 import type { ReviewTask } from '../tasks/reviewTask'
+import { OUTSIDE_TASKS, agentTasks } from '../tasks/taskChoice'
 import { type CloseReport, MAX_CLOSE_IDS, TaskCompletion, problemOf } from '../tasks/taskCompletion'
 import { countOf } from '../tasks/taskLabels'
 import { collectPrompt } from './copyCollect'
@@ -97,9 +98,10 @@ export const registerHandoff = (
   ): Promise<WrittenHandoff | undefined> => writeHandoff(writer, store, tasks)
 
   const copy = async (given?: unknown): Promise<void> => {
-    const tasks = isTaskList(given) ? given : deps.chosenTasks()
+    const chosen = isTaskList(given) ? given : deps.chosenTasks()
+    const tasks = agentTasks(chosen)
     if (tasks.length === 0) {
-      vscode.window.showWarningMessage(NO_TASK)
+      vscode.window.showWarningMessage(chosen.length === 0 ? NO_TASK : OUTSIDE_TASKS)
       return
     }
     const outcome = await vscode.window.withProgress(
