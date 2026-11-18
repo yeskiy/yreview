@@ -1,39 +1,37 @@
 package com.yeskiy.yreview.store
 
 /**
- * The rule that decides where the comments of one file live.
- *
- * A file belongs to the innermost git repository that holds it. Only a file that no
- * repository holds belongs to a folder store. This object answers both halves, and it
- * takes plain strings so that a test needs no project.
+ * The rule that decides where the comments of one file live. A repository with a commit owns
+ * its files. Else the nearest folder store of the walk does. The rule takes plain strings.
  */
 object AnchorRules {
 
     /**
-     * The whole rule for one file.
-     *
-     * A repository that holds the file answers first, so a file inside an inner repository
-     * never reaches the folder of a parent. A repository without a commit refuses, and it
-     * still takes no folder, because the repository owns its own files.
-     *
-     * [projectDir] and [contentRoots] read the project, so the rule calls them only after
-     * it knows that no repository holds the file.
+     * The whole rule for one file. A repository with a commit answers first, then the walk
+     * finds the nearest store. [workspaceRoot] reads the project, so only the walk calls it.
      */
     fun plan(
         filePath: String,
         repositoryRoot: String?,
         head: String?,
-        projectDir: () -> String?,
-        contentRoots: () -> List<String>,
+        workspaceRoot: () -> String?,
+        home: String?,
+        hasStore: (String) -> Boolean,
     ): AnchorPlan {
-        if (repositoryRoot != null) {
-            if (head == null) return AnchorPlan.NoCommit
+        if (repositoryRoot != null && head != null) {
             val path = relative(filePath, repositoryRoot) ?: return AnchorPlan.NoPlace
             return AnchorPlan.Git(repositoryRoot, head, path)
         }
-        val root = folderRoot(filePath, projectDir(), contentRoots()) ?: return AnchorPlan.NoPlace
-        val path = relative(filePath, root) ?: return AnchorPlan.NoPlace
-        return AnchorPlan.Folder(root, path)
+        if (StoreRules.isHomeFile(filePath, home)) return AnchorPlan.HomeFile
+        val dir = StoreRules.parentOf(filePath) ?: return AnchorPlan.NoPlace
+        val ceiling = workspaceRoot()?.takeIf { holds(it, dir) }
+        val walk = StoreRules.walk(dir, ceiling, home)
+        walk.firstOrNull(hasStore)?.let { found ->
+            return relative(filePath, found)?.let { AnchorPlan.Folder(found, it, exists = true) } ?: AnchorPlan.NoPlace
+        }
+        if (repositoryRoot != null) return AnchorPlan.NoCommit
+        val create = ceiling?.takeIf { it in walk } ?: dir
+        return relative(filePath, create)?.let { AnchorPlan.Folder(create, it, exists = false) } ?: AnchorPlan.NoPlace
     }
 
     /**
@@ -50,7 +48,7 @@ object AnchorRules {
 
     /** True when the root is the file or an ancestor of it. A name prefix is not an ancestor. */
     fun holds(root: String, filePath: String): Boolean =
-        filePath == root || filePath.startsWith("$root/")
+        filePath == root || filePath.startsWith(withSlash(root))
 
     /**
      * True when this repository holds the file, and no repository inside it holds the file.
@@ -64,9 +62,13 @@ object AnchorRules {
 
     /** The path of the file under the root, or null when the root does not hold the file. */
     fun relative(filePath: String, root: String): String? {
-        if (!filePath.startsWith("$root/")) return null
-        return filePath.removePrefix("$root/").ifEmpty { null }
+        val prefix = withSlash(root)
+        if (!filePath.startsWith(prefix)) return null
+        return filePath.removePrefix(prefix).ifEmpty { null }
     }
+
+    /** A root such as "/" or "C:/" already ends with a slash, so the rule adds none. */
+    private fun withSlash(root: String): String = if (root.endsWith("/")) root else "$root/"
 }
 
 /**
@@ -80,11 +82,14 @@ sealed interface AnchorPlan {
     /** A git repository holds the file, and the comments go to the notes of that repository. */
     data class Git(val root: String, val commit: String, val path: String) : AnchorPlan
 
-    /** No repository holds the file, so the comments go to the folder store at [root]. */
-    data class Folder(val root: String, val path: String) : AnchorPlan
+    /** The comments go to the folder store at [root]. [exists] is false when the store is still to be made. */
+    data class Folder(val root: String, val path: String, val exists: Boolean = true) : AnchorPlan
 
     /** A repository holds the file, and that repository has no commit yet. */
     data object NoCommit : AnchorPlan
+
+    /** A file directly in the home folder or in the bridge folder. It gets no store. */
+    data object HomeFile : AnchorPlan
 
     /** The project holds no place for the comments of this file. */
     data object NoPlace : AnchorPlan

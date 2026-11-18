@@ -92,7 +92,14 @@ class AnchorPlanTest {
         repositoryRoot: String? = null,
         head: String? = null,
         contentRoots: List<String> = emptyList(),
-    ) = AnchorRules.plan(filePath, repositoryRoot, head, { project }, { contentRoots })
+    ) = AnchorRules.plan(
+        filePath,
+        repositoryRoot,
+        head,
+        { AnchorRules.folderRoot(filePath, project, contentRoots) },
+        null,
+        { root -> repositoryRoot == null && root == AnchorRules.folderRoot(filePath, project, contentRoots) },
+    ).let { if (it is AnchorPlan.Folder && !it.exists) AnchorPlan.NoPlace else it }
 
     @Test
     fun `a file of a repository goes to the notes of that repository`() {
@@ -149,9 +156,10 @@ class AnchorPlanTest {
             "$project/api/src/Main.kt",
             "$project/api",
             head,
-            { project },
-            { reads += 1; listOf(project) },
+            { reads += 1; project },
+            null,
+            { reads += 1; false },
         )
-        assertEquals(0, reads, "the rule read the content roots of the project")
+        assertEquals(0, reads, "the rule read the roots of the project")
     }
 }

@@ -127,4 +127,29 @@ class SpecVectorsTest {
             ),
         )
     }
+
+    @Test
+    fun `every store parent matches`() =
+        cases("stores.json", "parent").forEach { assertEquals(it, SpecVectors.parent(it.text("path"))) }
+
+    @Test
+    fun `every store walk matches`() = cases("stores.json", "walk").forEach {
+        assertEquals(it, SpecVectors.walk(it.text("name"), it.text("dir"), it.textOrNull("workspaceRoot"), it.textOrNull("home")))
+    }
+
+    @Test
+    fun `every store plan matches`() =
+        cases("stores.json", "locate").forEach { assertEquals(it, SpecVectors.locate(it.jsonObject)) }
+
+    @Test
+    fun `every store label matches`() =
+        cases("stores.json", "label").forEach { assertEquals(it, SpecVectors.label(it.text("root"), it.textOrNull("home"))) }
+
+    @Test
+    fun `every migration prefix matches`() =
+        cases("stores.json", "prefix").forEach { assertEquals(it, SpecVectors.prefix(it.text("repository"), it.text("folder"))) }
+
+    @Test
+    fun `every record rewrite matches`() =
+        cases("stores.json", "rewrite").forEach { assertEquals(it, SpecVectors.rewrite(it.text("name"), it.text("prefix"), it.texts("lines"))) }
 }

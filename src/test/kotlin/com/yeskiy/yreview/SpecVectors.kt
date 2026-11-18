@@ -7,15 +7,19 @@ import com.yeskiy.yreview.session.AgentCatalog
 import com.yeskiy.yreview.session.CommandWords
 import com.yeskiy.yreview.session.McpRoute
 import com.yeskiy.yreview.session.Naming
+import com.yeskiy.yreview.store.AnchorPlan
+import com.yeskiy.yreview.store.AnchorRules
 import com.yeskiy.yreview.store.Carry
 import com.yeskiy.yreview.store.CommentJson
 import com.yeskiy.yreview.store.FileDiff
+import com.yeskiy.yreview.store.FolderMigration
 import com.yeskiy.yreview.store.GitResult
 import com.yeskiy.yreview.store.GitRunner
 import com.yeskiy.yreview.store.LineMap
 import com.yeskiy.yreview.store.NotesGateway
 import com.yeskiy.yreview.store.Range
 import com.yeskiy.yreview.store.StoreKind
+import com.yeskiy.yreview.store.StoreRules
 import com.yeskiy.yreview.store.id
 import com.yeskiy.yreview.tasks.HandleKey
 import com.yeskiy.yreview.tasks.HandleMatch
@@ -31,6 +35,9 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import java.nio.file.Path
 
@@ -271,5 +278,69 @@ internal object SpecVectors {
         }
         Carry.Gone -> buildJsonObject { put("kind", "gone") }
         Carry.Missing -> buildJsonObject { put("kind", "missing") }
+    }
+
+    // --- stores.json ---
+
+    private fun textOrNull(value: String?): JsonElement = value?.let { JsonPrimitive(it) } ?: JsonNull
+
+    private fun JsonObject.textOrNull(key: String): String? = get(key)?.takeUnless { it is JsonNull }?.jsonPrimitive?.content
+
+    fun parent(path: String) = buildJsonObject {
+        put("path", path)
+        put("parent", textOrNull(StoreRules.parentOf(path)))
+    }
+
+    fun walk(name: String, dir: String, workspaceRoot: String?, home: String?) = buildJsonObject {
+        put("name", name)
+        put("dir", dir)
+        put("workspaceRoot", textOrNull(workspaceRoot))
+        put("home", textOrNull(home))
+        put("walk", strings(StoreRules.walk(dir, workspaceRoot, home)))
+    }
+
+    fun locate(case: JsonObject): JsonObject {
+        val repository = case["repository"]?.takeUnless { it is JsonNull }?.jsonObject
+        val stores = case.getValue("stores").jsonArray.map { it.jsonPrimitive.content }.toSet()
+        val plan = AnchorRules.plan(
+            case.getValue("file").jsonPrimitive.content,
+            repository?.getValue("root")?.jsonPrimitive?.content,
+            repository?.textOrNull("head"),
+            { case.textOrNull("workspaceRoot") },
+            case.textOrNull("home"),
+            { it in stores },
+        )
+        return JsonObject(case + ("plan" to planJson(plan)))
+    }
+
+    private fun planJson(plan: AnchorPlan): JsonObject = when (plan) {
+        is AnchorPlan.Git -> buildJsonObject { put("kind", "git"); put("root", plan.root); put("commit", plan.commit); put("path", plan.path) }
+        is AnchorPlan.Folder -> buildJsonObject { put("kind", "folder"); put("root", plan.root); put("path", plan.path); put("exists", plan.exists) }
+        AnchorPlan.NoCommit -> buildJsonObject { put("kind", "noCommit") }
+        AnchorPlan.HomeFile -> buildJsonObject { put("kind", "homeFile") }
+        AnchorPlan.NoPlace -> buildJsonObject { put("kind", "noPlace") }
+    }
+
+    fun label(root: String, home: String?) = buildJsonObject {
+        put("root", root)
+        put("home", textOrNull(home))
+        put("label", StoreRules.label(root, home))
+    }
+
+    fun prefix(repository: String, folder: String) = buildJsonObject {
+        put("repository", repository)
+        put("folder", folder)
+        put("prefix", textOrNull(FolderMigration.prefixOf(repository, folder)))
+    }
+
+    fun rewrite(name: String, prefix: String, lines: List<String>): JsonObject {
+        val result = FolderMigration.rewrite(lines, prefix)
+        return buildJsonObject {
+            put("name", name)
+            put("prefix", prefix)
+            put("lines", strings(lines))
+            put("out", strings(result.lines))
+            put("renames", JsonObject(result.renames.mapValues { JsonPrimitive(it.value) }))
+        }
     }
 }

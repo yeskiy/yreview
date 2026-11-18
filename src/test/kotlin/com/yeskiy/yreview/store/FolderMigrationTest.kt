@@ -5,6 +5,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -213,13 +214,69 @@ class FolderMigrationTest {
     }
 
     @Test
-    fun `a repository rooted above the folder may not take the records`() {
-        assertFalse(FolderMigration.maySettle("E:/Projects/site", "E:/Projects/site/api"))
+    fun `a repository rooted above the folder may take the records with a prefix`() {
+        assertTrue(FolderMigration.maySettle("E:/Projects/site", "E:/Projects/site/api"))
+    }
+
+    @Test
+    fun `a repository rooted below the folder may not take the records`() {
+        assertFalse(FolderMigration.maySettle("E:/Projects/site/api", "E:/Projects/site"))
     }
 
     @Test
     fun `a repository beside the folder may not take the records`() {
         assertFalse(FolderMigration.maySettle("E:/Projects/other", "E:/Projects/site"))
+    }
+
+    // --- A store below the repository root ---
+
+    @Test
+    fun `a rewritten store copies new identifiers that match the renames`() {
+        withFolder { root ->
+            TempRepo().use { repo ->
+                val head = repo.commit("a.kt", "one")
+                val folder = FolderNotes(root)
+                val stored = bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
+                bookOf(folder).resolve(stored)
+                val lines = folder.readOrRefuse(NoteRefs.LOCAL, FolderStore.WORKTREE)
+                val renames = FolderMigration.rewrite(lines, "sub").renames
+                val notes = NotesGateway(repo.git)
+
+                val report = FolderMigration.copy(RewrittenNotes(folder, "sub", renames), notes, NoteRefs.ALL, head)
+
+                assertNull(report.problem)
+                assertEquals(
+                    renames.values.toSet(),
+                    notes.readOrRefuse(NoteRefs.LOCAL, head).map { CommentJson.decode(it).id() }.toSet(),
+                )
+                assertEquals(listOf("sub/a.kt"), bookOf(notes).closed(head).map { it.comment.location?.path })
+            }
+        }
+    }
+
+    @Test
+    fun `a rewritten store with an empty prefix copies the same bytes`() {
+        withFolder { root ->
+            TempRepo().use { repo ->
+                val head = repo.commit("a.kt", "one")
+                val folder = FolderNotes(root)
+                bookOf(folder).add(NoteRefs.LOCAL, FolderStore.WORKTREE, "a.kt", Range(startLine = 1, endLine = 1), "one")
+                val notes = NotesGateway(repo.git)
+
+                FolderMigration.copy(RewrittenNotes(folder, "", emptyMap()), notes, NoteRefs.ALL, head)
+
+                assertEquals(folder.readOrRefuse(NoteRefs.LOCAL, FolderStore.WORKTREE), notes.readOrRefuse(NoteRefs.LOCAL, head))
+            }
+        }
+    }
+
+    @Test
+    fun `a rewritten store takes no write`() {
+        withFolder { root ->
+            val store = RewrittenNotes(FolderNotes(root), "sub", emptyMap())
+            assertFailsWith<NotesWriteException> { store.append(NoteRefs.LOCAL, FolderStore.WORKTREE, "{}") }
+            assertFailsWith<NotesWriteException> { store.rewrite(NoteRefs.LOCAL, FolderStore.WORKTREE, emptyList()) }
+        }
     }
 
     // --- The lookup that may write ---

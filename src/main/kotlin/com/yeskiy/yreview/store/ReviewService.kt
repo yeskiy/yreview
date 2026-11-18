@@ -52,12 +52,15 @@ class ReviewService(private val project: Project) {
     /** The rule of the project, applied to one file. Every caller asks this and nothing else. */
     fun anchorOf(file: VirtualFile): AnchorResult {
         val repository = GitRepositoryManager.getInstance(project).getRepositoryForFileQuick(file)
+        val repositoryRoot = repository?.root?.path
+        val workspaceRoot by lazy { AnchorRules.folderRoot(file.path, projectDirPath(), contentRootPaths()) }
         val plan = AnchorRules.plan(
             file.path,
-            repository?.root?.path,
+            repositoryRoot,
             repository?.currentRevision,
-            { projectDirPath() },
-            { contentRootPaths() },
+            { workspaceRoot },
+            null,
+            { repositoryRoot == null && it == workspaceRoot },
         )
         return when (plan) {
             is AnchorPlan.Git -> {
@@ -65,12 +68,13 @@ class ReviewService(private val project: Project) {
                 AnchorResult.Found(ReviewAnchor(StoreKind.GIT, root, plan.commit, plan.path))
             }
             is AnchorPlan.Folder -> {
+                if (!plan.exists) return AnchorResult.NoPlace
                 val root = LocalFileSystem.getInstance().findFileByPath(plan.root)
                     ?: return AnchorResult.NoPlace
                 AnchorResult.Found(ReviewAnchor(StoreKind.FOLDER, root, FolderStore.WORKTREE, plan.path))
             }
             AnchorPlan.NoCommit -> AnchorResult.NoCommit
-            AnchorPlan.NoPlace -> AnchorResult.NoPlace
+            AnchorPlan.HomeFile, AnchorPlan.NoPlace -> AnchorResult.NoPlace
         }
     }
 
