@@ -18,12 +18,8 @@ class ScanWarmup : ProjectActivity {
         try {
             withContext(Dispatchers.IO) {
                 coroutineToIndicator {
-                    val stamp = ScanStamp.of(project)
-                    if (!holdsReviewData(stamp)) return@coroutineToIndicator
-                    val service = TaskScanService.getInstance(project)
-                    service.read(false) { ProgressManager.checkCanceled() }
-                    // The first scan fills the store cache of an open outside file, and only then is the stamp sure.
-                    if (!stamp.sure && ScanStamp.of(project).sure) service.read(false) { ProgressManager.checkCanceled() }
+                    if (!holdsReviewData(ScanStamp.of(project))) return@coroutineToIndicator
+                    TaskScanService.getInstance(project).read(false) { ProgressManager.checkCanceled() }
                 }
             }
         } catch (canceled: CancellationException) {

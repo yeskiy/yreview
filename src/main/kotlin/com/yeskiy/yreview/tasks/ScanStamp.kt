@@ -23,10 +23,10 @@ data class ScanStamp(
 
     companion object {
 
-        /** It starts no git. An outside root with no cached answer, or with a cached head that the files do not show, is not sure. */
+        /** The caller runs off the EDT. It starts git only for an open outside file with no cached store answer. */
         fun of(project: Project): ScanStamp {
             val repositories = GitRepositoryManager.getInstance(project).repositories
-            val (outside, cached) = TaskScan.cachedOutside(project)
+            val outside = TaskScan.cachedOutside(project, ReviewService.getInstance(project)::anchorOf)
             val outsideGit = outside.filter { it.kind == StoreKind.GIT }
             return build(
                 heads = repositories.associate { it.root.path to it.currentRevision } + outsideGit.associate { it.root to it.commit },
@@ -35,7 +35,7 @@ data class ScanStamp(
                     .filter { it.kind == StoreKind.FOLDER }.map { it.root.path } +
                     outside.filter { it.kind == StoreKind.FOLDER }.map { it.root },
                 outside = outside.flatMap { root -> root.files.map { it.path } }.sorted(),
-                known = cached && outsideGit.all { GitDirs.head(it.root) == it.commit },
+                known = outsideGit.all { GitDirs.head(it.root) == it.commit },
             )
         }
 

@@ -38,7 +38,6 @@ import git4idea.repo.GitRepository
 import git4idea.repo.GitRepositoryManager
 import java.nio.file.Files
 import java.nio.file.Path
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /** Where one TODO line sits, so the task record names the file and the commit. */
@@ -165,19 +164,17 @@ object TaskScan {
     }
 
     /** How many store roots outside the project have an open file. It reads the store cache only, so it starts no git. */
-    fun outsideCount(project: Project): Int = cachedOutside(project).first.size
+    fun outsideCount(project: Project): Int = cachedOutside(project) { null }.size
 
-    /** The outside roots from the store cache only, and true when each open outside file had a cached answer. */
-    internal fun cachedOutside(project: Project): Pair<List<OutsideRoot>, Boolean> {
+    /** The outside roots from the store cache. [miss] answers an open outside file that has no cached answer. */
+    internal fun cachedOutside(project: Project, miss: (VirtualFile) -> AnchorResult?): List<OutsideRoot> {
         val service = ReviewService.getInstance(project)
-        val missed = AtomicBoolean()
-        val found = OutsideRoots.of(
+        return OutsideRoots.of(
             FileEditorManager.getInstance(project).openFiles.toList(),
             insideRoots(project, GitRepositoryManager.getInstance(project).repositories.map { it.root.path }),
-            { service.anchorOfCached(it) ?: AnchorResult.NoPlace.also { missed.set(true) } },
+            { service.anchorOfCached(it) ?: miss(it) ?: AnchorResult.NoPlace },
             service.home(),
         )
-        return found to !missed.get()
     }
 
     /** The repository roots, the project folder and the content roots. */
