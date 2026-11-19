@@ -19,6 +19,7 @@ import com.intellij.usages.impl.UsagePreviewPanel
 import com.yeskiy.yreview.diagnostic.Redact
 import com.yeskiy.yreview.gutter.CommentIndex
 import com.yeskiy.yreview.store.CommentBook
+import com.yeskiy.yreview.store.GitRunner
 import com.yeskiy.yreview.store.NoteStore
 import com.yeskiy.yreview.store.NotesGateway
 import com.yeskiy.yreview.store.REVIEW_COMMENTS
@@ -87,10 +88,10 @@ class CommentPreviewPanel(
     }
 
     /**
-     * Reads the record of the card again after a write to the store.
+     * Reads the record of the card again from the note snapshot after a write to the store.
      *
-     * The read runs git, so it runs on a pooled thread. A pane that holds no card reads
-     * nothing, so a write beside an empty pane costs one comparison.
+     * A moved tip makes the read run git, so it runs on a pooled thread. A pane that holds
+     * no card reads nothing, so a write beside an empty pane costs one comparison.
      */
     private fun recheck() {
         val asked = wanted ?: return
@@ -104,13 +105,7 @@ class CommentPreviewPanel(
 
     /** The records the card may still match, or null when the read of the store failed. */
     private fun liveRecords(comment: PreviewComment): List<StoredComment>? = try {
-        val book = ReviewService.getInstance(project).bookForRoot(comment.root)
-        val shown = resolvedShown()
-        CommentPick.of(
-            book.open(comment.stored.commit),
-            if (shown) book.closed(comment.stored.commit) else emptyList(),
-            shown,
-        ).map { it.stored }
+        liveIn(notesOf(project, comment.root), comment.stored, resolvedShown())
     } catch (failure: Exception) {
         logger.warn(
             "the review preview pane could not read the comments again",
@@ -172,14 +167,30 @@ class CommentPreviewPanel(
         fun commentOf(project: Project, task: ReviewTask): PreviewComment? {
             if (task.kind != TaskKind.COMMENT || task.rootPath.isEmpty()) return null
             val root = LocalFileSystem.getInstance().findFileByPath(task.rootPath) ?: return null
+            return recordIn(notesOf(project, root) { ProgressManager.checkCanceled() }, task)?.let { PreviewComment(root, it) }
+        }
+
+        private fun notesOf(project: Project, root: VirtualFile, checkCanceled: () -> Unit = {}): NoteStore {
             val service = ReviewService.getInstance(project)
-            val notes = if (service.storeAt(root).kind == StoreKind.GIT) {
-                val git = ideGitRunner(project, root)
-                NoteScan.read(git, root.path) { ProgressManager.checkCanceled() } ?: NotesGateway(git)
+            return if (service.storeAt(root).kind == StoreKind.GIT) {
+                notesIn(ideGitRunner(project, root), root.path, checkCanceled)
             } else {
                 service.folderNotesOf(root)
             }
-            return recordIn(notes, task)?.let { PreviewComment(root, it) }
+        }
+
+        /** The note snapshot checks the ref tips on each read, so a write in or outside the IDE shows at once. */
+        internal fun notesIn(git: GitRunner, root: String, checkCanceled: () -> Unit = {}): NoteStore =
+            NoteScan.read(git, root, checkCanceled = checkCanceled) ?: NotesGateway(git)
+
+        /** The open records of the commit of [stored], and the resolved ones too while [shown] is true. */
+        internal fun liveIn(notes: NoteStore, stored: StoredComment, shown: Boolean): List<StoredComment> {
+            val book = CommentBook(notes, author = "")
+            return CommentPick.of(
+                book.open(stored.commit),
+                if (shown) book.closed(stored.commit) else emptyList(),
+                shown,
+            ).map { it.stored }
         }
 
         internal fun recordIn(notes: NoteStore, task: ReviewTask): StoredComment? =
