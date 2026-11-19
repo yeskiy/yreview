@@ -6,6 +6,23 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.1] - 2026-11-18
+
+### Changed
+
+- Add a helper that runs store reads at the same time
+- Run the diffs of the comment carry at the same time
+- Read the stores and the TODO index at the same time
+- Read the note ref tips from the git folder
+- Patch the note snapshot after a comment write
+- Start fewer git processes for a comment write
+- Read the preview comment from the note snapshot
+- Reload a shown tab at once after a comment write
+
+### Fixed
+
+- Keep the notes of a ref that a write moves during a scan
+
 ## [1.2.0] - 2026-11-18
 
 ### Added
@@ -224,7 +241,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Mark gradlew executable
 - Stop two tests from reading the platform they run on
 
-[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.2.1...HEAD
+[1.2.1]: https://github.com/yeskiy/yreview/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/yeskiy/yreview/compare/v1.0.2...v1.2.0
 [1.0.2]: https://github.com/yeskiy/yreview/compare/v1.0.1...v1.0.2
 [1.0.1]: https://github.com/yeskiy/yreview/compare/v1.0.0...v1.0.1
