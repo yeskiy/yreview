@@ -248,6 +248,7 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
     private fun coldCaches() {
         NoteScan.forget()
         DiffCache.forget()
+        TaskScanService.getInstance(project).invalidate()
     }
 
     private fun gitOf(block: () -> Unit): String {
@@ -548,7 +549,6 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         say("tab switch, Project then Changelist, TaskScan.read runs per switch: ${switches.map { it.scans }}")
         val starts = (1..5).map {
             coldCaches()
-            TaskScanService.getInstance(project).invalidate()
             runBlocking { ScanWarmup().execute(project) }
             open(TaskScope.PROJECT)
         }
