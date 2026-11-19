@@ -6,6 +6,19 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [1.2.2] - 2026-11-19
+
+### Changed
+
+- Share one scan result of the project between the tabs
+- Show the shared scan result when a tab opens
+- Fill the scan result in the background after the index is ready
+- Read the preview card again from the note snapshot after a write
+
+### Fixed
+
+- Keep the scan stamp sure after the store cache clears
+
 ## [1.2.1] - 2026-11-18
 
 ### Changed
@@ -241,7 +254,8 @@ project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Mark gradlew executable
 - Stop two tests from reading the platform they run on
 
-[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.2.1...HEAD
+[Unreleased]: https://github.com/yeskiy/yreview/compare/v1.2.2...HEAD
+[1.2.2]: https://github.com/yeskiy/yreview/compare/v1.2.1...v1.2.2
 [1.2.1]: https://github.com/yeskiy/yreview/compare/v1.2.0...v1.2.1
 [1.2.0]: https://github.com/yeskiy/yreview/compare/v1.0.2...v1.2.0
 [1.0.2]: https://github.com/yeskiy/yreview/compare/v1.0.1...v1.0.2
