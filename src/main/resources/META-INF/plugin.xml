@@ -77,6 +77,7 @@
     <postStartupActivity implementation="com.yeskiy.yreview.bridge.BridgeStartup" />
     <postStartupActivity implementation="com.yeskiy.yreview.settings.MaximizeStartup" />
     <postStartupActivity implementation="com.yeskiy.yreview.store.StoreStartup" />
+    <postStartupActivity implementation="com.yeskiy.yreview.tasks.ScanWarmup" />
 
     <toolWindow id="Yreview" anchor="bottom" icon="/icons/yReviewComments.svg"
                 factoryClass="com.yeskiy.yreview.toolwindow.ReviewToolWindowFactory" />

@@ -27,6 +27,7 @@ import com.yeskiy.yreview.tasks.PlacedComments
 import com.yeskiy.yreview.tasks.RepositoryTasks
 import com.yeskiy.yreview.tasks.ScanPhase
 import com.yeskiy.yreview.tasks.ScanState
+import com.yeskiy.yreview.tasks.ScanWarmup
 import com.yeskiy.yreview.tasks.TaskKind
 import com.yeskiy.yreview.tasks.TaskScan
 import com.yeskiy.yreview.tasks.TaskScanService
@@ -60,6 +61,7 @@ import java.nio.file.Files
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import javax.swing.SwingUtilities
+import kotlinx.coroutines.runBlocking
 
 /** The median and the max of a few runs, in milliseconds. */
 private data class Spread(val median: Double, val max: Double, val runs: List<Double>) {
@@ -544,5 +546,13 @@ class ToolWindowLoadBench : HeavyPlatformTestCase() {
         val switches = (1..5).map { open(TaskScope.PROJECT, switchTo = TaskScope.CHANGE_LIST) }
         report("tab switch, Project then Changelist", switches)
         say("tab switch, Project then Changelist, TaskScan.read runs per switch: ${switches.map { it.scans }}")
+        val starts = (1..5).map {
+            coldCaches()
+            TaskScanService.getInstance(project).invalidate()
+            runBlocking { ScanWarmup().execute(project) }
+            open(TaskScope.PROJECT)
+        }
+        report("first open after project start", starts)
+        say("first open after project start, TaskScan.read runs per open: ${starts.map { it.scans }}")
     }
 }
